@@ -1,0 +1,27 @@
+{
+  "expo": {
+    "name": "RiMusic",
+    "slug": "rimusic-ts",
+    "scheme": "rimusic",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#0a0a0a",
+    "splash": { "image": "./assets/splash-icon.png", "resizeMode": "contain", "backgroundColor": "#0a0a0a" },
+    "ios": {
+      "bundleIdentifier": "app.rimusic.ts",
+      "supportsTablet": true,
+      "infoPlist": {
+        "UIBackgroundModes": ["audio"],
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "plugins": [
+      "expo-router",
+      "expo-sqlite",
+      ["expo-build-properties", { "ios": { "deploymentTarget": "15.1" } }]
+    ],
+    "experiments": { "typedRoutes": false }
+  }
+}
