@@ -1,0 +1,84 @@
+name: Build iOS IPA (unsigned)
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: npm install
+      - run: npm run typecheck:core
+      - run: npm test
+
+  build-ios:
+    needs: test
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install JS dependencies
+        run: npm install
+
+      - name: Align native module versions with the installed Expo SDK
+        run: npx expo install --fix
+
+      - name: Generate the native iOS project
+        run: npx expo prebuild --platform ios --clean
+
+      - name: Install pods
+        working-directory: ios
+        run: pod install
+
+      - name: Build (no code signing)
+        run: |
+          xcodebuild \
+            -workspace ios/RiMusic.xcworkspace \
+            -scheme RiMusic \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            build > build.log 2>&1 || {
+              echo "=================== ERRORS ==================="
+              grep -E "error:|\*\* BUILD FAILED|fatal error|Undefined symbol|ld: " build.log | sort -u | head -60
+              echo "=================== LAST 40 LINES ==================="
+              tail -n 40 build.log
+              exit 1
+            }
+      - name: Package .ipa
+        run: |
+          APP=$(find build/Build/Products/Release-iphoneos -maxdepth 1 -name '*.app' | head -n 1)
+          test -n "$APP" || { echo "No .app produced"; exit 1; }
+          rm -rf Payload && mkdir Payload
+          cp -R "$APP" Payload/
+          zip -qry RiMusic-unsigned.ipa Payload
+          ls -lh RiMusic-unsigned.ipa
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RiMusic-unsigned-ipa
+          path: RiMusic-unsigned.ipa
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: xcodebuild-log
+          path: build.log
+
+      - name: Attach IPA to the GitHub release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: RiMusic-unsigned.ipa
