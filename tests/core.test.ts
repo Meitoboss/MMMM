@@ -270,6 +270,50 @@ describe('streams', () => {
 
   it('resolver reports every backend failure', async () => {
     mockFetch(() => json({}, 500));
-    await assert.rejects(() => resolveAudio('zzz', { pipedInstances: ['https://p.example'], invidiousInstances: ['https://i.example'] }), /innertube[\s\S]*piped[\s\S]*invidious/);
+    await assert.rejects(() => resolveAudio('zzz', { order: ['innertube', 'piped', 'invidious'], pipedInstances: ['https://p.example'], invidiousInstances: ['https://i.example'] }), /innertube[\s\S]*piped[\s\S]*invidious/);
+  });
+});
+
+/* ---------- own stream server backend ---------- */
+
+describe('stream server backend', () => {
+  it('is tried first when configured and builds an absolute URL', async () => {
+    mockFetch((url) => {
+      if (url.startsWith('http://pc.local:8787/resolve')) return json({ path: '/audio/abc.m4a?key=k', mimeType: 'audio/mp4', size: 123 });
+      return json({}, 500);
+    });
+    const a = await resolveAudio('abcdefghijk', { serverUrl: 'http://pc.local:8787/', serverKey: 'k' });
+    assert.equal(a.via, 'server');
+    assert.equal(a.url, 'http://pc.local:8787/audio/abc.m4a?key=k');
+    assert.match(calls[0].url, /\/resolve\?v=abcdefghijk&key=k$/);
+    assert.equal(calls.length, 1);
+  });
+
+  it('falls back to other backends and mentions the server error', async () => {
+    mockFetch((url) => {
+      if (url.includes('pc.local')) return json({ error: 'yt-dlp: Sign in to confirm' }, 500);
+      if (url.includes('/youtubei/')) return json({}, 400);
+      if (url.includes('piped.example')) return json({ audioStreams: [{ itag: 140, url: 'https://cdn/x', bitrate: 1, mimeType: 'audio/mp4' }] });
+      return json({}, 500);
+    });
+    const a = await resolveAudio('abcdefghijk', { serverUrl: 'http://pc.local:8787', pipedInstances: ['https://piped.example'] });
+    assert.equal(a.via, 'piped');
+  });
+
+  it('piped asks all instances in parallel and takes the first that works', async () => {
+    mockFetch((url) => (url.startsWith('https://good.example') ? json({ audioStreams: [{ itag: 140, url: 'https://cdn/ok', bitrate: 1, mimeType: 'audio/mp4' }] }) : json({}, 500)));
+    const a = await resolveAudio('abcdefghijk', { order: ['piped'], pipedInstances: ['https://bad1.example', 'https://bad2.example', 'https://good.example'] });
+    assert.equal(a.url, 'https://cdn/ok');
+    assert.equal(calls.length, 3);
+  });
+
+  it('summarises failures when every instance is dead', async () => {
+    mockFetch(() => json({}, 500));
+    await assert.rejects(() => resolveAudio('abcdefghijk', { order: ['piped'], pipedInstances: ['https://a.example', 'https://b.example'] }), /Piped: all 2 instances failed/);
+  });
+
+  it('rejects a server URL without scheme', async () => {
+    mockFetch(() => json({}, 500));
+    await assert.rejects(() => resolveAudio('abcdefghijk', { order: [], serverUrl: '192.168.1.5:8787' }), /must start with http/);
   });
 });
