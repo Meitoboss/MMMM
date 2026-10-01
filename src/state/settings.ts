@@ -14,6 +14,9 @@ export interface Settings {
   pipedInstances: string[];
   invidiousInstances: string[];
   /** keep playing similar songs when the queue ends */
+  /** your own server/server.mjs, e.g. http://192.168.1.10:8787 */
+  streamServerUrl: string;
+  streamServerKey: string;
   autoRadio: boolean;
   /** fetch lyrics automatically on the player screen */
   autoLyrics: boolean;
@@ -25,9 +28,11 @@ export const DEFAULT_SETTINGS: Settings = {
   gl: 'US',
   webClientVersion: WEB_REMIX.clientVersion,
   iosClientVersion: IOS.clientVersion,
-  streamOrder: ['innertube', 'piped', 'invidious'],
+  streamOrder: ['webpot', 'piped', 'invidious'],
   pipedInstances: DEFAULT_PIPED_INSTANCES,
   invidiousInstances: DEFAULT_INVIDIOUS_INSTANCES,
+  streamServerUrl: '',
+  streamServerKey: '',
   autoRadio: true,
   autoLyrics: true,
   playbackRate: 1,
@@ -38,7 +43,11 @@ const KEY = 'settings.v1';
 function load(): Settings {
   try {
     const raw = Storage.getItemSync(KEY);
-    return raw ? { ...DEFAULT_SETTINGS, ...JSON.parse(raw) } : DEFAULT_SETTINGS;
+    if (!raw) return DEFAULT_SETTINGS;
+    const saved = { ...DEFAULT_SETTINGS, ...JSON.parse(raw) } as Settings;
+    // older builds used the (now blocked) InnerTube iOS client first
+    if (saved.streamOrder.includes('innertube')) saved.streamOrder = DEFAULT_SETTINGS.streamOrder;
+    return saved;
   } catch {
     return DEFAULT_SETTINGS;
   }
@@ -59,7 +68,13 @@ export function applySettings(s: Settings) {
 }
 
 export function resolverOptions(s: Settings = useSettings.getState()): ResolverOptions {
-  return { order: s.streamOrder, pipedInstances: s.pipedInstances, invidiousInstances: s.invidiousInstances };
+  return {
+    order: s.streamOrder,
+    pipedInstances: s.pipedInstances,
+    invidiousInstances: s.invidiousInstances,
+    serverUrl: s.streamServerUrl,
+    serverKey: s.streamServerKey,
+  };
 }
 
 interface SettingsStore extends Settings {

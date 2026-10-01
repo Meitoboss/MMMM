@@ -174,6 +174,8 @@ export interface AudioSource {
   itag?: number;
   contentLength?: number;
   /** Where the URL came from, for debugging */
-  via: 'piped' | 'invidious' | 'innertube';
+  via: 'piped' | 'invidious' | 'innertube' | 'server' | 'webpot';
+  /** user agent the player must send (googlevideo URLs are client-bound) */
+  userAgent?: string;
   expiresAt?: number;
 }

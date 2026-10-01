@@ -1,0 +1,99 @@
+import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { WebView, WebViewMessageEvent } from 'react-native-webview';
+
+import { setEngine } from '../core/pot/engine';
+import { poTokenProvider } from '../core/pot/potoken';
+import { resetSolverState } from '../core/pot/solver';
+import { buildEngineHtml } from './engineHtml';
+
+interface Pending {
+  resolve: (v: unknown) => void;
+  reject: (e: Error) => void;
+  timer: ReturnType<typeof setTimeout>;
+}
+
+/**
+ * Invisible WebView that hosts BotGuard (PO tokens) and the yt-dlp "ejs" solver.
+ * Mounted once in the root layout. Core code talks to it through `getEngine()`.
+ */
+export function EngineHost() {
+  const ref = useRef<WebView>(null);
+  const pending = useRef(new Map<number, Pending>());
+  const seq = useRef(0);
+  const html = useMemo(() => buildEngineHtml(), []);
+
+  const failAll = useCallback((message: string) => {
+    pending.current.forEach((p) => {
+      clearTimeout(p.timer);
+      p.reject(new Error(message));
+    });
+    pending.current.clear();
+  }, []);
+
+  const call = useCallback(
+    (cmd: string, payload: Record<string, unknown> = {}, timeoutMs = 20_000) =>
+      new Promise<never>((resolve, reject) => {
+        const id = ++seq.current;
+        const timer = setTimeout(() => {
+          pending.current.delete(id);
+          reject(new Error(`JS engine: "${cmd}" timed out after ${timeoutMs / 1000}s`));
+        }, timeoutMs);
+        pending.current.set(id, { resolve: resolve as (v: unknown) => void, reject, timer });
+        ref.current?.injectJavaScript(`window.__rpc(${JSON.stringify({ id, cmd, ...payload })});true;`);
+      }),
+    [],
+  );
+
+  useEffect(
+    () => () => {
+      setEngine(null);
+      failAll('JS engine was unmounted');
+    },
+    [failAll],
+  );
+
+  const onMessage = useCallback(
+    (e: WebViewMessageEvent) => {
+      let msg: { type?: string; id?: number; ok?: boolean; result?: unknown; error?: string; message?: string };
+      try {
+        msg = JSON.parse(e.nativeEvent.data);
+      } catch {
+        return;
+      }
+      if (msg.type === 'ready') {
+        // fresh page: whatever the core believed about the engine's state is gone
+        resetSolverState();
+        poTokenProvider.reset();
+        setEngine({ call });
+        return;
+      }
+      if (msg.id === undefined) return;
+      const p = pending.current.get(msg.id);
+      if (!p) return;
+      pending.current.delete(msg.id);
+      clearTimeout(p.timer);
+      if (msg.ok) p.resolve(msg.result);
+      else p.reject(new Error(msg.error ?? 'engine error'));
+    },
+    [call],
+  );
+
+  return (
+    <WebView
+      ref={ref}
+      source={{ html, baseUrl: 'https://www.youtube.com' }}
+      originWhitelist={['*']}
+      javaScriptEnabled
+      onMessage={onMessage}
+      onContentProcessDidTerminate={() => {
+        // iOS killed the web content process (memory / background) – reload and rebuild state
+        setEngine(null);
+        failAll('JS engine process was terminated');
+        ref.current?.reload();
+      }}
+      style={{ position: 'absolute', width: 1, height: 1, opacity: 0 }}
+      pointerEvents="none"
+      accessible={false}
+    />
+  );
+}

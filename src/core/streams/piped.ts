@@ -1,6 +1,6 @@
 import { DEFAULT_PIPED_INSTANCES } from '../config';
 import type { AudioSource } from '../types';
-import { expiryFromUrl, fetchJson, isIosPlayable } from './util';
+import { expiryFromUrl, fetchJson, firstSuccess, isIosPlayable } from './util';
 
 /** Port of extensions/piped/.../Piped.kt (`Piped.media.audioStreams` + `PipedResponse`). */
 export interface PipedAudioStream {
@@ -27,8 +27,8 @@ export async function getInstances(): Promise<{ name: string; api_url: string }[
   return fetchJson('https://piped-instances.kavin.rocks/');
 }
 
-export async function audioStreams(apiBase: string, videoId: string): Promise<PipedStreams> {
-  return fetchJson<PipedStreams>(`${apiBase.replace(/\/$/, '')}/streams/${videoId}`);
+export async function audioStreams(apiBase: string, videoId: string, timeoutMs = 6000): Promise<PipedStreams> {
+  return fetchJson<PipedStreams>(`${apiBase.replace(/\/$/, '')}/streams/${videoId}`, {}, timeoutMs);
 }
 
 export function pickAudio(streams: PipedAudioStream[], iosOnly = true): AudioSource | null {
@@ -47,16 +47,14 @@ export function pickAudio(streams: PipedAudioStream[], iosOnly = true): AudioSou
   };
 }
 
-export async function resolve(videoId: string, instances: string[] = DEFAULT_PIPED_INSTANCES): Promise<AudioSource> {
-  let lastError: unknown;
-  for (const base of instances) {
-    try {
-      const s = await audioStreams(base, videoId);
-      const src = pickAudio(s.audioStreams ?? []);
-      if (src) return src;
-    } catch (e) {
-      lastError = e;
-    }
-  }
-  throw new Error(`Piped: no playable audio stream (${String(lastError ?? 'no instance answered')})`);
+/** All instances are asked in parallel (public instances are slow / often dead). */
+export function resolve(videoId: string, instances: string[] = DEFAULT_PIPED_INSTANCES): Promise<AudioSource> {
+  return firstSuccess(
+    instances.map(async (base) => {
+      const src = pickAudio((await audioStreams(base, videoId, 5000)).audioStreams ?? []);
+      if (!src) throw new Error('no playable audio stream');
+      return src;
+    }),
+    'Piped',
+  );
 }

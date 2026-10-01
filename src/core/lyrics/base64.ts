@@ -18,7 +18,10 @@ export function base64ToBytes(input: string): Uint8Array {
 }
 
 export function base64ToUtf8(input: string): string {
-  const bytes = base64ToBytes(input);
+  return utf8Decode(base64ToBytes(input));
+}
+
+export function utf8Decode(bytes: ArrayLike<number>): string {
   let out = '';
   for (let i = 0; i < bytes.length; ) {
     const b = bytes[i++];
@@ -30,6 +33,19 @@ export function base64ToUtf8(input: string): string {
       const cp = ((b & 0x07) << 18) | ((bytes[i++] & 0x3f) << 12) | ((bytes[i++] & 0x3f) << 6) | (bytes[i++] & 0x3f);
       out += String.fromCodePoint(cp);
     }
+  }
+  return out;
+}
+
+export function bytesToBase64(bytes: ArrayLike<number>): string {
+  let out = '';
+  for (let i = 0; i < bytes.length; i += 3) {
+    const b0 = bytes[i];
+    const b1 = i + 1 < bytes.length ? bytes[i + 1] : 0;
+    const b2 = i + 2 < bytes.length ? bytes[i + 2] : 0;
+    out += ALPHABET[b0 >> 2] + ALPHABET[((b0 & 3) << 4) | (b1 >> 4)];
+    out += i + 1 < bytes.length ? ALPHABET[((b1 & 15) << 2) | (b2 >> 6)] : '=';
+    out += i + 2 < bytes.length ? ALPHABET[b2 & 63] : '=';
   }
   return out;
 }

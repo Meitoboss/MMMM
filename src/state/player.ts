@@ -90,7 +90,7 @@ export const usePlayer = create<PlayerState>((set, get) => {
         album: song.album?.name,
         artwork: song.thumbnail,
         duration: song.durationSec,
-        userAgent: src.via === 'innertube' ? getConfig().ios.userAgent : undefined,
+        userAgent: src.userAgent ?? (src.via === 'innertube' ? getConfig().ios.userAgent : undefined),
       });
       await TrackPlayer.setRate(get().rate);
       await TrackPlayer.play();

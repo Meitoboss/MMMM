@@ -1,15 +1,20 @@
 import { player } from '../innertube/api';
+import { resolveWithPoToken } from '../innertube/webpot';
 import type { AudioSource } from '../types';
 import * as invidious from './invidious';
 import * as piped from './piped';
+import * as server from './server';
 import { expiryFromUrl, isIosPlayable } from './util';
 
-export type StreamBackend = 'innertube' | 'piped' | 'invidious';
+export type StreamBackend = 'server' | 'webpot' | 'innertube' | 'piped' | 'invidious';
 
 export interface ResolverOptions {
   order?: StreamBackend[];
   pipedInstances?: string[];
   invidiousInstances?: string[];
+  /** URL of your own server/server.mjs, e.g. http://192.168.1.10:8787 – used first when set */
+  serverUrl?: string;
+  serverKey?: string;
 }
 
 const cache = new Map<string, AudioSource>();
@@ -41,14 +46,19 @@ export async function resolveAudio(videoId: string, opts: ResolverOptions = {}):
   const hit = cache.get(videoId);
   if (hit && (!hit.expiresAt || hit.expiresAt - 60_000 > Date.now())) return hit;
 
-  const order = opts.order ?? ['innertube', 'piped', 'invidious'];
+  const base: StreamBackend[] = opts.order ?? ['webpot', 'piped', 'invidious'];
+  const order: StreamBackend[] = opts.serverUrl?.trim() ? ['server', ...base.filter((b) => b !== 'server')] : base.filter((b) => b !== 'server');
   const errors: string[] = [];
   for (const backend of order) {
     try {
       const src =
-        backend === 'innertube'
-          ? await viaInnerTube(videoId)
-          : backend === 'piped'
+        backend === 'server'
+          ? await server.resolve(videoId, opts.serverUrl ?? '', opts.serverKey)
+          : backend === 'webpot'
+            ? await resolveWithPoToken(videoId)
+            : backend === 'innertube'
+            ? await viaInnerTube(videoId)
+            : backend === 'piped'
             ? await piped.resolve(videoId, opts.pipedInstances)
             : await invidious.resolve(videoId, opts.invidiousInstances);
       cache.set(videoId, src);

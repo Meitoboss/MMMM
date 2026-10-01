@@ -7,3 +7,6 @@ export { resolveAudio, clearStreamCache } from './streams/resolver';
 export type { StreamBackend, ResolverOptions } from './streams/resolver';
 export * as piped from './streams/piped';
 export * as invidious from './streams/invidious';
+export * as streamServer from './streams/server';
+export { setEngine } from './pot/engine';
+export type { JsEngine } from './pot/engine';
