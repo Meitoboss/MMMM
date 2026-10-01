@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync } from 'node:fs';
+import { chmodSync, mkdtempSync } from 'node:fs';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -12,9 +12,12 @@ describe('stream server', () => {
   let base = '';
   let close: () => void;
   before(async () => {
+    // uploads through the GitHub web UI drop the executable bit
+    const fake = join(process.cwd(), 'server/fake-ytdlp.sh');
+    chmodSync(fake, 0o755);
     const server = createStreamServer({
       key: 'secret',
-      ytdlp: join(process.cwd(), 'server/fake-ytdlp.sh'),
+      ytdlp: fake,
       cacheDir: mkdtempSync(join(tmpdir(), 'rimusic-')),
       log: () => undefined,
     });
