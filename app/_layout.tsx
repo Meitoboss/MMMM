@@ -7,6 +7,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { openDb } from '../src/db/expo';
 import { ensurePlayer } from '../src/player/setup';
 import { applySettings, useSettings } from '../src/state/settings';
+import { EngineHost } from '../src/ui/EngineHost';
 import { MiniPlayer } from '../src/ui/MiniPlayer';
 import { colors } from '../src/ui/theme';
 
@@ -38,6 +39,7 @@ export default function RootLayout() {
           <Stack.Screen name="local-playlist/[id]" options={{ title: 'Playlist' }} />
         </Stack>
         <MiniPlayer />
+        <EngineHost />
       </View>
     </SafeAreaProvider>
   );

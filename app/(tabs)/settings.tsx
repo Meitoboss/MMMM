@@ -1,5 +1,6 @@
 import { Alert, Pressable, ScrollView, Switch, Text, TextInput, View } from 'react-native';
 import { useState } from 'react';
+import { runSelfTest, StepResult } from '../../src/core/diagnostics';
 
 import type { StreamBackend } from '../../src/core/streams/resolver';
 import { clearStreamCache } from '../../src/core';
@@ -8,9 +9,9 @@ import { s } from '../../src/ui/components';
 import { MINI_HEIGHT, colors } from '../../src/ui/theme';
 
 const ORDERS: { label: string; value: StreamBackend[] }[] = [
-  { label: 'YouTube → Piped → Invidious', value: ['innertube', 'piped', 'invidious'] },
-  { label: 'Piped → Invidious → YouTube', value: ['piped', 'invidious', 'innertube'] },
-  { label: 'Invidious → Piped → YouTube', value: ['invidious', 'piped', 'innertube'] },
+  { label: 'YouTube (PO token) → Piped → Invidious', value: ['webpot', 'piped', 'invidious'] },
+  { label: 'Piped → Invidious → YouTube (PO token)', value: ['piped', 'invidious', 'webpot'] },
+  { label: 'YouTube (PO token) only', value: ['webpot'] },
 ];
 
 function Row({ title, sub, children }: { title: string; sub?: string; children: React.ReactNode }) {
@@ -38,6 +39,8 @@ function Field({ label, value, onSave, multiline }: { label: string; value: stri
 
 export default function Settings() {
   const st = useSettings();
+  const [steps, setSteps] = useState<StepResult[]>([]);
+  const [running, setRunning] = useState(false);
   const orderIdx = Math.max(0, ORDERS.findIndex((o) => o.value.join() === st.streamOrder.join()));
 
   return (
@@ -53,6 +56,13 @@ export default function Settings() {
         <Row title="Stream source order" sub={`${ORDERS[orderIdx].label}  (tap to change)`}><Text style={{ color: colors.accent }}>Change</Text></Row>
       </Pressable>
 
+      <Text style={[s.h2, { marginTop: 20 }]}>Stream server (optional fallback)</Text>
+      <Text style={[s.sub, { paddingHorizontal: 16 }]}>
+        Only needed if playback on the phone alone does not work. Run server/server.mjs on your PC (see README) and enter its address here, e.g. http://192.168.1.10:8787
+      </Text>
+      <Field label="Server URL" value={st.streamServerUrl} onSave={(v) => { clearStreamCache(); st.update({ streamServerUrl: v }); }} />
+      <Field label="Server key (optional)" value={st.streamServerKey} onSave={(v) => { clearStreamCache(); st.update({ streamServerKey: v }); }} />
+
       <Text style={[s.h2, { marginTop: 20 }]}>Region</Text>
       <Field label="Language (hl)" value={st.hl} onSave={(v) => st.update({ hl: v || 'en' })} />
       <Field label="Country (gl)" value={st.gl} onSave={(v) => st.update({ gl: (v || 'US').toUpperCase() })} />
@@ -67,6 +77,26 @@ export default function Settings() {
         onSave={(v) => st.update({ pipedInstances: v.split(',').map((x) => x.trim()).filter(Boolean) })} />
       <Field label="Invidious instances (comma separated)" value={st.invidiousInstances.join(', ')} multiline
         onSave={(v) => st.update({ invidiousInstances: v.split(',').map((x) => x.trim()).filter(Boolean) })} />
+
+      <Text style={[s.h2, { marginTop: 20 }]}>Diagnostics</Text>
+      <Text style={[s.sub, { paddingHorizontal: 16 }]}>Checks every stage of phone-only playback (WebView, PO token, solver, stream).</Text>
+      <Pressable
+        disabled={running}
+        onPress={async () => {
+          setSteps([]);
+          setRunning(true);
+          await runSelfTest((r) => setSteps((cur) => [...cur, r]));
+          setRunning(false);
+        }}
+      >
+        <Row title={running ? 'Running…' : 'Run self-test'}><Text style={{ color: colors.accent }}>{running ? '' : 'Start'}</Text></Row>
+      </Pressable>
+      {steps.map((r) => (
+        <View key={r.name} style={{ paddingHorizontal: 16, paddingVertical: 6 }}>
+          <Text style={{ color: r.ok ? colors.accent : colors.danger, fontWeight: '600' }}>{r.ok ? '✓' : '✗'} {r.name} ({r.ms} ms)</Text>
+          <Text selectable style={[s.sub, { fontSize: 12 }]}>{r.detail}</Text>
+        </View>
+      ))}
 
       <Pressable onPress={() => Alert.alert('Reset settings?', undefined, [{ text: 'Reset', style: 'destructive', onPress: st.reset }, { text: 'Cancel', style: 'cancel' }])}>
         <Row title="Reset settings"><Text style={{ color: colors.danger }}>Reset</Text></Row>
