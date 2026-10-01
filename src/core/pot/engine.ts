@@ -8,11 +8,32 @@ export interface JsEngine {
   call<T = unknown>(cmd: string, payload?: Record<string, unknown>, timeoutMs?: number): Promise<T>;
 }
 
+/** What the WebView host reports about itself – shown in errors and in Settings → Diagnostics. */
+export const engineStatus = {
+  mounted: false,
+  loadStarted: false,
+  loadEnded: false,
+  ready: false,
+  probe: '' as string,
+  errors: [] as string[],
+  note(e: string) {
+    engineStatus.errors = [...engineStatus.errors.slice(-4), e];
+  },
+  describe(): string {
+    return (
+      `mounted=${engineStatus.mounted} loadStarted=${engineStatus.loadStarted} loadEnded=${engineStatus.loadEnded} ready=${engineStatus.ready}` +
+      (engineStatus.probe ? ` page=${engineStatus.probe}` : '') +
+      (engineStatus.errors.length ? ` errors=[${engineStatus.errors.join(' | ')}]` : '')
+    );
+  },
+};
+
 let current: JsEngine | null = null;
 let waiters: ((e: JsEngine) => void)[] = [];
 
 export function setEngine(engine: JsEngine | null) {
   current = engine;
+  engineStatus.ready = !!engine;
   if (engine) {
     const w = waiters;
     waiters = [];
@@ -26,7 +47,13 @@ export function getEngine(timeoutMs = 15_000): Promise<JsEngine> {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
       waiters = waiters.filter((w) => w !== onReady);
-      reject(new Error('JS engine (hidden WebView) is not ready'));
+      reject(
+        new Error(
+          engineStatus.mounted
+            ? `JS engine (hidden WebView) is not ready – ${engineStatus.describe()}`
+            : 'JS engine host is not mounted – app/_layout.tsx must render <EngineHost />',
+        ),
+      );
     }, timeoutMs);
     const onReady = (e: JsEngine) => {
       clearTimeout(timer);

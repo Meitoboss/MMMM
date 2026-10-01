@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { WebView, WebViewMessageEvent } from 'react-native-webview';
 
-import { setEngine } from '../core/pot/engine';
+import { engineStatus, setEngine } from '../core/pot/engine';
 import { poTokenProvider } from '../core/pot/potoken';
 import { resetSolverState } from '../core/pot/solver';
 import { buildEngineHtml } from './engineHtml';
@@ -44,13 +44,14 @@ export function EngineHost() {
     [],
   );
 
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    engineStatus.mounted = true;
+    return () => {
+      engineStatus.mounted = false;
       setEngine(null);
       failAll('JS engine was unmounted');
-    },
-    [failAll],
-  );
+    };
+  }, [failAll]);
 
   const onMessage = useCallback(
     (e: WebViewMessageEvent) => {
@@ -58,6 +59,14 @@ export function EngineHost() {
       try {
         msg = JSON.parse(e.nativeEvent.data);
       } catch {
+        return;
+      }
+      if (msg.type === 'jserror') {
+        engineStatus.note(`js: ${msg.message}`);
+        return;
+      }
+      if (msg.type === 'probe') {
+        engineStatus.probe = String((msg as { info?: string }).info);
         return;
       }
       if (msg.type === 'ready') {
@@ -85,6 +94,18 @@ export function EngineHost() {
       originWhitelist={['*']}
       javaScriptEnabled
       onMessage={onMessage}
+      onLoadStart={() => {
+        engineStatus.loadStarted = true;
+      }}
+      onLoadEnd={() => {
+        engineStatus.loadEnded = true;
+        // tells us whether the page scripts ran even if 'ready' never arrives
+        ref.current?.injectJavaScript(
+          "window.ReactNativeWebView.postMessage(JSON.stringify({type:'probe',info:'rpc='+typeof window.__rpc+',bg='+typeof window.runBotGuard}));true;",
+        );
+      }}
+      onError={(e) => engineStatus.note(`load error: ${e.nativeEvent.description}`)}
+      onHttpError={(e) => engineStatus.note(`http ${e.nativeEvent.statusCode}`)}
       onContentProcessDidTerminate={() => {
         // iOS killed the web content process (memory / background) – reload and rebuild state
         setEngine(null);
