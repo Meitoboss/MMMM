@@ -1,0 +1,76 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Install JS dependencies
+        run: npm install
+
+      - name: Bundle the YouTube challenge solver (yt-dlp-ejs)
+        run: npm run fetch-solver
+
+      - name: Align native module versions with the installed Expo SDK
+        run: npx expo install --fix
+
+      - name: Generate the native Android project
+        run: npx expo prebuild --platform android --clean
+
+      - name: Give Gradle enough memory
+        run: |
+          echo "org.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8" >> android/gradle.properties
+          echo "org.gradle.daemon=false" >> android/gradle.properties
+
+      # The Expo template signs release builds with the debug key, so the APK installs on any phone (sideloading).
+      - name: Build the APK
+        working-directory: android
+        run: |
+          ./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a,armeabi-v7a --no-daemon --stacktrace > ../gradle.log 2>&1 || {
+            echo "=================== ERRORS ==================="
+            grep -E "error:|FAILED|What went wrong|Execution failed|Could not|Unresolved|Exception" ../gradle.log | sort -u | head -60
+            echo "=================== LAST 60 LINES ==================="
+            tail -n 60 ../gradle.log
+            exit 1
+          }
+
+      - name: Collect the APK
+        run: |
+          APK=$(find android/app/build/outputs/apk/release -name '*.apk' | head -n 1)
+          test -n "$APK" || { echo "No APK produced"; find android/app/build -name '*.apk'; exit 1; }
+          cp "$APK" MusicSpace-android.apk
+          ls -lh MusicSpace-android.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MusicSpace-android-apk
+          path: MusicSpace-android.apk
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: gradle-log
+          path: gradle.log
+
+      - name: Attach the APK to the GitHub release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: MusicSpace-android.apk
