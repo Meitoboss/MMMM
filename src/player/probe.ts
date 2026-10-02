@@ -4,9 +4,11 @@ import type { SongItem } from '../core/types';
 import { usePlayer } from '../state/player';
 
 import type { StepResult } from '../core/diagnostics';
+import { ascii, codecInfo, hex, listBoxes } from '../core/mp4';
 import { resolveAudio } from '../core/streams/resolver';
 import type { AudioSource } from '../core/types';
 import { resolverOptions } from '../state/settings';
+import { downloadToCache } from './localCache';
 import { ensurePlayer } from './setup';
 
 interface Variant {
@@ -133,7 +135,49 @@ export async function runRealPathTest(onStep: (r: StepResult) => void): Promise<
   }
 }
 
-const hex = (b: Uint8Array) => Array.from(b).map((x) => x.toString(16).padStart(2, '0')).join(' ');
+/* ---------- HTTP inspection helpers ---------- */
+
+async function fetchBytes(url: string, range: string, userAgent?: string): Promise<{ status: number; bytes: Uint8Array }> {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 10_000);
+  try {
+    const res = await fetch(url, { headers: { Range: range, ...(userAgent ? { 'User-Agent': userAgent } : {}) }, signal: ctl.signal });
+    return { status: res.status, bytes: new Uint8Array(await res.arrayBuffer()) };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** Status line only (aborts the body) – "how does googlevideo answer this kind of range?" */
+async function rangeStatus(url: string, range?: string): Promise<string> {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 8000);
+  try {
+    const res = await fetch(url, { headers: range ? { Range: range } : {}, signal: ctl.signal });
+    const line = `${range ?? 'no Range'} → ${res.status} (len ${res.headers.get('content-length') ?? '-'})`;
+    ctl.abort();
+    return line;
+  } catch (e) {
+    return `${range ?? 'no Range'} → ${e instanceof Error ? e.message : String(e)}`;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function inspectStream(label: string, src: AudioSource, onStep: (r: StepResult) => void) {
+  try {
+    const head = await fetchBytes(src.url, 'bytes=0-65535');
+    onStep({ name: `${label} MP4 structure`, ok: head.status === 206 || head.status === 200, detail: `HTTP ${head.status}, ${head.bytes.length} B: ${listBoxes(head.bytes)} | ${codecInfo(head.bytes)}`, ms: 0 });
+  } catch (e) {
+    onStep({ name: `${label} MP4 structure`, ok: false, detail: e instanceof Error ? e.message : String(e), ms: 0 });
+  }
+  const size = src.contentLength ?? 0;
+  const ranges = ['bytes=0-1', 'bytes=0-', size ? `bytes=${Math.floor(size / 2)}-${Math.floor(size / 2) + 15}` : 'bytes=1000000-1000015', size ? `bytes=${size - 16}-` : 'bytes=-16'];
+  const lines: string[] = [];
+  for (const r of ranges) lines.push(await rangeStatus(src.url, r));
+  lines.push(await rangeStatus(src.url));
+  onStep({ name: `${label} range behaviour`, ok: true, detail: lines.join(' | '), ms: 0 });
+}
 
 /** What does googlevideo answer to AVPlayer-like requests for THIS url? */
 async function httpCheck(url: string, userAgent?: string) {
@@ -183,29 +227,44 @@ export async function runCurrentSongProbe(onStep: (r: StepResult) => void): Prom
   onStep({ name: 'B. HTTP (default user agent)', ok: true, detail: await httpCheck(u), ms: 0 });
   onStep({ name: 'B2. HTTP (AppleCoreMedia user agent)', ok: true, detail: await httpCheck(u, 'AppleCoreMedia/1.0.0.22B83 (iPhone; U; CPU OS 18_1 like Mac OS X; en_us)'), ms: 0 });
 
+  await inspectStream('B3.', src, onStep);
+
+  // reference: a song that is known to play (diagnostics 8.2) – compare structure / ranges
+  try {
+    const ref = await resolveAudio('dQw4w9WgXcQ', { ...resolverOptions(), order: ['webpot'], serverUrl: '' });
+    const rq = (n: string) => ref.url.match(new RegExp(`[?&]${n}=([^&]*)`))?.[1];
+    onStep({ name: 'R0. reference song (known to play)', ok: true, detail: `itag=${ref.itag} ${Math.round((ref.contentLength ?? 0) / 1024)}KB sig=${rq('sig') ? 'yes' : 'no'} n=${rq('n') ? 'yes' : 'NO'} c=${rq('c') ?? '-'}`, ms: 0 });
+    await inspectStream('R1.', ref, onStep);
+  } catch (e) {
+    onStep({ name: 'R0. reference song', ok: false, detail: e instanceof Error ? e.message : String(e), ms: 0 });
+  }
+
   const full = {
     title: song.title,
     artist: song.artists.map((a) => a.name).join(', '),
-    album: song.album?.name,
-    artwork: song.thumbnail,
-    duration: song.durationSec,
     contentType: 'audio/mp4',
   };
-  const variants: { name: string; extra: Record<string, unknown> }[] = [
-    { name: 'full metadata (what the app does)', extra: full },
-    { name: 'without duration', extra: { ...full, duration: undefined } },
-    { name: 'without artwork + album', extra: { ...full, artwork: undefined, album: undefined } },
-    { name: 'minimal (title/artist only)', extra: { contentType: 'audio/mp4' } },
-  ];
-  for (const [i, v] of variants.entries()) {
-    const t1 = Date.now();
-    const r = await attempt(u, v.extra, 12_000, { title: song.title, artist: 'x' });
-    onStep({ name: `C.${i + 1} AVPlayer – ${v.name}`, ok: r.ok, detail: r.detail, ms: Date.now() - t1 });
-    if (r.ok) {
-      await TrackPlayer.reset();
-      return true;
-    }
+  const t1 = Date.now();
+  const r1 = await attempt(u, full, 12_000, { title: song.title, artist: 'x' });
+  onStep({ name: 'C.1 AVPlayer – remote url', ok: r1.ok, detail: r1.detail, ms: Date.now() - t1 });
+  if (r1.ok) {
+    await TrackPlayer.reset();
+    return true;
   }
-  await TrackPlayer.reset();
-  return false;
+
+  // D: download the file first, then play the local copy
+  const t2 = Date.now();
+  try {
+    const local = await downloadToCache(u, `probe-${song.id}`);
+    onStep({ name: 'D.1 downloaded to cache', ok: true, detail: local.slice(-60), ms: Date.now() - t2 });
+    const t3 = Date.now();
+    const r2 = await attempt(local, { contentType: 'audio/mp4' }, 12_000, { title: song.title, artist: 'x' });
+    onStep({ name: 'D.2 AVPlayer – local file', ok: r2.ok, detail: r2.detail, ms: Date.now() - t3 });
+    await TrackPlayer.reset();
+    return r2.ok;
+  } catch (e) {
+    onStep({ name: 'D.1 download', ok: false, detail: e instanceof Error ? e.message : String(e), ms: Date.now() - t2 });
+    await TrackPlayer.reset();
+    return false;
+  }
 }
