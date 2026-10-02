@@ -8,7 +8,7 @@ import { recentInsertIndex } from '../../src/core/homeLayout';
 import type { Section, SongItem } from '../../src/core/types';
 import { openDb } from '../../src/db/expo';
 import * as repo from '../../src/db/repo';
-import { Button, ErrorView, Loading, SectionCarousel } from '../../src/ui/components';
+import { Button, ErrorView, Loading, SectionCarousel, s } from '../../src/ui/components';
 import { useAsync } from '../../src/ui/hooks';
 import { MINI_HEIGHT, colors, useScheme } from '../../src/ui/theme';
 
@@ -36,7 +36,7 @@ export default function Home() {
     useCallback(() => {
       let alive = true;
       openDb()
-        .then((db) => repo.history(db, 20))
+        .then((db) => repo.recentSongs(db, 20))
         .then((rows) => alive && setRecent(rows))
         .catch(() => undefined);
       return () => {
@@ -52,10 +52,10 @@ export default function Home() {
   }, [reload]);
 
   const sections: Section[] = data?.sections ?? [];
-  const recentSection: Section | null = useMemo(() => (recent.length ? { title: '最近聞いた曲', items: recent } : null), [recent]);
-  const at = recentInsertIndex(sections.map((s) => s.title));
+  const recentSection: Section = useMemo(() => ({ title: '最近聞いた曲', items: recent }), [recent]);
+  const at = recentInsertIndex(sections.map((x) => x.title));
 
-  if (loading && !data && !recentSection) return <Loading />;
+  if (loading && !data && !recent.length) return <Loading />;
 
   return (
     <ScrollView
@@ -63,10 +63,17 @@ export default function Home() {
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accentText} />}
     >
       <BrandHeader />
-      {sections.slice(0, at).map((s, i) => <SectionCarousel key={`${s.title}-${i}`} section={s} />)}
+      {sections.slice(0, at).map((x, i) => <SectionCarousel key={`${x.title}-${i}`} section={x} />)}
       {/* directly below "Today's hits" / "Trending" */}
-      {recentSection && <SectionCarousel section={recentSection} />}
-      {sections.slice(at).map((s, i) => <SectionCarousel key={`${s.title}-${at + i}`} section={s} />)}
+      {recent.length ? (
+        <SectionCarousel section={recentSection} />
+      ) : (
+        <View style={{ marginBottom: 20 }}>
+          <Text style={[s.h2]}>最近聞いた曲</Text>
+          <Text style={[s.sub, { paddingHorizontal: 16 }]}>まだ再生した曲がありません。曲を再生すると、ここに並びます。</Text>
+        </View>
+      )}
+      {sections.slice(at).map((x, i) => <SectionCarousel key={`${x.title}-${at + i}`} section={x} />)}
       {error && !data && (
         <View style={{ alignItems: 'center', padding: 24 }}>
           <ErrorView message={error} />

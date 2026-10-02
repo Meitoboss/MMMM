@@ -15,6 +15,7 @@ const TABLES = [
   'CREATE TABLE IF NOT EXISTS `Lyrics` (`songId` TEXT NOT NULL, `fixed` TEXT, `synced` TEXT, PRIMARY KEY(`songId`), FOREIGN KEY(`songId`) REFERENCES `Song`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )',
   'CREATE TABLE IF NOT EXISTS `Playlist` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, `browseId` TEXT)',
   // songs imported from files on the device: only the file NAME is stored (the app container path changes between installs)
+  'CREATE TABLE IF NOT EXISTS `RecentPlay` (`songId` TEXT NOT NULL, `playedAt` INTEGER NOT NULL, PRIMARY KEY(`songId`), FOREIGN KEY(`songId`) REFERENCES `Song`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )',
   'CREATE TABLE IF NOT EXISTS `LocalFile` (`songId` TEXT NOT NULL, `fileName` TEXT NOT NULL, `size` INTEGER, `addedAt` INTEGER NOT NULL, PRIMARY KEY(`songId`), FOREIGN KEY(`songId`) REFERENCES `Song`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )',
   'CREATE TABLE IF NOT EXISTS `SearchQuery` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `query` TEXT NOT NULL)',
   'CREATE TABLE IF NOT EXISTS `SongAlbumMap` (`songId` TEXT NOT NULL, `albumId` TEXT NOT NULL, `position` INTEGER, PRIMARY KEY(`songId`, `albumId`), FOREIGN KEY(`songId`) REFERENCES `Song`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`albumId`) REFERENCES `Album`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )',
@@ -23,6 +24,7 @@ const TABLES = [
 ];
 
 const INDICES = [
+  'CREATE INDEX IF NOT EXISTS `index_RecentPlay_playedAt` ON `RecentPlay` (`playedAt`)',
   'CREATE INDEX IF NOT EXISTS `index_Event_songId` ON `Event` (`songId`)',
   'CREATE UNIQUE INDEX IF NOT EXISTS `index_SearchQuery_query` ON `SearchQuery` (`query`)',
   'CREATE INDEX IF NOT EXISTS `index_SongAlbumMap_songId` ON `SongAlbumMap` (`songId`)',

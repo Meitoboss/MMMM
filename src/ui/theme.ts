@@ -2,114 +2,145 @@ import Storage from 'expo-sqlite/kv-store';
 import { Appearance, StyleSheet } from 'react-native';
 import { create } from 'zustand';
 
-/**
- * Music space theme.
- * Tokens follow the web version (Music space – Pro Edition): dark #0b0c10 with the lime accent #82e653,
- * plus the light theme from the same stylesheet.
- */
-export interface Palette {
-  bg: string;
-  /** cards, rows on press */
-  surface: string;
-  /** inputs, chips, hover */
-  surface2: string;
-  text: string;
-  sub: string;
-  accent: string;
-  /** accent used for TEXT/ICONS (the lime is too light to read on white) */
-  accentText: string;
-  /** text/icon colour on top of an accent-coloured fill */
-  onAccent: string;
-  danger: string;
-  border: string;
-  /** dimmed lyric lines */
-  dim: string;
-}
+import { normalizeHex } from '../core/color';
+import {
+  Overrides,
+  Palette,
+  Preset,
+  Scheme,
+  ThemeMode,
+  palettes,
+  resolvePalette,
+  sanitizeOverrides,
+} from '../core/themeLogic';
 
-export const palettes = {
-  dark: {
-    bg: '#0b0c10',
-    surface: '#161b22',
-    surface2: '#21262d',
-    text: '#ffffff',
-    sub: '#8f9499',
-    accent: '#82e653',
-    accentText: '#82e653',
-    onAccent: '#0b0c10',
-    danger: '#ff6b6b',
-    border: '#1f232b',
-    dim: '#4a5058',
-  },
-  light: {
-    bg: '#f4f5f7',
-    surface: '#ffffff',
-    surface2: '#eaeaea',
-    text: '#1f232b',
-    sub: '#656d76',
-    accent: '#82e653',
-    accentText: '#3d8f16',
-    onAccent: '#0b0c10',
-    danger: '#d93025',
-    border: '#e1e4e8',
-    dim: '#b4bac1',
-  },
-} satisfies Record<string, Palette>;
+export type { Overrides, Palette, Preset, Scheme, ThemeMode };
+export { ACCENT_SWATCHES, EDITABLE, PRESETS, palettes } from '../core/themeLogic';
 
-export type Scheme = keyof typeof palettes;
-export type ThemeMode = Scheme | 'system';
+const MODE_KEY = 'theme.v1';
+const OVERRIDES_KEY = 'theme.overrides.v1';
 
-const KEY = 'theme.v1';
-
-function resolve(mode: ThemeMode): Scheme {
+function resolveScheme(mode: ThemeMode): Scheme {
   if (mode === 'system') return Appearance.getColorScheme() === 'light' ? 'light' : 'dark';
   return mode;
 }
 
 function loadMode(): ThemeMode {
   try {
-    const v = Storage.getItemSync(KEY);
+    const v = Storage.getItemSync(MODE_KEY);
     return v === 'light' || v === 'system' || v === 'dark' ? v : 'dark';
   } catch {
     return 'dark';
   }
 }
 
+function loadOverrides(): Overrides {
+  try {
+    const raw = Storage.getItemSync(OVERRIDES_KEY);
+    return raw ? sanitizeOverrides(JSON.parse(raw)) : {};
+  } catch {
+    return {};
+  }
+}
+
+function persist(key: string, value: string) {
+  try {
+    Storage.setItemSync(key, value);
+  } catch {
+    /* not saved – the theme still applies until the app closes */
+  }
+}
+
 const initialMode = loadMode();
-let currentScheme: Scheme = resolve(initialMode);
+let currentScheme: Scheme = resolveScheme(initialMode);
+let overrides: Overrides = loadOverrides();
+let resolved: Record<Scheme, Palette> = {
+  dark: resolvePalette('dark', overrides.dark),
+  light: resolvePalette('light', overrides.light),
+};
+/** bumped whenever the colours change, so cached styles are rebuilt */
+let version = 0;
+
+function rebuild() {
+  resolved = { dark: resolvePalette('dark', overrides.dark), light: resolvePalette('light', overrides.light) };
+  version += 1;
+}
 
 interface ThemeStore {
   mode: ThemeMode;
   scheme: Scheme;
+  /** changes whenever a colour changes */
+  version: number;
+  overrides: Overrides;
   setMode: (m: ThemeMode) => void;
   refresh: () => void;
+  /** set (hex) or clear (null) one colour of one mode; returns false for an invalid colour */
+  setColor: (scheme: Scheme, key: keyof Palette, value: string | null) => boolean;
+  /** replaces the colours of the preset's mode and switches to that mode */
+  applyPreset: (preset: Preset) => void;
+  resetColors: (scheme: Scheme) => void;
 }
 
-export const useTheme = create<ThemeStore>((set, get) => ({
-  mode: initialMode,
-  scheme: currentScheme,
-  setMode: (mode) => {
-    try {
-      Storage.setItemSync(KEY, mode);
-    } catch {
-      /* not persisted */
-    }
-    currentScheme = resolve(mode);
-    set({ mode, scheme: currentScheme });
-  },
-  refresh: () => {
-    const next = resolve(get().mode);
-    if (next !== currentScheme) {
-      currentScheme = next;
-      set({ scheme: next });
-    }
-  },
-}));
+export const useTheme = create<ThemeStore>((set, get) => {
+  const commit = (extra: Partial<ThemeStore> = {}) => {
+    persist(OVERRIDES_KEY, JSON.stringify(overrides));
+    rebuild();
+    set({ overrides, version, ...extra });
+  };
+  return {
+    mode: initialMode,
+    scheme: currentScheme,
+    version,
+    overrides,
+    setMode: (mode) => {
+      persist(MODE_KEY, mode);
+      currentScheme = resolveScheme(mode);
+      set({ mode, scheme: currentScheme });
+    },
+    refresh: () => {
+      const next = resolveScheme(get().mode);
+      if (next !== currentScheme) {
+        currentScheme = next;
+        set({ scheme: next });
+      }
+    },
+    setColor: (scheme, key, value) => {
+      const next: Partial<Palette> = { ...(overrides[scheme] ?? {}) };
+      if (value === null) {
+        delete next[key];
+      } else {
+        const hex = normalizeHex(value);
+        if (!hex) return false;
+        next[key] = hex;
+      }
+      overrides = { ...overrides, [scheme]: next };
+      commit();
+      return true;
+    },
+    applyPreset: (preset) => {
+      overrides = { ...overrides, [preset.scheme]: { ...preset.colors } };
+      persist(MODE_KEY, preset.scheme);
+      currentScheme = preset.scheme;
+      commit({ mode: preset.scheme, scheme: preset.scheme });
+    },
+    resetColors: (scheme) => {
+      overrides = { ...overrides, [scheme]: {} };
+      commit();
+    },
+  };
+});
 
 Appearance.addChangeListener(() => useTheme.getState().refresh());
 
-/** Components call this so they re-render when the theme changes. */
+/** Components call this so they re-render when the mode OR any colour changes. */
 export function useScheme(): Scheme {
+  useTheme((s) => s.version);
   return useTheme((s) => s.scheme);
+}
+
+/** The colours of the current theme, as a ready-to-use object (e.g. for the editor's own rows). */
+export function currentPalette(): Palette {
+  return resolved[currentScheme];
 }
 
 /**
@@ -119,16 +150,19 @@ export function useScheme(): Scheme {
  */
 export const colors = {} as Palette;
 for (const key of Object.keys(palettes.dark) as (keyof Palette)[]) {
-  Object.defineProperty(colors, key, { get: () => palettes[currentScheme][key], enumerable: true });
+  Object.defineProperty(colors, key, { get: () => resolved[currentScheme][key], enumerable: true });
 }
 
-/** StyleSheet whose values follow the theme (rebuilt once per scheme, then cached). */
+/** StyleSheet whose values follow the theme (rebuilt when the mode or a colour changes, otherwise cached). */
 export function dynamicStyles<T extends Record<string, object>>(factory: (c: Palette) => T): T {
-  const cache: Partial<Record<Scheme, T>> = {};
+  const cache: Partial<Record<Scheme, { v: number; styles: T }>> = {};
   const current = (): T => {
     const scheme = currentScheme;
-    cache[scheme] ??= StyleSheet.create(factory(palettes[scheme])) as T;
-    return cache[scheme] as T;
+    const hit = cache[scheme];
+    if (hit && hit.v === version) return hit.styles;
+    const styles = StyleSheet.create(factory(resolved[scheme])) as T;
+    cache[scheme] = { v: version, styles };
+    return styles;
   };
   const out = {} as T;
   for (const key of Object.keys(current()) as (keyof T)[]) {

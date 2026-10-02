@@ -106,6 +106,8 @@ export const usePlayer = create<PlayerState>((set, get) => {
       await TrackPlayer.play();
       loadedAt = Date.now();
       get().log('play() called');
+      // for the home screen's "recently played" shelf (best effort, never blocks playback)
+      openDb().then((db) => repo.markPlayed(db, song)).catch(() => undefined);
       set({ status: 'playing' });
       // warm the URL cache for the next song so skipping is instant
       const upcoming = get().queue[index + 1];

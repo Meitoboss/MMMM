@@ -3,7 +3,7 @@
     "name": "Music space",
     "slug": "music-space",
     "scheme": "musicspace",
-    "version": "0.1.0",
+    "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -24,7 +24,9 @@
         "NSAppTransportSecurity": {
           "NSAllowsArbitraryLoads": true
         },
-        "NSLocalNetworkUsageDescription": "Connect to your own RiMusic stream server on the local network."
+        "NSLocalNetworkUsageDescription": "あなたの自宅サーバー（ローカルネットワーク上）に接続するために使います。",
+        "UIFileSharingEnabled": true,
+        "LSSupportsOpeningDocumentsInPlace": true
       }
     },
     "plugins": [

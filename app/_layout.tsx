@@ -6,6 +6,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { clearLastCrash, readLastCrash } from '../src/crash';
 import { openDb } from '../src/db/expo';
+import { ensureFolders } from '../src/player/localFiles';
 import { ensurePlayer } from '../src/player/setup';
 import { applySettings, useSettings } from '../src/state/settings';
 import { EngineHost } from '../src/ui/EngineHost';
@@ -22,6 +23,7 @@ export default function RootLayout() {
       Alert.alert('前回、アプリが異常終了しました', `${crash.message}\n\n${crash.stack}`.slice(0, 1200), [{ text: 'OK', onPress: clearLastCrash }]);
     }
     void openDb();
+    void ensureFolders(); // creates Documents/Music, which then shows up in the Files app
     void ensurePlayer();
   }, []);
 

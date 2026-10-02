@@ -1,55 +1,73 @@
 import * as FileSystem from 'expo-file-system/legacy';
 
-import { LOCAL_PREFIX, fileExtension, makeLocalId, parseLocalName } from '../core/localMeta';
-import type { AudioSource, SongItem } from '../core/types';
+import { runImport, type ImportDeps, type ImportResult, type InboxFile } from '../core/localImport';
+import { isAudioFileName } from '../core/localMeta';
+import type { AudioSource } from '../core/types';
 import type { Db } from '../db/driver';
 import { openDb } from '../db/expo';
 import * as repo from '../db/repo';
 
-/**
- * TEMPORARY (crash investigation): the native file-picker module (expo-document-picker) is left out of this build.
- * To bring it back: add "expo-document-picker" to package.json and restore the call in importLocalFiles().
- */
-/**
- * Songs imported from the device. Files are copied into the app's own Documents folder so they keep working
- * after the original is moved, and only the file NAME is stored in the database – the absolute path of the
- * app container changes when the app is reinstalled or re-signed.
- */
-const dir = () => `${FileSystem.documentDirectory}local/`;
-export const localUri = (fileName: string): string => `${dir()}${fileName}`;
+export type { ImportResult, InboxFile };
 
-export interface ImportResult {
-  added: SongItem[];
-  failed: string[];
-  cancelled: boolean;
+/**
+ * Music on this device.
+ *
+ *   inbox   Documents/Music/   – shown in the Files app (On My iPhone → Music space → Music). The user drops files here.
+ *   store   Documents/local/   – where imported files live; only the file NAME is stored in the database, because the
+ *                                absolute path of the app container changes when the app is reinstalled or re-signed.
+ *
+ * No native file-picker module is needed: the Files app does the picking.
+ */
+const root = () => FileSystem.documentDirectory ?? '';
+const inboxDir = () => `${root()}Music/`;
+const storeDir = () => `${root()}local/`;
+export const localUri = (fileName: string): string => `${storeDir()}${fileName}`;
+
+/** Creates the folders (so "Music" shows up in the Files app). Safe to call every launch. */
+export async function ensureFolders(): Promise<void> {
+  await FileSystem.makeDirectoryAsync(inboxDir(), { intermediates: true }).catch(() => undefined);
+  await FileSystem.makeDirectoryAsync(storeDir(), { intermediates: true }).catch(() => undefined);
 }
 
-export async function importLocalFiles(db?: Db): Promise<ImportResult> {
-  const database = db ?? (await openDb());
-  throw new Error('このビルドでは、ファイル選択を一時的に外しています（起動できない原因を調べているため）。');
-  // eslint-disable-next-line no-unreachable
-  const res = { canceled: true, assets: [] as { uri: string; name: string; size?: number | null }[] };
-  if (res.canceled) return { added: [], failed: [], cancelled: true };
+async function readNames(dir: string): Promise<string[]> {
+  try {
+    return await FileSystem.readDirectoryAsync(dir);
+  } catch {
+    return [];
+  }
+}
 
-  await FileSystem.makeDirectoryAsync(dir(), { intermediates: true }).catch(() => undefined);
-  const added: SongItem[] = [];
-  const failed: string[] = [];
-  for (const a of res.assets) {
-    try {
-      const id = makeLocalId();
-      // ASCII-only stored name: Japanese file names would need URL-encoding for the player. The title lives in the database.
-      const stored = `${id.slice(LOCAL_PREFIX.length)}${fileExtension(a.name)}`;
-      await FileSystem.moveAsync({ from: a.uri, to: localUri(stored) });
-      const meta = parseLocalName(a.name);
-      added.push(await repo.addLocalFile(database, { id, fileName: stored, title: meta.title, artist: meta.artist, size: a.size ?? undefined }));
-    } catch {
-      failed.push(a.name);
+/** music files waiting in the folder "Music" (and loose ones in the app's top folder) */
+export async function listInbox(): Promise<InboxFile[]> {
+  const out: InboxFile[] = [];
+  for (const dir of [inboxDir(), root()]) {
+    for (const name of await readNames(dir)) {
+      if (isAudioFileName(name)) out.push({ name, uri: `${dir}${encodeURIComponent(name)}` });
     }
   }
-  return { added, failed, cancelled: false };
+  return out;
 }
 
-/** Delete the song from the library (playlists, history, likes) and the copied file from the device. */
+const deps: ImportDeps = {
+  list: listInbox,
+  move: async (from, stored) => {
+    await ensureFolders();
+    await FileSystem.moveAsync({ from, to: localUri(stored) });
+  },
+  undo: async (stored, original) => {
+    await FileSystem.moveAsync({ from: localUri(stored), to: original });
+  },
+  size: async (uri) => {
+    const info = await FileSystem.getInfoAsync(uri);
+    return info.exists && 'size' in info ? info.size : undefined;
+  },
+};
+
+export async function importLocalFiles(db?: Db): Promise<ImportResult> {
+  return runImport(db ?? (await openDb()), deps);
+}
+
+/** Delete the song from the library (playlists, history, likes) and the copy on the device. */
 export async function removeLocalFile(songId: string, db?: Db): Promise<void> {
   const name = await repo.deleteLocalFile(db ?? (await openDb()), songId);
   if (name) await FileSystem.deleteAsync(localUri(name), { idempotent: true });

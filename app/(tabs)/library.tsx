@@ -6,7 +6,7 @@ import { Alert, FlatList, Pressable, ScrollView, Text, TextInput, View } from 'r
 import type { AlbumItem, ArtistItem, SongItem } from '../../src/core/types';
 import { openDb } from '../../src/db/expo';
 import * as repo from '../../src/db/repo';
-import { importLocalFiles } from '../../src/player/localFiles';
+import { importLocalFiles, listInbox } from '../../src/player/localFiles';
 import { usePlayer } from '../../src/state/player';
 import { Button, Cover, ItemRow, SongRow, s } from '../../src/ui/components';
 import { MINI_HEIGHT, colors, useScheme } from '../../src/ui/theme';
@@ -41,11 +41,15 @@ export default function Library() {
   const [total, setTotal] = useState(0);
   const [newName, setNewName] = useState('');
   const [importing, setImporting] = useState(false);
+  const [waiting, setWaiting] = useState(0);
 
   const load = useCallback(async () => {
     const db = await openDb();
     if (tab === 'songs') setSongs(await repo.allSongs(db));
-    if (tab === 'local') setSongs(await repo.localSongs(db));
+    if (tab === 'local') {
+      setSongs(await repo.localSongs(db));
+      setWaiting((await listInbox()).length);
+    }
     if (tab === 'liked') setSongs(await repo.likedSongs(db));
     if (tab === 'history') setSongs(await repo.history(db));
     if (tab === 'playlists') setPlaylists(await repo.playlists(db));
@@ -62,11 +66,16 @@ export default function Library() {
     setImporting(true);
     try {
       const r = await importLocalFiles();
-      if (r.cancelled) return;
       await load();
-      if (r.failed.length) Alert.alert('読み込めなかったファイルがあります', r.failed.join('\n'));
+      if (r.found === 0) {
+        Alert.alert('取り込む曲がありません', '「ファイル」アプリ → このiPhone内 → Music space → Music フォルダに、音楽ファイルを入れてから、もう一度押してください。');
+      } else if (r.failed.length) {
+        Alert.alert(`${r.added.length}曲を取り込みました`, `取り込めなかったファイル:\n${r.failed.join('\n')}`);
+      } else {
+        Alert.alert(`${r.added.length}曲を取り込みました`);
+      }
     } catch (e) {
-      Alert.alert('ファイルを読み込めませんでした', e instanceof Error ? e.message : String(e));
+      Alert.alert('取り込めませんでした', e instanceof Error ? e.message : String(e));
     } finally {
       setImporting(false);
     }
@@ -93,10 +102,15 @@ export default function Library() {
           ListHeaderComponent={tab === 'local' || songs.length ? (
             <View>
               {tab === 'local' && (
-                <View style={{ paddingHorizontal: 16, marginBottom: 4 }}>
-                  <Text style={s.sub}>端末内の音楽ファイルを、このアプリの中に安全にコピーして保存します。曲を長押しすると、削除できます。</Text>
+                <View style={{ paddingHorizontal: 16, marginBottom: 6, gap: 6 }}>
+                  <Text style={s.sub}>
+                    「ファイル」アプリ → このiPhone内 → Music space → Music フォルダに、音楽ファイル（mp3、m4a、wav、flac など）を入れて、下の「取り込む」を押してください。取り込んだ曲は、アプリの中に保存されます。曲を長押しすると、削除できます。
+                  </Text>
+                  <Text style={{ color: waiting ? colors.accentText : colors.sub, fontWeight: '700' }}>
+                    取り込み待ち: {waiting}件
+                  </Text>
                   <View style={{ flexDirection: 'row', marginBottom: songs.length ? 4 : 0 }}>
-                    <Button label={importing ? '読み込み中…' : 'ファイルを追加'} icon="add" onPress={() => { if (!importing) void addFiles(); }} />
+                    <Button label={importing ? '取り込み中…' : '取り込む'} icon="download-outline" onPress={() => { if (!importing) void addFiles(); }} />
                   </View>
                 </View>
               )}
@@ -108,7 +122,7 @@ export default function Library() {
               )}
             </View>
           ) : null}
-          ListEmptyComponent={empty(tab === 'local' ? 'まだファイルがありません。「ファイルを追加」から、端末内の音楽を読み込めます' : tab === 'liked' ? 'お気に入りはまだありません。曲を長押しして追加できます' : tab === 'history' ? 'まだ再生した曲がありません' : '再生した曲、お気に入り、プレイリストの曲がここに並びます')}
+          ListEmptyComponent={empty(tab === 'local' ? 'まだ曲がありません。Music フォルダに音楽ファイルを入れて、「取り込む」を押してください' : tab === 'liked' ? 'お気に入りはまだありません。曲を長押しして追加できます' : tab === 'history' ? 'まだ再生した曲がありません' : '再生した曲、お気に入り、プレイリストの曲がここに並びます')}
           renderItem={({ item, index }) => <SongRow song={item} onChanged={load} onPress={() => void play(songs, index)} />}
         />
       )}

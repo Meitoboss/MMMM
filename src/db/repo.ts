@@ -145,6 +145,23 @@ export async function history(db: Db, limit = 100): Promise<SongItem[]> {
   return rows.map(songFromRow);
 }
 
+/**
+ * "Recently played" for the home screen: written the moment a song STARTS (the Event history is only written when
+ * a song ends, so the song you are listening to right now would be missing).
+ */
+export async function markPlayed(db: Db, song: SongItem): Promise<void> {
+  await upsertSong(db, song);
+  await db.run('INSERT OR REPLACE INTO RecentPlay (songId, playedAt) VALUES (?,?)', [song.id, now()]);
+}
+
+export async function recentSongs(db: Db, limit = 20): Promise<SongItem[]> {
+  const rows = await db.all<SongRow>(
+    'SELECT Song.* FROM RecentPlay JOIN Song ON Song.id = RecentPlay.songId ORDER BY RecentPlay.playedAt DESC, Song.rowid DESC LIMIT ?',
+    [limit],
+  );
+  return rows.map(songFromRow);
+}
+
 export type StatsRange = 'today' | 'week' | 'month' | '3months' | '6months' | 'year' | 'all';
 
 const DAY = 86_400_000;

@@ -35,3 +35,12 @@ export function parseLocalName(fileName: string): { title: string; artist?: stri
   const title = base.replace(/^\d{1,3}[.\-\s]+(?=\S)/, '').trim();
   return { title: title || base || fileName };
 }
+
+/** Formats AVPlayer (the iPhone's own player) can play. */
+export const AUDIO_EXTENSIONS = ['.mp3', '.m4a', '.aac', '.wav', '.flac', '.aif', '.aiff', '.caf', '.mp4'];
+
+export function isAudioFileName(name: string): boolean {
+  if (name.startsWith('.')) return false; // hidden / system files such as ".DS_Store"
+  const ext = fileExtension(name, '');
+  return ext !== '' && AUDIO_EXTENSIONS.includes(ext);
+}
