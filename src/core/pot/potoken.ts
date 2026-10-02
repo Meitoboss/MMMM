@@ -21,6 +21,8 @@ export interface PoTokenResult {
   streamingDecoded?: string;
   /** same, but bound to the bare 11-character visitor id inside visitorData */
   streamingVisitorId?: string;
+  /** where the tokens were minted: this phone's WebView (default) or a token server */
+  source?: 'local' | 'remote';
 }
 
 async function botguardRequest(url: string, body: string): Promise<string> {

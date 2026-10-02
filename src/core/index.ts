@@ -10,3 +10,4 @@ export * as invidious from './streams/invidious';
 export * as streamServer from './streams/server';
 export { setEngine } from './pot/engine';
 export type { JsEngine } from './pot/engine';
+export { configureRemotePot, isRemotePotConfigured } from './pot/remote';

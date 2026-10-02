@@ -2,6 +2,7 @@ import Storage from 'expo-sqlite/kv-store';
 import { create } from 'zustand';
 
 import { DEFAULT_INVIDIOUS_INSTANCES, DEFAULT_PIPED_INSTANCES, IOS, WEB_REMIX, configure } from '../core/config';
+import { configureRemotePot } from '../core/pot/remote';
 import type { ResolverOptions, StreamBackend } from '../core/streams/resolver';
 
 export interface Settings {
@@ -17,6 +18,9 @@ export interface Settings {
   /** your own server/server.mjs, e.g. http://192.168.1.10:8787 */
   streamServerUrl: string;
   streamServerKey: string;
+  /** a bgutil token server, e.g. https://1-2-3-4.sslip.io – mints PO tokens instead of this phone's WebView */
+  potServerUrl: string;
+  potServerKey: string;
   autoRadio: boolean;
   /** fetch lyrics automatically on the player screen */
   autoLyrics: boolean;
@@ -33,6 +37,8 @@ export const DEFAULT_SETTINGS: Settings = {
   invidiousInstances: DEFAULT_INVIDIOUS_INSTANCES,
   streamServerUrl: '',
   streamServerKey: '',
+  potServerUrl: '',
+  potServerKey: '',
   autoRadio: true,
   autoLyrics: true,
   playbackRate: 1,
@@ -55,6 +61,7 @@ function load(): Settings {
 
 /** Push the user-facing settings into the core library. */
 export function applySettings(s: Settings) {
+  configureRemotePot({ url: s.potServerUrl, key: s.potServerKey });
   configure({
     hl: s.hl,
     gl: s.gl,

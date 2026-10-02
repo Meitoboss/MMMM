@@ -1,6 +1,6 @@
 import { Alert, Pressable, ScrollView, Switch, Text, TextInput, View } from 'react-native';
 import { useState } from 'react';
-import { runSelfTest, StepResult } from '../../src/core/diagnostics';
+import { runSelfTest, runTokenServerTest, StepResult } from '../../src/core/diagnostics';
 import { runCurrentSongProbe, runFormatMatrix, runPlaybackProbe, runRealPathTest, runTokenExperiment } from '../../src/player/probe';
 
 import type { StreamBackend } from '../../src/core/streams/resolver';
@@ -63,6 +63,13 @@ export default function Settings() {
       </Text>
       <Field label="Server URL" value={st.streamServerUrl} onSave={(v) => { clearStreamCache(); st.update({ streamServerUrl: v }); }} />
       <Field label="Server key (optional)" value={st.streamServerKey} onSave={(v) => { clearStreamCache(); st.update({ streamServerKey: v }); }} />
+
+      <Text style={[s.h2, { marginTop: 20 }]}>Token server</Text>
+      <Text style={[s.sub, { paddingHorizontal: 16 }]}>
+        A bgutil server (e.g. on Oracle Cloud) that mints YouTube PO tokens. Only the tokens come from it – audio is still fetched by this phone.
+      </Text>
+      <Field label="Token server URL (https://…)" value={st.potServerUrl} onSave={(v) => { clearStreamCache(); st.update({ potServerUrl: v }); }} />
+      <Field label="Token server key" value={st.potServerKey} onSave={(v) => { clearStreamCache(); st.update({ potServerKey: v }); }} />
 
       <Text style={[s.h2, { marginTop: 20 }]}>Region</Text>
       <Field label="Language (hl)" value={st.hl} onSave={(v) => st.update({ hl: v || 'en' })} />
@@ -136,6 +143,17 @@ export default function Settings() {
         }}
       >
         <Row title="Format matrix" sub="Which formats (itag) are served, and with which token? (tap a failing song first)"><Text style={{ color: colors.accent }}>{running ? '' : 'Start'}</Text></Row>
+      </Pressable>
+      <Pressable
+        disabled={running}
+        onPress={async () => {
+          setSteps([]);
+          setRunning(true);
+          await runTokenServerTest((r) => setSteps((cur) => [...cur, r]));
+          setRunning(false);
+        }}
+      >
+        <Row title="Test token server" sub="Reachable? Key accepted? Does it mint tokens?"><Text style={{ color: colors.accent }}>{running ? '' : 'Start'}</Text></Row>
       </Pressable>
       {steps.map((r) => (
         <View key={r.name} style={{ paddingHorizontal: 16, paddingVertical: 6 }}>

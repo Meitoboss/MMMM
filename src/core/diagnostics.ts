@@ -1,6 +1,7 @@
 import { resolveWithPoToken, ensureVisitorData } from './innertube/webpot';
 import { engineStatus, getEngine } from './pot/engine';
 import { poTokenProvider } from './pot/potoken';
+import { getRemotePotConfig, isRemotePotConfigured, mintRemote, pingRemote } from './pot/remote';
 import { SOLVER_VERSION } from './pot/solver.generated';
 import { getPlayerJs, solveChallenges } from './pot/solver';
 
@@ -57,4 +58,30 @@ export async function runSelfTest(onStep: (r: StepResult) => void, videoId = 'dQ
     () => resolveWithPoToken(videoId),
     (s) => `itag ${s.itag}, ${s.url.split('/')[2]}, ${((s.contentLength ?? 0) / 1e6).toFixed(1)} MB`,
   ));
+}
+
+/** Settings → Diagnostics → "Test token server": can the phone reach it, is the key accepted, does it mint tokens? */
+export async function runTokenServerTest(onStep: (r: StepResult) => void, videoId = 'cy-4YL--Cm8'): Promise<boolean> {
+  if (!isRemotePotConfigured()) {
+    onStep({ name: 'Token server', ok: false, detail: 'Enter "Token server URL" (and key) in Settings first.', ms: 0 });
+    return false;
+  }
+  const cfg = getRemotePotConfig()!;
+  let t0 = Date.now();
+  try {
+    const pong = await pingRemote();
+    onStep({ name: `1. ${cfg.url} /ping`, ok: true, detail: pong.slice(0, 120), ms: Date.now() - t0 });
+  } catch (e) {
+    onStep({ name: `1. ${cfg.url} /ping`, ok: false, detail: e instanceof Error ? e.message : String(e), ms: Date.now() - t0 });
+    return false;
+  }
+  t0 = Date.now();
+  try {
+    const t = await mintRemote(videoId);
+    onStep({ name: '2. mint a token', ok: true, detail: `${t.length} chars: ${t.slice(0, 16)}…`, ms: Date.now() - t0 });
+    return true;
+  } catch (e) {
+    onStep({ name: '2. mint a token', ok: false, detail: e instanceof Error ? e.message : String(e), ms: Date.now() - t0 });
+    return false;
+  }
 }

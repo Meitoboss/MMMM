@@ -7,6 +7,7 @@ import { bytesToBase64 } from '../src/core/lyrics/base64';
 import { decodeVisitorData, descramble, extractVisitorId, parseChallengeData, parseIntegrityTokenData, u8CsvToPoToken, ytBase64ToBytes } from '../src/core/pot/botguard';
 import { JsEngine, setEngine } from '../src/core/pot/engine';
 import { poTokenProvider } from '../src/core/pot/potoken';
+import { configureRemotePot, mintRemote, pingRemote } from '../src/core/pot/remote';
 import { getQueryParam, overrideSolverBundle, removeQueryParam, resetSolverState, setQueryParam } from '../src/core/pot/solver';
 import { resolveAudio, clearStreamCache } from '../src/core/streams/resolver';
 
@@ -161,9 +162,11 @@ describe('PO-token playback (RiMusic web-potoken flow)', () => {
     mints.length = 0;
     engineCalls.length = 0;
     overrideSolverBundle({ lib: 'LIB', core: 'CORE' });
+    configureRemotePot(null);
     setEngine(fakeEngine);
   });
   afterEach(() => {
+    configureRemotePot(null);
     globalThis.fetch = realFetch;
     setEngine(null);
   });
@@ -320,6 +323,84 @@ describe('PO-token playback (RiMusic web-potoken flow)', () => {
     const rows = await formatMatrix('abcdefghijk');
     const m4a = rows.find((r) => r.label.includes('itag 140'))!;
     assert.match(m4a.results, /none 403 \| video 403 \| session 403 \| session-dec 403 \| visitor-id 403/);
+  });
+
+  describe('token server (bgutil)', () => {
+    /** wraps the installed mock: answers https://pot.example/* itself */
+    function withTokenServer(handler: (path: string, init?: RequestInit) => Response) {
+      const inner = globalThis.fetch;
+      const seen: { path: string; init?: RequestInit }[] = [];
+      globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+        const url = String(input);
+        if (url.startsWith('https://pot.example')) {
+          const path = url.slice('https://pot.example'.length);
+          seen.push({ path, init });
+          return handler(path, init);
+        }
+        return inner(input, init);
+      }) as typeof fetch;
+      return seen;
+    }
+    const okMint = (_p: string, init?: RequestInit) => {
+      const binding = JSON.parse(String(init?.body)).content_binding as string;
+      return json({ contentBinding: binding, poToken: `remote-${binding}`, expiresAt: new Date(Date.now() + 3_600_000).toISOString() });
+    };
+
+    it('uses tokens from the token server instead of the WebView', async () => {
+      installNetwork();
+      const seen = withTokenServer(okMint);
+      configureRemotePot({ url: 'https://pot.example/', key: 'secret' });
+      const src = await resolveWithPoToken('abcdefghijk');
+
+      assert.deepEqual(mints, [], 'the WebView must not be asked to mint');
+      assert.ok(!engineCalls.includes('botguard'));
+      assert.equal(src.note, 'itag140 pot=video-bound (token server)');
+      assert.ok(src.url.endsWith('pot=remote-abcdefghijk'));
+      assert.equal(src.potTokens?.source, 'remote');
+
+      const first = seen.find((x) => x.path === '/get_pot')!;
+      assert.equal((first.init?.headers as Record<string, string>)['X-Api-Key'], 'secret');
+      assert.equal(first.init?.credentials, 'omit');
+      const player = JSON.parse(String(calls.find((c) => c.url.includes('/youtubei/v1/player'))!.init?.body));
+      assert.equal(player.serviceIntegrityDimensions.poToken, 'remote-abcdefghijk');
+    });
+
+    it('asks for the video token and the session token, and caches both', async () => {
+      installNetwork();
+      const seen = withTokenServer(okMint);
+      configureRemotePot({ url: 'https://pot.example' });
+      await resolveWithPoToken('aaaaaaaaaaa');
+      const bindings = seen.map((x) => JSON.parse(String(x.init?.body)).content_binding).sort();
+      assert.deepEqual(bindings, ['VISITOR123', 'aaaaaaaaaaa']);
+      const before = seen.length;
+      await resolveWithPoToken('aaaaaaaaaaa');
+      assert.equal(seen.length, before, 'second resolve is served from the token cache');
+      await resolveWithPoToken('bbbbbbbbbbb');
+      assert.equal(seen.length, before + 1, 'only the new video needs a new token');
+    });
+
+    it('falls back to the WebView when the token server fails, and says so', async () => {
+      installNetwork();
+      withTokenServer(() => new Response('boom', { status: 502 }));
+      configureRemotePot({ url: 'https://pot.example' });
+      const src = await resolveWithPoToken('abcdefghijk');
+      assert.deepEqual(mints, ['VISITOR123', 'abcdefghijk']); // local WebView did the work
+      assert.match(src.note ?? '', /token server failed: token server HTTP 502/);
+    });
+
+    it('explains a rejected key', async () => {
+      withTokenServer(() => new Response('unauthorized', { status: 401 }));
+      configureRemotePot({ url: 'https://pot.example', key: 'wrong' });
+      await assert.rejects(() => mintRemote('x'), /refused the key \(HTTP 401\)/);
+      await assert.rejects(() => pingRemote(), /refused the key/);
+    });
+
+    it('is off when no URL is set', async () => {
+      installNetwork();
+      configureRemotePot({ url: '   ' });
+      await resolveWithPoToken('abcdefghijk');
+      assert.deepEqual(mints, ['VISITOR123', 'abcdefghijk']);
+    });
   });
 
   it('is the first backend in the resolver', async () => {

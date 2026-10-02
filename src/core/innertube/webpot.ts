@@ -1,5 +1,6 @@
 import { configure, getConfig } from '../config';
 import { poTokenProvider } from '../pot/potoken';
+import { getRemotePoTokens, isRemotePotConfigured } from '../pot/remote';
 import { getPlayerJs, getStreamUrl } from '../pot/solver';
 import type { AudioSource } from '../types';
 import { post } from './client';
@@ -71,7 +72,9 @@ export interface WebFormat2 extends WebFormat {
 
 export interface WebPlayerData {
   player: Awaited<ReturnType<typeof getPlayerJs>>;
-  pot: { player: string; streaming: string; streamingDecoded?: string; streamingVisitorId?: string };
+  pot: { player: string; streaming: string; streamingDecoded?: string; streamingVisitorId?: string; source?: 'local' | 'remote' };
+  /** why the token server was skipped, if it was configured but failed */
+  remoteError?: string;
   formats: WebFormat2[];
   expiresInSeconds: number;
 }
@@ -80,7 +83,18 @@ export interface WebPlayerData {
 export async function fetchWebFormats(videoId: string): Promise<WebPlayerData> {
   const visitorData = await ensureVisitorData();
   const player = await getPlayerJs();
-  const pot = await poTokenProvider.getWebClientPoToken(videoId, visitorData);
+  // Tokens from the configured token server (a bgutil server outside the phone) if there is one,
+  // otherwise – or if the server cannot be reached – from BotGuard running in this phone's WebView.
+  let pot: WebPlayerData['pot'] | undefined;
+  let remoteError: string | undefined;
+  if (isRemotePotConfigured()) {
+    try {
+      pot = await getRemotePoTokens(videoId, visitorData);
+    } catch (e) {
+      remoteError = e instanceof Error ? e.message : String(e);
+    }
+  }
+  pot ??= await poTokenProvider.getWebClientPoToken(videoId, visitorData);
 
   const res = await post<Json>(
     'player',
@@ -105,6 +119,7 @@ export async function fetchWebFormats(videoId: string): Promise<WebPlayerData> {
   return {
     player,
     pot,
+    remoteError,
     formats: [...(sd?.adaptiveFormats ?? []), ...(sd?.formats ?? [])],
     expiresInSeconds: sd?.expiresInSeconds ? Number(sd.expiresInSeconds) : 3600,
   };
@@ -181,7 +196,7 @@ export async function resolveWithPoToken(
     itag: format.itag,
     contentLength: format.contentLength ? Number(format.contentLength) : undefined,
     via: 'webpot',
-    note: `itag${format.itag} pot=${kind}`,
+    note: `itag${format.itag} pot=${kind}${wp.pot.source === 'remote' ? ' (token server)' : wp.remoteError ? ' (token server failed: ' + wp.remoteError + ')' : ''}`,
     userAgent: ua,
     potTokens: wp.pot,
     expiresAt: Date.now() + wp.expiresInSeconds * 1000,
