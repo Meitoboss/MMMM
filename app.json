@@ -1,27 +1,46 @@
 {
   "expo": {
-    "name": "RiMusic",
-    "slug": "rimusic-ts",
-    "scheme": "rimusic",
+    "name": "Music space",
+    "slug": "music-space",
+    "scheme": "musicspace",
     "version": "0.1.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "dark",
-    "backgroundColor": "#0a0a0a",
-    "splash": { "image": "./assets/splash-icon.png", "resizeMode": "contain", "backgroundColor": "#0a0a0a" },
+    "userInterfaceStyle": "automatic",
+    "backgroundColor": "#0b0c10",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0b0c10"
+    },
     "ios": {
-      "bundleIdentifier": "app.rimusic.ts",
+      "bundleIdentifier": "app.musicspace.player",
       "supportsTablet": true,
       "infoPlist": {
-        "UIBackgroundModes": ["audio"],
-        "ITSAppUsesNonExemptEncryption": false
+        "UIBackgroundModes": [
+          "audio"
+        ],
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": true
+        },
+        "NSLocalNetworkUsageDescription": "Connect to your own RiMusic stream server on the local network."
       }
     },
     "plugins": [
       "expo-router",
       "expo-sqlite",
-      ["expo-build-properties", { "ios": { "deploymentTarget": "15.1" } }]
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "deploymentTarget": "15.1"
+          }
+        }
+      ]
     ],
-    "experiments": { "typedRoutes": false }
+    "experiments": {
+      "typedRoutes": false
+    }
   }
 }

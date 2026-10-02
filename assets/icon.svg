@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+<defs>
+  <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#20252d"/><stop offset="0.55" stop-color="#0f1217"/><stop offset="1" stop-color="#0b0c10"/></linearGradient>
+  <linearGradient id="lime" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#b9f78f"/><stop offset="1" stop-color="#82e653"/></linearGradient>
+  <filter id="glow" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="16"/></filter>
+</defs>
+<rect width="1024" height="1024" fill="url(#bg)"/>
+<g filter="url(#glow)" opacity="0.55"><path d="M 250 232 V 546 A 262 262 0 0 0 774 546 V 232" fill="none" stroke-linecap="round" stroke="#82e653" stroke-width="56"/>
+<path d="M 338 232 V 546 A 174 174 0 0 0 686 546 V 232" fill="none" stroke-linecap="round" stroke="#82e653" stroke-width="56"/>
+<path d="M 426 232 V 546 A 86 86 0 0 0 598 546 V 232" fill="none" stroke-linecap="round" stroke="#82e653" stroke-width="56"/></g>
+<path d="M 250 232 V 546 A 262 262 0 0 0 774 546 V 232" fill="none" stroke-linecap="round" stroke="url(#lime)" stroke-width="34"/>
+<path d="M 338 232 V 546 A 174 174 0 0 0 686 546 V 232" fill="none" stroke-linecap="round" stroke="url(#lime)" stroke-width="34"/>
+<path d="M 426 232 V 546 A 86 86 0 0 0 598 546 V 232" fill="none" stroke-linecap="round" stroke="url(#lime)" stroke-width="34"/>
+</svg>
