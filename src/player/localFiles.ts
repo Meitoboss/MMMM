@@ -6,14 +6,10 @@ import type { Db } from '../db/driver';
 import { openDb } from '../db/expo';
 import * as repo from '../db/repo';
 
-declare const require: (id: string) => any;
-
 /**
- * The file picker is a native module that is only needed when the user taps "ファイルを追加". It is loaded on demand,
- * so a problem with it can never stop the app from starting.
+ * TEMPORARY (crash investigation): the native file-picker module (expo-document-picker) is left out of this build.
+ * To bring it back: add "expo-document-picker" to package.json and restore the call in importLocalFiles().
  */
-const documentPicker = (): typeof import('expo-document-picker') => require('expo-document-picker');
-
 /**
  * Songs imported from the device. Files are copied into the app's own Documents folder so they keep working
  * after the original is moved, and only the file NAME is stored in the database – the absolute path of the
@@ -30,7 +26,9 @@ export interface ImportResult {
 
 export async function importLocalFiles(db?: Db): Promise<ImportResult> {
   const database = db ?? (await openDb());
-  const res = await documentPicker().getDocumentAsync({ type: ['audio/*'], multiple: true, copyToCacheDirectory: true });
+  throw new Error('このビルドでは、ファイル選択を一時的に外しています（起動できない原因を調べているため）。');
+  // eslint-disable-next-line no-unreachable
+  const res = { canceled: true, assets: [] as { uri: string; name: string; size?: number | null }[] };
   if (res.canceled) return { added: [], failed: [], cancelled: true };
 
   await FileSystem.makeDirectoryAsync(dir(), { intermediates: true }).catch(() => undefined);
