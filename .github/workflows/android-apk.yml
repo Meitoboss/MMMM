@@ -11,6 +11,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
+      # The hosted runner has ~14 GB of disk; an Android build needs most of it. Remove tools we never use.
+      - name: Free disk space
+        run: |
+          df -h /
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost /usr/local/lib/node_modules/npm/docs || true
+          df -h /
+
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
@@ -31,23 +38,41 @@ jobs:
       - name: Align native module versions with the installed Expo SDK
         run: npx expo install --fix
 
+      # react-native-track-player 4.1.x does not compile with Kotlin 2.x (RN 0.81 / Expo SDK 54): fix its source before building
+      - name: Patch react-native-track-player for Kotlin 2
+        run: node scripts/patch-track-player.mjs
+
       - name: Generate the native Android project
         run: npx expo prebuild --platform android --clean
 
-      - name: Give Gradle enough memory
+      # A hosted runner has ~7 GB of RAM: keep Gradle small, build one CPU type (all current phones), few parallel jobs.
+      - name: Tune Gradle for a small machine
         run: |
-          echo "org.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8" >> android/gradle.properties
-          echo "org.gradle.daemon=false" >> android/gradle.properties
+          {
+            echo "org.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=768m -Dfile.encoding=UTF-8"
+            echo "org.gradle.daemon=false"
+            echo "org.gradle.parallel=false"
+            echo "org.gradle.workers.max=2"
+            echo "kotlin.daemon.jvmargs=-Xmx1g"
+            echo "android.enableJetifier=false"
+          } >> android/gradle.properties
+          free -h
+          nproc
+          df -h /
 
       # The Expo template signs release builds with the debug key, so the APK installs on any phone (sideloading).
+      # The output is shown live (tee), so progress is visible and a stop can be located.
       - name: Build the APK
         working-directory: android
         run: |
-          ./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a,armeabi-v7a --no-daemon --stacktrace > ../gradle.log 2>&1 || {
-            echo "=================== ERRORS ==================="
-            grep -E "error:|FAILED|What went wrong|Execution failed|Could not|Unresolved|Exception" ../gradle.log | sort -u | head -60
-            echo "=================== LAST 60 LINES ==================="
-            tail -n 60 ../gradle.log
+          ./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a --no-daemon --max-workers=2 --stacktrace 2>&1 | tee ../gradle.log || {
+            echo "=================== COMPILER ERRORS (e: …) ==================="
+            grep -E "^e: |error: " ../gradle.log | sed 's#file:///[^ ]*node_modules/#…/node_modules/#' | sort -u | head -40
+            echo "=================== GRADLE ==================="
+            grep -E "FAILED|What went wrong|Execution failed|Could not resolve|Unresolved reference" ../gradle.log | sort -u | head -30
+            echo "=================== MEMORY / DISK ==================="
+            free -h
+            df -h /
             exit 1
           }
 
@@ -63,11 +88,13 @@ jobs:
           name: MusicSpace-android-apk
           path: MusicSpace-android.apk
 
+      # also when the run is stopped part-way, so the last lines show where it was
       - uses: actions/upload-artifact@v4
-        if: failure()
+        if: always()
         with:
           name: gradle-log
           path: gradle.log
+          if-no-files-found: ignore
 
       - name: Attach the APK to the GitHub release
         if: startsWith(github.ref, 'refs/tags/v')
