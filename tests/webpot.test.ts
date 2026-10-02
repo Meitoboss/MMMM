@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { afterEach, beforeEach, describe, it } from 'node:test';
 
 import { configure, defaultConfig } from '../src/core/config';
-import { resolveWithPoToken } from '../src/core/innertube/webpot';
+import { formatMatrix, resolveWithPoToken } from '../src/core/innertube/webpot';
 import { bytesToBase64 } from '../src/core/lyrics/base64';
 import { descramble, parseChallengeData, parseIntegrityTokenData, u8CsvToPoToken, ytBase64ToBytes } from '../src/core/pot/botguard';
 import { JsEngine, setEngine } from '../src/core/pot/engine';
@@ -95,7 +95,7 @@ const b64u = (t: string) => Buffer.from(t).toString('base64').replace(/\+/g, '-'
 const json = (d: unknown, status = 200) => new Response(JSON.stringify(d), { status, headers: { 'content-type': 'application/json' } });
 const text = (t: string, status = 200) => new Response(t, { status });
 
-function installNetwork(opts: { cipher?: boolean; probeStatus?: number; playability?: string; probe?: (url: string, range: string) => number } = {}) {
+function installNetwork(opts: { cipher?: boolean; probeStatus?: number; playability?: string; muxed?: boolean; probe?: (url: string, range: string) => number } = {}) {
   calls.length = 0;
   globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
     const url = String(input);
@@ -111,6 +111,9 @@ function installNetwork(opts: { cipher?: boolean; probeStatus?: number; playabil
         playabilityStatus: { status: opts.playability ?? 'OK' },
         streamingData: {
           expiresInSeconds: '21540',
+          formats: opts.muxed
+            ? [{ itag: 18, mimeType: 'video/mp4; codecs="avc1.42001E, mp4a.40.2"', bitrate: 400000, contentLength: '9000000', url: 'https://rr1.googlevideo.com/videoplayback?expire=1&itag=18&n=nval' }]
+            : [],
           adaptiveFormats: [
             { itag: 251, mimeType: 'audio/webm; codecs="opus"', bitrate: 160000, url: 'https://x/webm' },
             opts.cipher === false
@@ -155,7 +158,7 @@ describe('PO-token playback (RiMusic web-potoken flow)', () => {
 
     // cipher: s "ABC" -> "CBA" in the `sig` param; n "nval" -> "lavn"; the video-bound token (preferred) is appended
     assert.equal(src.url, `https://rr1.googlevideo.com/videoplayback?expire=1&n=lavn&x=1&sig=CBA&pot=${b64u('pot-dQw4w9WgXcQ')}`);
-    assert.equal(src.note, 'pot=video-bound');
+    assert.equal(src.note, 'itag140 pot=video-bound');
 
     const playerCall = calls.find((c) => c.url.includes('/youtubei/v1/player'))!;
     const body = JSON.parse(String(playerCall.init?.body));
@@ -214,7 +217,7 @@ describe('PO-token playback (RiMusic web-potoken flow)', () => {
     const videoPot = b64u('pot-dQw4w9WgXcQ');
     installNetwork({ probe: (url) => (url.includes(`pot=${videoPot}`) ? 403 : 206) });
     const src = await resolveWithPoToken('dQw4w9WgXcQ');
-    assert.equal(src.note, 'pot=session-bound');
+    assert.equal(src.note, 'itag140 pot=session-bound');
     assert.ok(src.url.endsWith(`pot=${b64u('pot-VISITOR123')}`));
   });
 
@@ -229,6 +232,47 @@ describe('PO-token playback (RiMusic web-potoken flow)', () => {
     await assert.rejects(() => resolveWithPoToken('abcdefghijk'), /HTTP 403/);
     // contentLength 3456789 -> middle = 1728394
     assert.ok(seen.includes('bytes=1728394-1728395'), seen.join(' | '));
+  });
+
+  it('falls back to the muxed itag 18 (no pot needed) when the audio format is refused', async () => {
+    installNetwork({
+      muxed: true,
+      probe: (url) => (url.includes('itag=18') && !url.includes('pot=') ? 206 : 403),
+    });
+    const src = await resolveWithPoToken('abcdefghijk');
+    assert.equal(src.itag, 18);
+    assert.equal(src.mimeType, 'video/mp4');
+    assert.equal(src.note, 'itag18 pot=no pot');
+    assert.ok(!src.url.includes('pot='));
+    assert.match(src.url, /n=lavn/); // n was still solved
+  });
+
+  it('keeps the audio format when it works, even if a muxed one exists', async () => {
+    installNetwork({ muxed: true });
+    const src = await resolveWithPoToken('abcdefghijk');
+    assert.equal(src.itag, 140);
+  });
+
+  it('reports every failed attempt when nothing is playable', async () => {
+    installNetwork({ muxed: true, probeStatus: 403 });
+    await assert.rejects(
+      () => resolveWithPoToken('abcdefghijk'),
+      /video-bound: HTTP 403, session-bound: HTTP 403\) \| itag 18: Stream URL rejected by YouTube \(no pot: HTTP 403, video-bound: HTTP 403, session-bound: HTTP 403\)/,
+    );
+  });
+
+  it('forced pot modes never fall back to the muxed format', async () => {
+    installNetwork({ muxed: true, probeStatus: 403 });
+    await assert.rejects(() => resolveWithPoToken('abcdefghijk', { potMode: 'player' }), (e: Error) => !e.message.includes('itag 18'));
+  });
+
+  it('format matrix lists each audio/muxed format with all three token variants', async () => {
+    installNetwork({ muxed: true, probe: (url) => (url.includes('itag=18') && !url.includes('pot=') ? 206 : 403) });
+    const rows = await formatMatrix('abcdefghijk');
+    assert.equal(rows.length, 3); // 251 webm, 140 m4a, 18 muxed
+    const m18 = rows.find((r) => r.label.includes('itag 18'))!;
+    assert.equal(m18.results, 'none 206 | video 403 | session 403');
+    assert.match(rows.find((r) => r.label.includes('itag 140'))!.label, /\(cipher\)/);
   });
 
   it('is the first backend in the resolver', async () => {

@@ -1,7 +1,7 @@
 import { Alert, Pressable, ScrollView, Switch, Text, TextInput, View } from 'react-native';
 import { useState } from 'react';
 import { runSelfTest, StepResult } from '../../src/core/diagnostics';
-import { runCurrentSongProbe, runPlaybackProbe, runRealPathTest, runTokenExperiment } from '../../src/player/probe';
+import { runCurrentSongProbe, runFormatMatrix, runPlaybackProbe, runRealPathTest, runTokenExperiment } from '../../src/player/probe';
 
 import type { StreamBackend } from '../../src/core/streams/resolver';
 import { clearStreamCache } from '../../src/core';
@@ -125,6 +125,17 @@ export default function Settings() {
         }}
       >
         <Row title="Token experiment" sub="Which PO token does YouTube accept? (tap a failing song first)"><Text style={{ color: colors.accent }}>{running ? '' : 'Start'}</Text></Row>
+      </Pressable>
+      <Pressable
+        disabled={running}
+        onPress={async () => {
+          setSteps([]);
+          setRunning(true);
+          await runFormatMatrix((r) => setSteps((cur) => [...cur, r]));
+          setRunning(false);
+        }}
+      >
+        <Row title="Format matrix" sub="Which formats (itag) are served, and with which token? (tap a failing song first)"><Text style={{ color: colors.accent }}>{running ? '' : 'Start'}</Text></Row>
       </Pressable>
       {steps.map((r) => (
         <View key={r.name} style={{ paddingHorizontal: 16, paddingVertical: 6 }}>

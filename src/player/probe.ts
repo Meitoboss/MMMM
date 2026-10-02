@@ -4,7 +4,7 @@ import type { SongItem } from '../core/types';
 import { usePlayer } from '../state/player';
 
 import type { StepResult } from '../core/diagnostics';
-import { resolveWithPoToken, ensureVisitorData } from '../core/innertube/webpot';
+import { ensureVisitorData, formatMatrix, resolveWithPoToken } from '../core/innertube/webpot';
 import { ascii, codecInfo, hex, listBoxes } from '../core/mp4';
 import { removeQueryParam, setQueryParam } from '../core/pot/solver';
 import { clearStreamCache, resolveAudio } from '../core/streams/resolver';
@@ -307,6 +307,30 @@ export async function runTokenExperiment(onStep: (r: StepResult) => void): Promi
       });
     } catch (e) {
       onStep({ name: `T. ${id}`, ok: false, detail: e instanceof Error ? e.message : String(e), ms: Date.now() - t0 });
+    }
+  }
+  return any;
+}
+
+/** Which formats does YouTube serve for this song, and with which token variant? */
+export async function runFormatMatrix(onStep: (r: StepResult) => void): Promise<boolean> {
+  const current = usePlayer.getState().current?.id;
+  const ids = [...(current && current !== 'dQw4w9WgXcQ' ? [current] : []), 'dQw4w9WgXcQ'];
+  let any = false;
+  for (const id of ids) {
+    const t0 = Date.now();
+    try {
+      const rows = await formatMatrix(id);
+      const ok = rows.some((r) => /\b206\b/.test(r.results));
+      any = any || ok;
+      onStep({
+        name: `M. ${id === 'dQw4w9WgXcQ' ? 'reference song' : 'current song'} (${id}) – status of a mid-file request`,
+        ok,
+        detail: rows.map((r) => `${r.label}: ${r.results}`).join('\n'),
+        ms: Date.now() - t0,
+      });
+    } catch (e) {
+      onStep({ name: `M. ${id}`, ok: false, detail: e instanceof Error ? e.message : String(e), ms: Date.now() - t0 });
     }
   }
   return any;

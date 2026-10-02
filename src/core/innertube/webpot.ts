@@ -65,10 +65,19 @@ async function probeStatus(url: string, size: number, userAgent?: string): Promi
   return 206;
 }
 
-export async function resolveWithPoToken(
-  videoId: string,
-  opts: { validate?: boolean; potMode?: PotMode } = {},
-): Promise<AudioSource> {
+export interface WebFormat2 extends WebFormat {
+  approxDurationMs?: string;
+}
+
+export interface WebPlayerData {
+  player: Awaited<ReturnType<typeof getPlayerJs>>;
+  pot: { player: string; streaming: string };
+  formats: WebFormat2[];
+  expiresInSeconds: number;
+}
+
+/** Steps 1-3 of the flow: visitorData, player JS, PO tokens, then the `player` request. */
+export async function fetchWebFormats(videoId: string): Promise<WebPlayerData> {
   const visitorData = await ensureVisitorData();
   const player = await getPlayerJs();
   const pot = await poTokenProvider.getWebClientPoToken(videoId, visitorData);
@@ -93,58 +102,132 @@ export async function resolveWithPoToken(
     throw new Error(`YouTube: ${status ?? 'no playabilityStatus'}${res?.playabilityStatus?.reason ? ` – ${res.playabilityStatus.reason}` : ''}`);
   }
   const sd = res?.streamingData;
-  const format = pickM4aFormat([...(sd?.adaptiveFormats ?? []), ...(sd?.formats ?? [])]);
-  if (!format) throw new Error('No AAC (audio/mp4) format offered for this video');
+  return {
+    player,
+    pot,
+    formats: [...(sd?.adaptiveFormats ?? []), ...(sd?.formats ?? [])],
+    expiresInSeconds: sd?.expiresInSeconds ? Number(sd.expiresInSeconds) : 3600,
+  };
+}
 
-  const baseUrl = await getStreamUrl(format, player);
+/** Muxed (video+audio) MP4 with AAC – itag 18. Some clients do not enforce PO tokens for it. */
+export function pickMuxedFormat(formats: WebFormat[]): WebFormat | undefined {
+  return formats
+    .filter((f) => f.mimeType?.startsWith('video/mp4') && /mp4a/.test(f.mimeType))
+    .sort((a, b) => a.bitrate - b.bitrate)[0];
+}
+
+type PotKind = 'video-bound' | 'session-bound' | 'no pot';
+interface Candidate {
+  kind: PotKind;
+  url: string;
+}
+
+/** Build the candidate stream urls for one format and keep the first one googlevideo really serves. */
+async function tryFormat(
+  format: WebFormat,
+  wp: WebPlayerData,
+  kinds: PotKind[],
+  validate: boolean,
+): Promise<{ url: string; kind: PotKind }> {
+  const baseUrl = await getStreamUrl(format, wp.player);
   const joiner = baseUrl.includes('?') ? '&' : '?';
-
-  // Which token goes into the stream url's `pot=`?
-  //  - default (auto): YouTube is moving videos from session-bound to video-bound tokens (FreeTube #8137,
-  //    yt-dlp PO Token Guide) and the choice differs per video, so try the video-bound one first, then the
-  //    session-bound one, and keep whichever googlevideo really accepts.
-  //  - 'player' / 'streaming' / 'none' force one variant (used by Settings → Diagnostics experiments).
-  type Candidate = { kind: string; url: string };
-  const video: Candidate = { kind: 'video-bound', url: `${baseUrl}${joiner}pot=${pot.player}` };
-  const session: Candidate = { kind: 'session-bound', url: `${baseUrl}${joiner}pot=${pot.streaming}` };
-  const candidates: Candidate[] =
-    opts.potMode === 'none'
-      ? [{ kind: 'no pot', url: baseUrl }]
-      : opts.potMode === 'player'
-        ? [video]
-        : opts.potMode === 'streaming'
-          ? [session]
-          : [video, session];
+  const make = (kind: PotKind): Candidate => ({
+    kind,
+    url: kind === 'no pot' ? baseUrl : `${baseUrl}${joiner}pot=${kind === 'video-bound' ? wp.pot.player : wp.pot.streaming}`,
+  });
+  const candidates = kinds.map(make);
+  if (!validate) return candidates[0];
 
   const ua = getConfig().web.userAgent;
   const size = format.contentLength ? Number(format.contentLength) : 2_000_000;
-  let { url, kind } = candidates[0];
-  if (opts.validate !== false) {
-    const failures: string[] = [];
-    let accepted = false;
-    for (const c of candidates) {
-      const status = await probeStatus(c.url, size, ua);
-      if (status === 206) {
-        ({ url, kind } = c);
-        accepted = true;
-        break;
-      }
-      failures.push(`${c.kind}: HTTP ${status}`);
-    }
-    if (!accepted) throw new Error(`Stream URL rejected by YouTube (${failures.join(', ')})`);
+  const failures: string[] = [];
+  for (const c of candidates) {
+    const status = await probeStatus(c.url, size, ua);
+    if (status === 206) return c;
+    failures.push(`${c.kind}: HTTP ${status}`);
   }
+  throw new Error(`Stream URL rejected by YouTube (${failures.join(', ')})`);
+}
 
-  const expiresIn = sd?.expiresInSeconds ? Number(sd.expiresInSeconds) : 3600;
-  return {
+export async function resolveWithPoToken(
+  videoId: string,
+  opts: { validate?: boolean; potMode?: PotMode } = {},
+): Promise<AudioSource> {
+  const wp = await fetchWebFormats(videoId);
+  const validate = opts.validate !== false;
+  const ua = getConfig().web.userAgent;
+  const toSource = (format: WebFormat, url: string, kind: PotKind, mime: string): AudioSource => ({
     url,
-    mimeType: 'audio/mp4',
+    mimeType: mime,
     bitrate: format.bitrate,
     itag: format.itag,
     contentLength: format.contentLength ? Number(format.contentLength) : undefined,
     via: 'webpot',
-    note: `pot=${kind}`,
+    note: `itag${format.itag} pot=${kind}`,
     userAgent: ua,
-    potTokens: pot,
-    expiresAt: Date.now() + expiresIn * 1000,
-  };
+    potTokens: wp.pot,
+    expiresAt: Date.now() + wp.expiresInSeconds * 1000,
+  });
+
+  // Which token goes into the stream url's `pot=`?
+  //  - default (auto): video-bound first, then session-bound (YouTube is moving videos between the two – FreeTube #8137,
+  //    yt-dlp PO Token Guide); keep whichever googlevideo really accepts.
+  //  - 'player' / 'streaming' / 'none' force one variant (Settings → Diagnostics experiments).
+  const forced: PotKind[] | undefined =
+    opts.potMode === 'none' ? ['no pot'] : opts.potMode === 'player' ? ['video-bound'] : opts.potMode === 'streaming' ? ['session-bound'] : undefined;
+  const failures: string[] = [];
+
+  const audio = pickM4aFormat(wp.formats);
+  if (!audio) failures.push('No AAC (audio/mp4) format offered for this video');
+  else {
+    try {
+      const r = await tryFormat(audio, wp, forced ?? ['video-bound', 'session-bound'], validate);
+      return toSource(audio, r.url, r.kind, 'audio/mp4');
+    } catch (e) {
+      failures.push(e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  // Fallback: the muxed 360p MP4 (itag 18). AVPlayer plays its AAC track; some clients do not need a PO token for it.
+  const muxed = forced ? undefined : pickMuxedFormat(wp.formats);
+  if (muxed) {
+    try {
+      const r = await tryFormat(muxed, wp, ['no pot', 'video-bound', 'session-bound'], validate);
+      return toSource(muxed, r.url, r.kind, 'video/mp4');
+    } catch (e) {
+      failures.push(`itag ${muxed.itag}: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+  throw new Error(failures.join(' | '));
+}
+
+/**
+ * For Settings → Diagnostics: every audio / muxed format with every way of attaching a token,
+ * tested with a request from the middle of the file.
+ */
+export async function formatMatrix(videoId: string): Promise<{ label: string; results: string }[]> {
+  const wp = await fetchWebFormats(videoId);
+  const ua = getConfig().web.userAgent;
+  const rows: { label: string; results: string }[] = [];
+  const interesting = wp.formats.filter((f) => f.mimeType?.startsWith('audio/') || (f.mimeType?.startsWith('video/mp4') && /mp4a/.test(f.mimeType)));
+  for (const f of interesting) {
+    const label = `itag ${f.itag} ${f.mimeType.split(';')[0]} ${Math.round(f.bitrate / 1000)}k${f.signatureCipher || f.cipher ? ' (cipher)' : ''}`;
+    try {
+      const base = await getStreamUrl(f, wp.player);
+      const j = base.includes('?') ? '&' : '?';
+      const size = f.contentLength ? Number(f.contentLength) : 2_000_000;
+      const variants: [string, string][] = [
+        ['none', base],
+        ['video', `${base}${j}pot=${wp.pot.player}`],
+        ['session', `${base}${j}pot=${wp.pot.streaming}`],
+      ];
+      const out: string[] = [];
+      for (const [name, url] of variants) out.push(`${name} ${await probeStatus(url, size, ua)}`);
+      rows.push({ label, results: out.join(' | ') });
+    } catch (e) {
+      rows.push({ label, results: e instanceof Error ? e.message : String(e) });
+    }
+  }
+  return rows;
 }
