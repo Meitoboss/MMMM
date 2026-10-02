@@ -24,6 +24,9 @@ interface PlayerState {
   rate: number;
   /** epoch ms when the sleep timer fires */
   sleepAt?: number;
+  /** last playback events, shown on the player screen to explain silent failures */
+  debug: string[];
+  log: (line: string) => void;
 
   playSongs: (songs: SongItem[], startIndex?: number) => Promise<void>;
   playRadio: (song: SongItem) => Promise<void>;
@@ -46,6 +49,7 @@ interface PlayerState {
 }
 
 let loadToken = 0;
+let loadedAt = 0;
 let playedMs = 0;
 let sleepTimeout: ReturnType<typeof setTimeout> | undefined;
 
@@ -77,10 +81,12 @@ export const usePlayer = create<PlayerState>((set, get) => {
     const token = ++loadToken;
     await flushPlayTime(get().current);
     set({ index, current: song, status: 'loading', error: undefined });
+    get().log(`load ${song.id} (#${index + 1}/${get().queue.length})`);
     try {
       await ensurePlayer();
       const src = await resolveAudio(song.id, resolverOptions());
       if (token !== loadToken) return; // user skipped again while resolving
+      get().log(`resolved via=${src.via} itag=${src.itag ?? '-'} ${src.mimeType ?? ''} host=${String(src.url).split('/')[2]}`);
       await TrackPlayer.reset();
       await TrackPlayer.add({
         id: song.id,
@@ -96,12 +102,18 @@ export const usePlayer = create<PlayerState>((set, get) => {
       });
       await TrackPlayer.setRate(get().rate);
       await TrackPlayer.play();
+      loadedAt = Date.now();
+      get().log('play() called');
       set({ status: 'playing' });
       // warm the URL cache for the next song so skipping is instant
       const upcoming = get().queue[index + 1];
       if (upcoming) resolveAudio(upcoming.id, resolverOptions()).catch(() => undefined);
     } catch (e) {
-      if (token === loadToken) set({ status: 'error', error: e instanceof Error ? e.message : String(e) });
+      if (token === loadToken) {
+        const msg = e instanceof Error ? e.message : String(e);
+        get().log(`FAILED ${msg.split('\n')[0]}`);
+        set({ status: 'error', error: msg });
+      }
     }
   }
 
@@ -121,6 +133,12 @@ export const usePlayer = create<PlayerState>((set, get) => {
     queue: [],
     index: 0,
     status: 'idle',
+    debug: [],
+    log: (line) => {
+      const t = new Date();
+      const hh = `${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}:${String(t.getSeconds()).padStart(2, '0')}`;
+      set({ debug: [...get().debug.slice(-9), `${hh} ${line}`] });
+    },
     repeat: 'off',
     shuffle: false,
     rate: useSettings.getState().playbackRate,
@@ -224,6 +242,12 @@ export const usePlayer = create<PlayerState>((set, get) => {
 
     onEnded: async () => {
       const { repeat } = get();
+      // A "queue ended" that arrives right after loading is spurious (e.g. caused by reset()) – ignore it.
+      const progress = await TrackPlayer.getProgress().catch(() => ({ position: 0, duration: 0 }));
+      if (Date.now() - loadedAt < 4000 || (progress.duration > 0 && progress.position < 3)) {
+        get().log(`ignored queueEnded (pos ${progress.position.toFixed(1)}/${progress.duration.toFixed(0)})`);
+        return;
+      }
       if (repeat === 'one') {
         await TrackPlayer.seekTo(0);
         await TrackPlayer.play();

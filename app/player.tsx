@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import Slider from '@react-native-community/slider';
 import { useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { ActionSheetIOS, FlatList, Pressable, Text, View, useWindowDimensions } from 'react-native';
+import { ActionSheetIOS, FlatList, Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useProgress } from 'react-native-track-player';
 
@@ -114,7 +114,15 @@ export default function PlayerScreen() {
         {view === 'cover' && (
           <View style={{ alignItems: 'center' }}>
             <Cover uri={song.thumbnail} size={cover} />
-            {p.status === 'error' && <Text style={{ color: colors.danger, margin: 16, textAlign: 'center' }} numberOfLines={4}>{p.error}</Text>}
+            <Text selectable style={{ color: '#6b6b6b', fontSize: 10, marginTop: 8, paddingHorizontal: 20, alignSelf: 'stretch' }}>
+              {p.debug.join('\n')}
+            </Text>
+            {p.status === 'error' && (
+              <ScrollView style={{ maxHeight: 140, marginTop: 12, paddingHorizontal: 16 }}>
+                <Text selectable style={{ color: colors.danger, textAlign: 'center', fontSize: 12 }}>{p.error}</Text>
+                <Text style={{ color: colors.sub, textAlign: 'center', fontSize: 12, marginTop: 6 }}>Settings → Stream server can fix this.</Text>
+              </ScrollView>
+            )}
           </View>
         )}
         {view === 'lyrics' && (

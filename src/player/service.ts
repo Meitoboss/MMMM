@@ -13,12 +13,18 @@ export async function playbackService() {
   TrackPlayer.addEventListener(Event.RemoteSeek, (e) => void p().seekTo(e.position));
   TrackPlayer.addEventListener(Event.RemoteStop, () => void TrackPlayer.pause());
 
-  TrackPlayer.addEventListener(Event.PlaybackQueueEnded, () => void p().onEnded());
+  TrackPlayer.addEventListener(Event.PlaybackQueueEnded, () => {
+    p().log('event: queueEnded');
+    void p().onEnded();
+  });
   TrackPlayer.addEventListener(Event.PlaybackProgressUpdated, () => p().tick());
+  TrackPlayer.addEventListener(Event.PlaybackActiveTrackChanged, (e) => p().log(`event: activeTrack idx=${e.index ?? '-'}`));
   TrackPlayer.addEventListener(Event.PlaybackError, (e) => {
+    p().log(`event: ERROR ${JSON.stringify(e)}`);
     usePlayer.setState({ status: 'error', error: `Player error ${e.code}: ${e.message}` });
   });
   TrackPlayer.addEventListener(Event.PlaybackState, (e) => {
+    p().log(`event: state=${e.state}`);
     const cur = p().status;
     if (cur === 'loading' || cur === 'idle') {
       if (e.state === State.Playing) p().setStatus('playing');
