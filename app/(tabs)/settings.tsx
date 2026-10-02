@@ -1,7 +1,7 @@
 import { Alert, Pressable, ScrollView, Switch, Text, TextInput, View } from 'react-native';
 import { useState } from 'react';
 import { runSelfTest, StepResult } from '../../src/core/diagnostics';
-import { runPlaybackProbe } from '../../src/player/probe';
+import { runPlaybackProbe, runRealPathTest } from '../../src/player/probe';
 
 import type { StreamBackend } from '../../src/core/streams/resolver';
 import { clearStreamCache } from '../../src/core';
@@ -92,6 +92,17 @@ export default function Settings() {
         }}
       >
         <Row title={running ? 'Running…' : 'Run self-test'}><Text style={{ color: colors.accent }}>{running ? '' : 'Start'}</Text></Row>
+      </Pressable>
+      <Pressable
+        disabled={running}
+        onPress={async () => {
+          setSteps([]);
+          setRunning(true);
+          await runRealPathTest((r) => setSteps((cur) => [...cur, r]));
+          setRunning(false);
+        }}
+      >
+        <Row title="Test real playback path" sub="Plays the current (or a test) song for 8 s and reports what AVPlayer does"><Text style={{ color: colors.accent }}>{running ? '' : 'Start'}</Text></Row>
       </Pressable>
       {steps.map((r) => (
         <View key={r.name} style={{ paddingHorizontal: 16, paddingVertical: 6 }}>
