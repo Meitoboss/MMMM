@@ -29,7 +29,7 @@ export const VARIANTS: Variant[] = [
   },
 ];
 
-function attempt(url: string, extra: Record<string, unknown>, timeoutMs = 12_000): Promise<{ ok: boolean; detail: string }> {
+function attempt(url: string, extra: Record<string, unknown>, timeoutMs = 12_000, base: Record<string, unknown> = { title: 'probe', artist: 'probe' }): Promise<{ ok: boolean; detail: string }> {
   return new Promise((resolve) => {
     let done = false;
     let lastState = '?';
@@ -53,7 +53,7 @@ function attempt(url: string, extra: Record<string, unknown>, timeoutMs = 12_000
 
     (async () => {
       await TrackPlayer.reset();
-      await TrackPlayer.add({ id: 'probe', url, title: 'probe', artist: 'probe', ...extra } as never);
+      await TrackPlayer.add({ id: 'probe', url, ...base, ...extra } as never);
       await TrackPlayer.play();
     })().catch((e) => finish({ ok: false, detail: `add/play threw: ${e instanceof Error ? e.message : String(e)}` }));
   });
@@ -131,4 +131,81 @@ export async function runRealPathTest(onStep: (r: StepResult) => void): Promise<
   } finally {
     subs.forEach((s) => s.remove());
   }
+}
+
+const hex = (b: Uint8Array) => Array.from(b).map((x) => x.toString(16).padStart(2, '0')).join(' ');
+
+/** What does googlevideo answer to AVPlayer-like requests for THIS url? */
+async function httpCheck(url: string, userAgent?: string) {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 8000);
+  try {
+    const res = await fetch(url, { headers: { Range: 'bytes=0-15', ...(userAgent ? { 'User-Agent': userAgent } : {}) }, signal: ctl.signal });
+    const head = new Uint8Array(await res.arrayBuffer()).slice(0, 16);
+    const h = (n: string) => res.headers.get(n) ?? '-';
+    const ascii = Array.from(head.slice(4, 12)).map((c) => (c >= 32 && c < 127 ? String.fromCharCode(c) : '.')).join('');
+    return `HTTP ${res.status} type=${h('content-type')} range=${h('content-range')} len=${h('content-length')} first16=[${hex(head)}] "${ascii}"`;
+  } catch (e) {
+    return `request failed: ${e instanceof Error ? e.message : String(e)}`;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * "Why does THIS song fail?" – resolves the currently loaded song, inspects the HTTP answer,
+ * then tries handing it to AVPlayer with progressively less metadata.
+ */
+export async function runCurrentSongProbe(onStep: (r: StepResult) => void): Promise<boolean> {
+  await ensurePlayer();
+  const song = usePlayer.getState().current;
+  if (!song) {
+    onStep({ name: 'A. current song', ok: false, detail: 'Tap a song in Search first, then run this test.', ms: 0 });
+    return false;
+  }
+  const t0 = Date.now();
+  let src: AudioSource;
+  try {
+    src = await resolveAudio(song.id, { ...resolverOptions(), order: ['webpot'], serverUrl: '' });
+  } catch (e) {
+    onStep({ name: `A. resolve ${song.id}`, ok: false, detail: e instanceof Error ? e.message : String(e), ms: Date.now() - t0 });
+    return false;
+  }
+  const u = src.url;
+  const q = (n: string) => u.match(new RegExp(`[?&]${n}=([^&]*)`))?.[1];
+  onStep({
+    name: `A. resolved ${song.title}`,
+    ok: true,
+    detail: `itag=${src.itag} ${src.mimeType} ${Math.round((src.contentLength ?? 0) / 1024)}KB host=${u.split('/')[2]} params: n=${q('n') ? 'yes' : 'NO'} sig=${q('sig') ? 'yes' : 'no'} pot=${q('pot') ? 'yes' : 'NO'} c=${q('c') ?? '-'} mime=${q('mime') ?? '-'} clen=${q('clen') ?? '-'} dur=${q('dur') ?? '-'}`,
+    ms: Date.now() - t0,
+  });
+
+  onStep({ name: 'B. HTTP (default user agent)', ok: true, detail: await httpCheck(u), ms: 0 });
+  onStep({ name: 'B2. HTTP (AppleCoreMedia user agent)', ok: true, detail: await httpCheck(u, 'AppleCoreMedia/1.0.0.22B83 (iPhone; U; CPU OS 18_1 like Mac OS X; en_us)'), ms: 0 });
+
+  const full = {
+    title: song.title,
+    artist: song.artists.map((a) => a.name).join(', '),
+    album: song.album?.name,
+    artwork: song.thumbnail,
+    duration: song.durationSec,
+    contentType: 'audio/mp4',
+  };
+  const variants: { name: string; extra: Record<string, unknown> }[] = [
+    { name: 'full metadata (what the app does)', extra: full },
+    { name: 'without duration', extra: { ...full, duration: undefined } },
+    { name: 'without artwork + album', extra: { ...full, artwork: undefined, album: undefined } },
+    { name: 'minimal (title/artist only)', extra: { contentType: 'audio/mp4' } },
+  ];
+  for (const [i, v] of variants.entries()) {
+    const t1 = Date.now();
+    const r = await attempt(u, v.extra, 12_000, { title: song.title, artist: 'x' });
+    onStep({ name: `C.${i + 1} AVPlayer – ${v.name}`, ok: r.ok, detail: r.detail, ms: Date.now() - t1 });
+    if (r.ok) {
+      await TrackPlayer.reset();
+      return true;
+    }
+  }
+  await TrackPlayer.reset();
+  return false;
 }
