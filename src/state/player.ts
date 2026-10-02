@@ -90,7 +90,8 @@ export const usePlayer = create<PlayerState>((set, get) => {
         album: song.album?.name,
         artwork: song.thumbnail,
         duration: song.durationSec,
-        userAgent: src.userAgent ?? (src.via === 'innertube' ? getConfig().ios.userAgent : undefined),
+        // A custom user agent makes AVPlayer fail on PO-token streams (diagnostics 8.1 vs 8.2) – only the old iOS-client URLs need one.
+        userAgent: src.via === 'innertube' ? getConfig().ios.userAgent : undefined,
         contentType: src.mimeType,
       });
       await TrackPlayer.setRate(get().rate);
