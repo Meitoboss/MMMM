@@ -1,6 +1,7 @@
 import { Alert, Pressable, ScrollView, Switch, Text, TextInput, View } from 'react-native';
 import { useState } from 'react';
 import { runSelfTest, StepResult } from '../../src/core/diagnostics';
+import { runPlaybackProbe } from '../../src/player/probe';
 
 import type { StreamBackend } from '../../src/core/streams/resolver';
 import { clearStreamCache } from '../../src/core';
@@ -85,7 +86,8 @@ export default function Settings() {
         onPress={async () => {
           setSteps([]);
           setRunning(true);
-          await runSelfTest((r) => setSteps((cur) => [...cur, r]));
+          const add = (r: StepResult) => setSteps((cur) => [...cur, r]);
+          if (await runSelfTest(add)) await runPlaybackProbe(add);
           setRunning(false);
         }}
       >

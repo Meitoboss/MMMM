@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { View } from 'react-native';
 import { WebView, WebViewMessageEvent } from 'react-native-webview';
 
 import { engineStatus, setEngine } from '../core/pot/engine';
@@ -87,34 +88,39 @@ export function EngineHost() {
     [call],
   );
 
+  // react-native-webview wraps the web view in a container with `flex: 1`; without an explicit
+  // containerStyle that container takes half of the screen and swallows touches meant for the app.
   return (
-    <WebView
-      ref={ref}
-      source={{ html, baseUrl: 'https://www.youtube.com' }}
-      originWhitelist={['*']}
-      javaScriptEnabled
-      onMessage={onMessage}
-      onLoadStart={() => {
-        engineStatus.loadStarted = true;
-      }}
-      onLoadEnd={() => {
-        engineStatus.loadEnded = true;
-        // tells us whether the page scripts ran even if 'ready' never arrives
-        ref.current?.injectJavaScript(
-          "window.ReactNativeWebView.postMessage(JSON.stringify({type:'probe',info:'rpc='+typeof window.__rpc+',bg='+typeof window.runBotGuard}));true;",
-        );
-      }}
-      onError={(e) => engineStatus.note(`load error: ${e.nativeEvent.description}`)}
-      onHttpError={(e) => engineStatus.note(`http ${e.nativeEvent.statusCode}`)}
-      onContentProcessDidTerminate={() => {
-        // iOS killed the web content process (memory / background) – reload and rebuild state
-        setEngine(null);
-        failAll('JS engine process was terminated');
-        ref.current?.reload();
-      }}
-      style={{ position: 'absolute', width: 1, height: 1, opacity: 0 }}
-      pointerEvents="none"
-      accessible={false}
-    />
+    <View pointerEvents="none" style={{ position: 'absolute', left: 0, top: 0, width: 1, height: 1, opacity: 0, overflow: 'hidden' }}>
+      <WebView
+        ref={ref}
+        source={{ html, baseUrl: 'https://www.youtube.com' }}
+        originWhitelist={['*']}
+        javaScriptEnabled
+        onMessage={onMessage}
+        onLoadStart={() => {
+          engineStatus.loadStarted = true;
+        }}
+        onLoadEnd={() => {
+          engineStatus.loadEnded = true;
+          // tells us whether the page scripts ran even if 'ready' never arrives
+          ref.current?.injectJavaScript(
+            "window.ReactNativeWebView.postMessage(JSON.stringify({type:'probe',info:'rpc='+typeof window.__rpc+',bg='+typeof window.runBotGuard}));true;",
+          );
+        }}
+        onError={(e) => engineStatus.note(`load error: ${e.nativeEvent.description}`)}
+        onHttpError={(e) => engineStatus.note(`http ${e.nativeEvent.statusCode}`)}
+        onContentProcessDidTerminate={() => {
+          // iOS killed the web content process (memory / background) – reload and rebuild state
+          setEngine(null);
+          failAll('JS engine process was terminated');
+          ref.current?.reload();
+        }}
+        containerStyle={{ flex: 0, width: 1, height: 1 }}
+        style={{ width: 1, height: 1 }}
+        scrollEnabled={false}
+        accessible={false}
+      />
+    </View>
   );
 }

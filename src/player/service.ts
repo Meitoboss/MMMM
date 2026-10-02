@@ -16,7 +16,7 @@ export async function playbackService() {
   TrackPlayer.addEventListener(Event.PlaybackQueueEnded, () => void p().onEnded());
   TrackPlayer.addEventListener(Event.PlaybackProgressUpdated, () => p().tick());
   TrackPlayer.addEventListener(Event.PlaybackError, (e) => {
-    usePlayer.setState({ status: 'error', error: e.message });
+    usePlayer.setState({ status: 'error', error: `Player error ${e.code}: ${e.message}` });
   });
   TrackPlayer.addEventListener(Event.PlaybackState, (e) => {
     const cur = p().status;
