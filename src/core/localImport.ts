@@ -20,17 +20,22 @@ export interface ImportDeps {
   /** gives the file back its place if the database could not take it */
   undo(storedName: string, originalUri: string): Promise<void>;
   size(uri: string): Promise<number | undefined>;
+  /** Android: files stay where they are, so skip the ones that were imported before */
+  alreadyImported?(file: InboxFile): Promise<boolean>;
+  markImported?(file: InboxFile): Promise<void>;
 }
 
 export interface ImportResult {
   added: SongItem[];
   failed: string[];
-  /** how many music files were waiting in the folder */
+  /** how many NEW music files were waiting in the folder */
   found: number;
 }
 
 export async function runImport(db: Db, deps: ImportDeps): Promise<ImportResult> {
-  const files = await deps.list();
+  const all = await deps.list();
+  const files: InboxFile[] = [];
+  for (const f of all) if (!(await deps.alreadyImported?.(f))) files.push(f);
   const added: SongItem[] = [];
   const failed: string[] = [];
   for (const f of files) {
@@ -44,6 +49,7 @@ export async function runImport(db: Db, deps: ImportDeps): Promise<ImportResult>
       moved = true;
       const meta = parseLocalName(f.name);
       added.push(await repo.addLocalFile(db, { id, fileName: stored, title: meta.title, artist: meta.artist, size }));
+      await deps.markImported?.(f);
     } catch {
       failed.push(f.name);
       if (moved) await deps.undo(stored, f.uri).catch(() => undefined);

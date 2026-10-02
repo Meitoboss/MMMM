@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import Slider from '@react-native-community/slider';
 import { useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { ActionSheetIOS, FlatList, Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
+import { FlatList, Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useProgress } from 'react-native-track-player';
 
@@ -15,6 +15,7 @@ import { usePlayer } from '../src/state/player';
 import { useSettings } from '../src/state/settings';
 import { Cover, SongRow } from '../src/ui/components';
 import { useAddToPlaylist } from '../src/ui/actions';
+import { showActionSheet } from '../src/ui/dialogs';
 import { colors, useScheme } from '../src/ui/theme';
 
 const fmt = (sec: number) => `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, '0')}`;
@@ -85,16 +86,16 @@ export default function PlayerScreen() {
 
   const menu = () => {
     const opts = ['プレイリストに追加', `再生速度（${p.rate}×）`, p.sleepAt ? 'スリープタイマーを解除' : 'スリープタイマー', 'この曲のラジオを開始', 'キャンセル'];
-    ActionSheetIOS.showActionSheetWithOptions({ options: opts, cancelButtonIndex: opts.length - 1 }, (i) => {
+    showActionSheet({ options: opts, cancelButtonIndex: opts.length - 1 }, (i) => {
       if (i === 0) { useAddToPlaylist.setState({ song }); router.push('/add-to-playlist'); }
       if (i === 1) {
         const r = [...RATES.map((x) => `${x}×`), 'キャンセル'];
-        ActionSheetIOS.showActionSheetWithOptions({ options: r, cancelButtonIndex: r.length - 1 }, (j) => { if (j < RATES.length) void p.setRate(RATES[j]); });
+        showActionSheet({ options: r, cancelButtonIndex: r.length - 1 }, (j) => { if (j < RATES.length) void p.setRate(RATES[j]); });
       }
       if (i === 2) {
         if (p.sleepAt) return p.setSleepTimer(null);
         const r = [...SLEEP.map((x) => `${x}分`), 'キャンセル'];
-        ActionSheetIOS.showActionSheetWithOptions({ options: r, cancelButtonIndex: r.length - 1 }, (j) => { if (j < SLEEP.length) p.setSleepTimer(SLEEP[j]); });
+        showActionSheet({ options: r, cancelButtonIndex: r.length - 1 }, (j) => { if (j < SLEEP.length) p.setSleepTimer(SLEEP[j]); });
       }
       if (i === 3) void p.playRadio(song);
     });

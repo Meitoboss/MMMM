@@ -1,6 +1,6 @@
 import { DEFAULT_INVIDIOUS_INSTANCES } from '../config';
 import type { AudioSource } from '../types';
-import { expiryFromUrl, fetchJson, firstSuccess, isIosPlayable } from './util';
+import { expiryFromUrl, fetchJson, firstSuccess, isPlayableMime } from './util';
 
 /** Port of extensions/invidious (`Invidious.api.videos` + `InvidiousResponse`). */
 export interface AdaptiveFormat {
@@ -22,7 +22,7 @@ export function resolve(videoId: string, instances: string[] = DEFAULT_INVIDIOUS
     instances.map(async (base) => {
       const r = await videos(base, videoId, 5000);
       const best = (r.adaptiveFormats ?? [])
-        .filter((f) => f.url && mime(f)?.startsWith('audio/') && isIosPlayable(mime(f)))
+        .filter((f) => f.url && mime(f)?.startsWith('audio/') && isPlayableMime(mime(f)))
         .sort((a, b) => Number(b.bitrate ?? 0) - Number(a.bitrate ?? 0))[0];
       if (!best?.url) throw new Error('no playable audio stream');
       return {

@@ -1,3 +1,5 @@
+import { getConfig } from '../config';
+
 export async function fetchJson<T>(url: string, init: RequestInit = {}, timeoutMs = 6000): Promise<T> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -13,6 +15,12 @@ export async function fetchJson<T>(url: string, init: RequestInit = {}, timeoutM
 /** iOS (AVPlayer) plays AAC in MP4/M4A but not WebM/Opus. */
 export function isIosPlayable(mime?: string): boolean {
   return !!mime && /audio\/(mp4|m4a|mpeg|aac)/i.test(mime);
+}
+
+/** Can THIS platform's player play it? Android (ExoPlayer) also takes WebM/Opus and friends. */
+export function isPlayableMime(mime?: string): boolean {
+  if (!mime) return false;
+  return getConfig().platform === 'android' ? mime.startsWith('audio/') : isIosPlayable(mime);
 }
 
 export function expiryFromUrl(url: string): number | undefined {

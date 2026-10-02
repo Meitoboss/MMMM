@@ -1,6 +1,6 @@
-# RiMusic (TypeScript / React Native)
+# Music space (TypeScript / React Native)
 
-A TypeScript re-implementation of [RiMusic](https://github.com/fast4x/RiMusic) (Kotlin Multiplatform, Android/Desktop)
+**Music space** – a TypeScript re-implementation, based on [RiMusic](https://github.com/fast4x/RiMusic) (Kotlin Multiplatform, Android/Desktop)
 for **iOS**, built with Expo + React Native. Licensed **GPL-3.0-or-later**, like the original.
 
 ## Layout
@@ -33,8 +33,12 @@ playlist sync, theme editor, Crowdin translations (UI is English), backup import
 * **Client identifiers.** The Kotlin app read its InnerTube client names/versions/keys from Android resources
   (`env_*`) that are not in the public repository. `src/core/config.ts` uses publicly known defaults. YouTube retires
   old versions regularly – if search or playback stops working, update the versions in **Settings → Advanced**.
-* **Playback.** The InnerTube iOS client often needs a PO token; when it fails the resolver falls back to Piped and
-  Invidious. Public instances come and go – edit them in Settings.
+* **Playback (phone only, same method as RiMusic).** A hidden WebView runs YouTube's BotGuard to mint PO tokens
+  (`src/core/pot/potoken.ts`, port of `PoTokenWebView.kt`), the `player` request is sent with the token and
+  `signatureTimestamp`, and signature / `n` challenges are solved with yt-dlp's *ejs* solver
+  (`src/core/pot/solver.ts`, replaces NewPipeExtractor). `npm run fetch-solver` bundles the solver at build time (CI does
+  this). When YouTube changes its player, **rebuild** to pick up the newest solver. Fallbacks: Piped → Invidious, and
+  optionally your own `server/` (yt-dlp on a PC).
 * iOS can't play WebM/Opus, so only AAC/MP4 streams are selected.
 * Using YouTube Music this way is against YouTube's Terms of Service, and such apps are not accepted by the App Store.
   The workflow builds an **unsigned** IPA for sideloading (AltStore, Sideloadly, TrollStore…).
@@ -56,3 +60,18 @@ npx expo run:ios
 4. Sideload with a tool that signs with your own Apple ID.
 
 Change `ios.bundleIdentifier` in `app.json` to your own identifier.
+
+## Android
+
+The same TypeScript code builds for Android (Expo / React Native). Platform differences are isolated:
+
+| Area | iOS | Android |
+|---|---|---|
+| Menus / text prompts | system `ActionSheetIOS` / `Alert.prompt` | `src/ui/dialogs.tsx` draws a bottom sheet and a text dialog |
+| Playable audio | AAC in MP4 only (AVPlayer) | any `audio/*`, WebM/Opus when no AAC is offered (ExoPlayer) – `isPlayableMime`, `pickAudioFormat` |
+| Local music | Files app → *On My iPhone → Music space → Music*, import **moves** the files | pick a folder once (system folder picker), import **copies** and remembers what it took |
+| Notifications | – | Android 13+ asks for the notification permission (lock-screen controls) |
+| Build | `.github/workflows/ios-ipa.yml` → unsigned `.ipa` | `.github/workflows/android-apk.yml` → `MusicSpace-android.apk` (signed with the debug key, for sideloading) |
+
+Build the APK: push to `main` (or run the *Build Android APK* workflow) and download the `MusicSpace-android-apk` artifact.
+Locally: `npx expo prebuild --platform android && cd android && ./gradlew assembleRelease`.

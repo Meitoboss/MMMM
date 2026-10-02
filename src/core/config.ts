@@ -39,7 +39,11 @@ export const IOS: ClientProfile = {
   deviceModel: 'iPhone16,2',
 };
 
+/** Decides which audio formats the player can take: iOS (AVPlayer) is picky, Android (ExoPlayer) plays almost everything. */
+export type AppPlatform = 'ios' | 'android';
+
 export interface InnerTubeConfig {
+  platform: AppPlatform;
   host: string;
   /** path prefix, e.g. /youtubei/v1 */
   apiPath: string;
@@ -54,6 +58,7 @@ export interface InnerTubeConfig {
 }
 
 export const defaultConfig: InnerTubeConfig = {
+  platform: 'ios',
   host: 'music.youtube.com',
   apiPath: '/youtubei/v1',
   origin: 'https://music.youtube.com',

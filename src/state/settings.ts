@@ -1,4 +1,5 @@
 import Storage from 'expo-sqlite/kv-store';
+import { Platform } from 'react-native';
 import { create } from 'zustand';
 
 import { DEFAULT_INVIDIOUS_INSTANCES, DEFAULT_PIPED_INSTANCES, IOS, WEB_REMIX, configure } from '../core/config';
@@ -21,6 +22,8 @@ export interface Settings {
   /** a bgutil token server, e.g. https://1-2-3-4.sslip.io – mints PO tokens instead of this phone's WebView */
   potServerUrl: string;
   potServerKey: string;
+  /** show the playback event log on the player screen */
+  showDebug: boolean;
   autoRadio: boolean;
   /** fetch lyrics automatically on the player screen */
   autoLyrics: boolean;
@@ -39,6 +42,7 @@ export const DEFAULT_SETTINGS: Settings = {
   streamServerKey: '',
   potServerUrl: '',
   potServerKey: '',
+  showDebug: false,
   autoRadio: true,
   autoLyrics: true,
   playbackRate: 1,
@@ -63,6 +67,7 @@ function load(): Settings {
 export function applySettings(s: Settings) {
   configureRemotePot({ url: s.potServerUrl, key: s.potServerKey });
   configure({
+    platform: Platform.OS === 'android' ? 'android' : 'ios',
     hl: s.hl,
     gl: s.gl,
     web: { ...WEB_REMIX, clientVersion: s.webClientVersion },

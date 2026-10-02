@@ -44,3 +44,22 @@ export function isAudioFileName(name: string): boolean {
   const ext = fileExtension(name, '');
   return ext !== '' && AUDIO_EXTENSIONS.includes(ext);
 }
+
+/**
+ * File name inside an Android "content://" uri (what the system folder picker gives us), e.g.
+ * ".../document/primary%3AMusic%2FMy%20Song.mp3" → "My Song.mp3".
+ * Some providers hide the name behind a number; those yield a name without a usable extension and are simply not music here.
+ */
+export function nameFromContentUri(uri: string): string {
+  let s = uri;
+  try {
+    s = decodeURIComponent(uri);
+  } catch {
+    /* keep the raw text */
+  }
+  const slash = s.lastIndexOf('/');
+  let name = slash >= 0 ? s.slice(slash + 1) : s;
+  const colon = name.lastIndexOf(':'); // "primary:Song.mp3" when the picked folder is the root of the storage
+  if (colon >= 0) name = name.slice(colon + 1);
+  return name;
+}

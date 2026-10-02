@@ -1,4 +1,4 @@
-import { ActionSheetIOS, Alert } from 'react-native';
+import { Alert } from 'react-native';
 import type { Router } from 'expo-router';
 import { create } from 'zustand';
 
@@ -8,6 +8,7 @@ import { openDb } from '../db/expo';
 import * as repo from '../db/repo';
 import { removeLocalFile } from '../player/localFiles';
 import { usePlayer } from '../state/player';
+import { showActionSheet } from './dialogs';
 
 /** Song waiting to be added to a playlist (read by app/add-to-playlist.tsx) */
 export const useAddToPlaylist = create<{ song?: SongItem }>(() => ({}));
@@ -53,7 +54,7 @@ export function songMenu(router: Router, song: SongItem, onChanged?: () => void)
   options.push('キャンセル');
   const destructive = local ? options.indexOf('ライブラリから削除') : undefined;
 
-  ActionSheetIOS.showActionSheetWithOptions(
+  showActionSheet(
     {
       title: song.title,
       message: song.artists.map((a) => a.name).join(', '),

@@ -1,7 +1,7 @@
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
-import { Alert, View } from 'react-native';
+import { Alert, PermissionsAndroid, Platform, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { clearLastCrash, readLastCrash } from '../src/crash';
@@ -9,6 +9,7 @@ import { openDb } from '../src/db/expo';
 import { ensureFolders } from '../src/player/localFiles';
 import { ensurePlayer } from '../src/player/setup';
 import { applySettings, useSettings } from '../src/state/settings';
+import { DialogHost } from '../src/ui/dialogs';
 import { EngineHost } from '../src/ui/EngineHost';
 import { MiniPlayer } from '../src/ui/MiniPlayer';
 import { colors, useScheme } from '../src/ui/theme';
@@ -25,6 +26,10 @@ export default function RootLayout() {
     void openDb();
     void ensureFolders(); // creates Documents/Music, which then shows up in the Files app
     void ensurePlayer();
+    // Android 13+: the media notification (lock-screen controls) needs this permission
+    if (Platform.OS === 'android' && Number(Platform.Version) >= 33) {
+      void PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS).catch(() => undefined);
+    }
   }, []);
 
   return (
@@ -50,6 +55,7 @@ export default function RootLayout() {
         </Stack>
         <MiniPlayer />
         <EngineHost />
+        <DialogHost />
       </View>
     </SafeAreaProvider>
   );

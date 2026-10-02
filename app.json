@@ -37,12 +37,30 @@
         {
           "ios": {
             "deploymentTarget": "15.1"
+          },
+          "android": {
+            "usesCleartextTraffic": true
           }
         }
       ]
     ],
     "experiments": {
       "typedRoutes": false
+    },
+    "android": {
+      "package": "app.musicspace.player",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-foreground.png",
+        "monochromeImage": "./assets/adaptive-monochrome.png",
+        "backgroundColor": "#0b0c10"
+      },
+      "permissions": [
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",
+        "android.permission.WAKE_LOCK"
+      ]
     }
   }
 }

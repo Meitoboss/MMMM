@@ -43,6 +43,18 @@ interface WebFormat {
   contentLength?: string;
 }
 
+/**
+ * AAC in MP4 (itag 140 / 141) plays everywhere, so it is always preferred.
+ * AVPlayer (iOS) cannot play WebM/Opus; Android's player can – so there it is the fallback when no AAC is offered.
+ */
+export function pickAudioFormat(formats: WebFormat[]): WebFormat | undefined {
+  const m4a = pickM4aFormat(formats);
+  if (m4a || getConfig().platform !== 'android') return m4a;
+  return formats
+    .filter((f) => f.mimeType?.startsWith('audio/'))
+    .sort((a, b) => b.bitrate - a.bitrate)[0];
+}
+
 /** AVPlayer can play AAC in MP4 (itag 140 / 141) but not WebM/Opus. */
 export function pickM4aFormat(formats: WebFormat[]): WebFormat | undefined {
   return formats
@@ -210,12 +222,12 @@ export async function resolveWithPoToken(
     opts.potMode === 'none' ? ['no pot'] : opts.potMode === 'player' ? ['video-bound'] : opts.potMode === 'streaming' ? ['session-bound'] : undefined;
   const failures: string[] = [];
 
-  const audio = pickM4aFormat(wp.formats);
-  if (!audio) failures.push('No AAC (audio/mp4) format offered for this video');
+  const audio = pickAudioFormat(wp.formats);
+  if (!audio) failures.push('No playable audio format offered for this video');
   else {
     try {
       const r = await tryFormat(audio, wp, forced ?? AUTO_KINDS, validate);
-      return toSource(audio, r.url, r.kind, 'audio/mp4');
+      return toSource(audio, r.url, r.kind, audio.mimeType.split(';')[0]);
     } catch (e) {
       failures.push(e instanceof Error ? e.message : String(e));
     }

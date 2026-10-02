@@ -116,6 +116,12 @@ export function EngineHost() {
           failAll('JS engine process was terminated');
           ref.current?.reload();
         }}
+        onRenderProcessGone={() => {
+          // Android killed the WebView renderer (memory / background) – reload and rebuild state
+          setEngine(null);
+          failAll('JS engine process was terminated');
+          ref.current?.reload();
+        }}
         containerStyle={{ flex: 0, width: 1, height: 1 }}
         style={{ width: 1, height: 1 }}
         scrollEnabled={false}

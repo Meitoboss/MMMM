@@ -416,6 +416,15 @@ export async function localFileName(db: Db, songId: string): Promise<string | nu
   return r?.fileName ?? null;
 }
 
+/** Android copies files out of the folder the user picked, so the originals stay: remember what was already imported. */
+export async function isSourceImported(db: Db, sourceKey: string): Promise<boolean> {
+  return !!(await db.first('SELECT 1 AS x FROM LocalImported WHERE sourceKey = ?', [sourceKey]));
+}
+
+export async function markSourceImported(db: Db, sourceKey: string): Promise<void> {
+  await db.run('INSERT OR REPLACE INTO LocalImported (sourceKey, importedAt) VALUES (?,?)', [sourceKey, now()]);
+}
+
 /** Removes the song everywhere (playlists, history … via ON DELETE CASCADE); returns the stored file name so the file can be deleted too. */
 export async function deleteLocalFile(db: Db, songId: string): Promise<string | null> {
   const name = await localFileName(db, songId);

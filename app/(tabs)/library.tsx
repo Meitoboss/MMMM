@@ -6,7 +6,7 @@ import { Alert, FlatList, Pressable, ScrollView, Text, TextInput, View } from 'r
 import type { AlbumItem, ArtistItem, SongItem } from '../../src/core/types';
 import { openDb } from '../../src/db/expo';
 import * as repo from '../../src/db/repo';
-import { importLocalFiles, listInbox } from '../../src/player/localFiles';
+import { chooseAndroidFolder, importLocalFiles, isAndroid, listInbox, savedAndroidFolder } from '../../src/player/localFiles';
 import { usePlayer } from '../../src/state/player';
 import { Button, Cover, ItemRow, SongRow, s } from '../../src/ui/components';
 import { MINI_HEIGHT, colors, useScheme } from '../../src/ui/theme';
@@ -65,10 +65,16 @@ export default function Library() {
   const addFiles = async () => {
     setImporting(true);
     try {
+      if (isAndroid && !savedAndroidFolder() && !(await chooseAndroidFolder())) return;
       const r = await importLocalFiles();
       await load();
       if (r.found === 0) {
-        Alert.alert('取り込む曲がありません', '「ファイル」アプリ → このiPhone内 → Music space → Music フォルダに、音楽ファイルを入れてから、もう一度押してください。');
+        Alert.alert(
+          '取り込む曲がありません',
+          isAndroid
+            ? '選んだフォルダに、新しい音楽ファイルがありません。別のフォルダを選ぶ場合は、「フォルダを選ぶ」を押してください。'
+            : '「ファイル」アプリ → このiPhone内 → Music space → Music フォルダに、音楽ファイルを入れてから、もう一度押してください。',
+        );
       } else if (r.failed.length) {
         Alert.alert(`${r.added.length}曲を取り込みました`, `取り込めなかったファイル:\n${r.failed.join('\n')}`);
       } else {
@@ -78,6 +84,14 @@ export default function Library() {
       Alert.alert('取り込めませんでした', e instanceof Error ? e.message : String(e));
     } finally {
       setImporting(false);
+    }
+  };
+
+  const pickFolder = async () => {
+    try {
+      if (await chooseAndroidFolder()) await load();
+    } catch (e) {
+      Alert.alert('フォルダを選べませんでした', e instanceof Error ? e.message : String(e));
     }
   };
 
@@ -104,13 +118,17 @@ export default function Library() {
               {tab === 'local' && (
                 <View style={{ paddingHorizontal: 16, marginBottom: 6, gap: 6 }}>
                   <Text style={s.sub}>
-                    「ファイル」アプリ → このiPhone内 → Music space → Music フォルダに、音楽ファイル（mp3、m4a、wav、flac など）を入れて、下の「取り込む」を押してください。取り込んだ曲は、アプリの中に保存されます。曲を長押しすると、削除できます。
+                    {isAndroid
+                      ? '音楽が入っているフォルダを一度選ぶと、その中の曲（mp3、m4a、wav、flac など）をアプリにコピーして取り込みます。取り込んだ曲は、アプリの中に保存されます。曲を長押しすると、削除できます。'
+                      : '「ファイル」アプリ → このiPhone内 → Music space → Music フォルダに、音楽ファイル（mp3、m4a、wav、flac など）を入れて、下の「取り込む」を押してください。取り込んだ曲は、アプリの中に保存されます。曲を長押しすると、削除できます。'}
                   </Text>
                   <Text style={{ color: waiting ? colors.accentText : colors.sub, fontWeight: '700' }}>
-                    取り込み待ち: {waiting}件
+                    {isAndroid && !savedAndroidFolder() ? 'フォルダが未選択です' : `取り込み待ち: ${waiting}件`}
                   </Text>
                   <View style={{ flexDirection: 'row', marginBottom: songs.length ? 4 : 0 }}>
                     <Button label={importing ? '取り込み中…' : '取り込む'} icon="download-outline" onPress={() => { if (!importing) void addFiles(); }} />
+                    {isAndroid && <View style={{ width: 8 }} />}
+                    {isAndroid && <Button label={savedAndroidFolder() ? 'フォルダを変える' : 'フォルダを選ぶ'} icon="folder-open-outline" secondary onPress={() => void pickFolder()} />}
                   </View>
                 </View>
               )}
@@ -122,7 +140,7 @@ export default function Library() {
               )}
             </View>
           ) : null}
-          ListEmptyComponent={empty(tab === 'local' ? 'まだ曲がありません。Music フォルダに音楽ファイルを入れて、「取り込む」を押してください' : tab === 'liked' ? 'お気に入りはまだありません。曲を長押しして追加できます' : tab === 'history' ? 'まだ再生した曲がありません' : '再生した曲、お気に入り、プレイリストの曲がここに並びます')}
+          ListEmptyComponent={empty(tab === 'local' ? (isAndroid ? 'まだ曲がありません。「フォルダを選ぶ」で音楽のフォルダを選んで、「取り込む」を押してください' : 'まだ曲がありません。Music フォルダに音楽ファイルを入れて、「取り込む」を押してください') : tab === 'liked' ? 'お気に入りはまだありません。曲を長押しして追加できます' : tab === 'history' ? 'まだ再生した曲がありません' : '再生した曲、お気に入り、プレイリストの曲がここに並びます')}
           renderItem={({ item, index }) => <SongRow song={item} onChanged={load} onPress={() => void play(songs, index)} />}
         />
       )}

@@ -1,7 +1,9 @@
+import Storage from 'expo-sqlite/kv-store';
 import * as FileSystem from 'expo-file-system/legacy';
+import { Platform } from 'react-native';
 
 import { runImport, type ImportDeps, type ImportResult, type InboxFile } from '../core/localImport';
-import { isAudioFileName } from '../core/localMeta';
+import { isAudioFileName, nameFromContentUri } from '../core/localMeta';
 import type { AudioSource } from '../core/types';
 import type { Db } from '../db/driver';
 import { openDb } from '../db/expo';
@@ -10,24 +12,57 @@ import * as repo from '../db/repo';
 export type { ImportResult, InboxFile };
 
 /**
- * Music on this device.
+ * Music on this device. The app keeps its own copy of every imported song:
  *
- *   inbox   Documents/Music/   – shown in the Files app (On My iPhone → Music space → Music). The user drops files here.
- *   store   Documents/local/   – where imported files live; only the file NAME is stored in the database, because the
- *                                absolute path of the app container changes when the app is reinstalled or re-signed.
+ *   store   <app documents>/local/   – only the file NAME is stored in the database, because the absolute path of the app
+ *                                      container changes when the app is reinstalled or re-signed.
  *
- * No native file-picker module is needed: the Files app does the picking.
+ * Where the music comes from depends on the platform (neither needs a native file-picker module):
+ *
+ *   iOS      the user drops files into  Files app → On My iPhone → Music space → Music  (Documents/Music/).
+ *            "Import" MOVES them into the store.
+ *   Android  the user picks a folder once (the system folder picker, Storage Access Framework); "Import" COPIES the music
+ *            files in it into the store and remembers which ones it has already taken.
  */
+export const isAndroid = Platform.OS === 'android';
+
 const root = () => FileSystem.documentDirectory ?? '';
 const inboxDir = () => `${root()}Music/`;
 const storeDir = () => `${root()}local/`;
 export const localUri = (fileName: string): string => `${storeDir()}${fileName}`;
 
-/** Creates the folders (so "Music" shows up in the Files app). Safe to call every launch. */
+/** Creates the folders (on iOS "Music" then shows up in the Files app). Safe to call every launch. */
 export async function ensureFolders(): Promise<void> {
-  await FileSystem.makeDirectoryAsync(inboxDir(), { intermediates: true }).catch(() => undefined);
+  if (!isAndroid) await FileSystem.makeDirectoryAsync(inboxDir(), { intermediates: true }).catch(() => undefined);
   await FileSystem.makeDirectoryAsync(storeDir(), { intermediates: true }).catch(() => undefined);
 }
+
+/* ------------------------------ Android: the picked folder ------------------------------ */
+
+const FOLDER_KEY = 'local.androidFolder.v1';
+
+export function savedAndroidFolder(): string | null {
+  try {
+    return Storage.getItemSync(FOLDER_KEY);
+  } catch {
+    return null;
+  }
+}
+
+/** Opens the system folder picker. Returns false when the user cancels. */
+export async function chooseAndroidFolder(): Promise<boolean> {
+  const saf = FileSystem.StorageAccessFramework;
+  const res = await saf.requestDirectoryPermissionsAsync();
+  if (!res.granted) return false;
+  try {
+    Storage.setItemSync(FOLDER_KEY, res.directoryUri);
+  } catch {
+    /* works until the app closes */
+  }
+  return true;
+}
+
+/* ------------------------------ listing / importing ------------------------------ */
 
 async function readNames(dir: string): Promise<string[]> {
   try {
@@ -37,8 +72,7 @@ async function readNames(dir: string): Promise<string[]> {
   }
 }
 
-/** music files waiting in the folder "Music" (and loose ones in the app's top folder) */
-export async function listInbox(): Promise<InboxFile[]> {
+async function listIosInbox(): Promise<InboxFile[]> {
   const out: InboxFile[] = [];
   for (const dir of [inboxDir(), root()]) {
     for (const name of await readNames(dir)) {
@@ -48,23 +82,72 @@ export async function listInbox(): Promise<InboxFile[]> {
   return out;
 }
 
-const deps: ImportDeps = {
-  list: listInbox,
-  move: async (from, stored) => {
-    await ensureFolders();
-    await FileSystem.moveAsync({ from, to: localUri(stored) });
-  },
-  undo: async (stored, original) => {
-    await FileSystem.moveAsync({ from: localUri(stored), to: original });
-  },
-  size: async (uri) => {
-    const info = await FileSystem.getInfoAsync(uri);
-    return info.exists && 'size' in info ? info.size : undefined;
-  },
-};
+async function listAndroidFolder(): Promise<InboxFile[]> {
+  const folder = savedAndroidFolder();
+  if (!folder) return [];
+  let uris: string[] = [];
+  try {
+    uris = await FileSystem.StorageAccessFramework.readDirectoryAsync(folder);
+  } catch {
+    return []; // permission gone (folder deleted / access revoked): the user picks again
+  }
+  return uris.map((uri) => ({ uri, name: nameFromContentUri(uri) })).filter((f) => isAudioFileName(f.name));
+}
+
+/** music files that are ready to be imported */
+export async function listInbox(): Promise<InboxFile[]> {
+  const all = isAndroid ? await listAndroidFolder() : await listIosInbox();
+  if (!isAndroid) return all;
+  const db = await openDb();
+  const fresh: InboxFile[] = [];
+  for (const f of all) if (!(await repo.isSourceImported(db, f.uri))) fresh.push(f);
+  return fresh;
+}
+
+async function iosDeps(): Promise<ImportDeps> {
+  return {
+    list: listIosInbox,
+    move: async (from, stored) => {
+      await ensureFolders();
+      await FileSystem.moveAsync({ from, to: localUri(stored) });
+    },
+    undo: async (stored, original) => {
+      await FileSystem.moveAsync({ from: localUri(stored), to: original });
+    },
+    size: async (uri) => {
+      const info = await FileSystem.getInfoAsync(uri);
+      return info.exists && 'size' in info ? info.size : undefined;
+    },
+  };
+}
+
+async function androidDeps(db: Db): Promise<ImportDeps> {
+  return {
+    list: listAndroidFolder,
+    move: async (from, stored) => {
+      await ensureFolders();
+      await FileSystem.copyAsync({ from, to: localUri(stored) });
+    },
+    undo: async (stored) => {
+      await FileSystem.deleteAsync(localUri(stored), { idempotent: true });
+    },
+    size: async (uri) => {
+      try {
+        const info = await FileSystem.getInfoAsync(uri);
+        return info.exists && 'size' in info ? info.size : undefined;
+      } catch {
+        return undefined; // some providers cannot report a size
+      }
+    },
+    alreadyImported: (f) => repo.isSourceImported(db, f.uri),
+    markImported: (f) => repo.markSourceImported(db, f.uri),
+  };
+}
 
 export async function importLocalFiles(db?: Db): Promise<ImportResult> {
-  return runImport(db ?? (await openDb()), deps);
+  const database = db ?? (await openDb());
+  if (isAndroid && !savedAndroidFolder()) throw new Error('先に、音楽が入っているフォルダを選んでください。');
+  return runImport(database, isAndroid ? await androidDeps(database) : await iosDeps());
 }
 
 /** Delete the song from the library (playlists, history, likes) and the copy on the device. */

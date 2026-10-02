@@ -10,6 +10,7 @@ import * as repo from '../../src/db/repo';
 import { usePlayer } from '../../src/state/player';
 import { Button, Cover, s } from '../../src/ui/components';
 import { DraggableList } from '../../src/ui/DraggableList';
+import { promptText } from '../../src/ui/dialogs';
 import { MINI_HEIGHT, colors, useScheme } from '../../src/ui/theme';
 
 const ROW_HEIGHT = 64;
@@ -48,7 +49,7 @@ export default function LocalPlaylist() {
           <View>
             <View style={{ flexDirection: 'row', gap: 8, paddingHorizontal: 16 }}>
               <Button label="再生" icon="play" onPress={() => void play(songs, 0)} />
-              <Button label="名前を変更" secondary onPress={() => Alert.prompt('プレイリスト名を変更', undefined, async (t) => { if (t?.trim()) { await repo.renamePlaylist(await openDb(), pid, t.trim()); void load(); } }, 'plain-text', name)} />
+              <Button label="名前を変更" secondary onPress={() => promptText('プレイリスト名を変更', undefined, name, async (t) => { if (t.trim()) { await repo.renamePlaylist(await openDb(), pid, t.trim()); void load(); } })} />
             </View>
             <Text style={[s.sub, { paddingHorizontal: 16, marginTop: 8, marginBottom: 4 }]}>右の「≡」をドラッグして、曲の順番を入れ替えられます。</Text>
           </View>
