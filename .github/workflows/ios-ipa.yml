@@ -55,9 +55,12 @@ jobs:
 
       - name: Build (no code signing)
         run: |
+          WS=$(ls -d ios/*.xcworkspace | head -n 1)
+          SCHEME=$(basename "$WS" .xcworkspace)
+          echo "workspace: $WS  scheme: $SCHEME"
           xcodebuild \
-            -workspace ios/RiMusic.xcworkspace \
-            -scheme RiMusic \
+            -workspace "$WS" \
+            -scheme "$SCHEME" \
             -configuration Release \
             -sdk iphoneos \
             -destination 'generic/platform=iOS' \
@@ -77,13 +80,13 @@ jobs:
           test -n "$APP" || { echo "No .app produced"; exit 1; }
           rm -rf Payload && mkdir Payload
           cp -R "$APP" Payload/
-          zip -qry RiMusic-unsigned.ipa Payload
-          ls -lh RiMusic-unsigned.ipa
+          zip -qry MusicSpace-unsigned.ipa Payload
+          ls -lh MusicSpace-unsigned.ipa
 
       - uses: actions/upload-artifact@v4
         with:
-          name: RiMusic-unsigned-ipa
-          path: RiMusic-unsigned.ipa
+          name: MusicSpace-unsigned-ipa
+          path: MusicSpace-unsigned.ipa
 
       - uses: actions/upload-artifact@v4
         if: failure()
@@ -95,4 +98,4 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: RiMusic-unsigned.ipa
+          files: MusicSpace-unsigned.ipa
