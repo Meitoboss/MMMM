@@ -45,6 +45,18 @@ jobs:
       - name: Generate the native Android project
         run: npx expo prebuild --platform android --clean
 
+      # react-native-track-player 4.x cannot be loaded by React Native's New Architecture on Android ("TurboModule system assumes
+      # returnType == void iff the method is synchronous", issue #2489). Android builds use the legacy architecture instead.
+      # (iOS keeps the new one – it works there.)
+      - name: Use the legacy architecture on Android
+        run: |
+          if grep -q '^newArchEnabled=' android/gradle.properties; then
+            sed -i 's/^newArchEnabled=.*/newArchEnabled=false/' android/gradle.properties
+          else
+            echo 'newArchEnabled=false' >> android/gradle.properties
+          fi
+          grep -n 'newArchEnabled' android/gradle.properties
+
       # A hosted runner has ~7 GB of RAM: keep Gradle small, build one CPU type (all current phones), few parallel jobs.
       - name: Tune Gradle for a small machine
         run: |
