@@ -5,6 +5,7 @@ import { ReactNode } from 'react';
 import { ActivityIndicator, FlatList, Pressable, Text, View } from 'react-native';
 
 import type { MusicItem, Section, SongItem } from '../core/types';
+import { useOffline } from '../state/offline';
 import { songMenu, openItem } from './actions';
 import { colors, dynamicStyles, useScheme } from './theme';
 
@@ -43,6 +44,8 @@ export function SongRow({
 }) {
   const router = useRouter();
   useScheme();
+  const saved = useOffline((st) => !!st.ids[song.id]);
+  const job = useOffline((st) => st.jobs[song.id]);
   return (
     <Pressable
       onPress={onPress}
@@ -61,6 +64,15 @@ export function SongRow({
           {song.durationText ? ` • ${song.durationText}` : ''}
         </Text>
       </View>
+      {job?.status === 'downloading' ? (
+        <Text style={{ color: colors.accentText, fontSize: 12, fontWeight: '700' }}>{Math.round(job.progress * 100)}%</Text>
+      ) : job?.status === 'queued' ? (
+        <Ionicons name="time-outline" size={16} color={colors.sub} />
+      ) : job?.status === 'error' ? (
+        <Ionicons name="alert-circle" size={18} color={colors.danger} />
+      ) : saved ? (
+        <Ionicons name="arrow-down-circle" size={18} color={colors.accentText} />
+      ) : null}
       {right}
       <Pressable hitSlop={12} onPress={() => songMenu(router, song, onChanged)}>
         <Ionicons name="ellipsis-horizontal" size={20} color={colors.sub} />

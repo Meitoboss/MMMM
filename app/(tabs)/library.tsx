@@ -1,20 +1,22 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Alert, FlatList, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 
 import type { AlbumItem, ArtistItem, SongItem } from '../../src/core/types';
 import { openDb } from '../../src/db/expo';
 import * as repo from '../../src/db/repo';
 import { chooseAndroidFolder, importLocalFiles, isAndroid, listInbox, savedAndroidFolder } from '../../src/player/localFiles';
+import { useOffline } from '../../src/state/offline';
 import { usePlayer } from '../../src/state/player';
 import { Button, Cover, ItemRow, SongRow, s } from '../../src/ui/components';
 import { MINI_HEIGHT, colors, useScheme } from '../../src/ui/theme';
 
-type Tab = 'songs' | 'local' | 'liked' | 'playlists' | 'albums' | 'artists' | 'history' | 'stats';
+type Tab = 'songs' | 'local' | 'offline' | 'liked' | 'playlists' | 'albums' | 'artists' | 'history' | 'stats';
 const TABS: { key: Tab; label: string }[] = [
   { key: 'songs', label: '曲' },
   { key: 'local', label: 'ローカル' },
+  { key: 'offline', label: 'オフライン' },
   { key: 'liked', label: 'お気に入り' },
   { key: 'playlists', label: 'プレイリスト' },
   { key: 'albums', label: 'アルバム' },
@@ -42,6 +44,10 @@ export default function Library() {
   const [newName, setNewName] = useState('');
   const [importing, setImporting] = useState(false);
   const [waiting, setWaiting] = useState(0);
+  const [offlineBytes, setOfflineBytes] = useState(0);
+  const jobs = useOffline((st) => st.jobs);
+  const names = useOffline((st) => st.names);
+  const offlineVersion = useOffline((st) => st.version);
 
   const load = useCallback(async () => {
     const db = await openDb();
@@ -49,6 +55,10 @@ export default function Library() {
     if (tab === 'local') {
       setSongs(await repo.localSongs(db));
       setWaiting((await listInbox()).length);
+    }
+    if (tab === 'offline') {
+      setSongs(await repo.offlineSongs(db));
+      setOfflineBytes(await repo.offlineTotalSize(db));
     }
     if (tab === 'liked') setSongs(await repo.likedSongs(db));
     if (tab === 'history') setSongs(await repo.history(db));
@@ -61,6 +71,11 @@ export default function Library() {
     }
   }, [tab, range]);
   useFocusEffect(useCallback(() => { void load(); }, [load]));
+  // a download finished / a copy was removed
+  useEffect(() => {
+    if (tab === 'offline') void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [offlineVersion]);
 
   const addFiles = async () => {
     setImporting(true);
@@ -108,12 +123,12 @@ export default function Library() {
         ))}
       </ScrollView>
 
-      {(tab === 'songs' || tab === 'local' || tab === 'liked' || tab === 'history') && (
+      {(tab === 'songs' || tab === 'local' || tab === 'offline' || tab === 'liked' || tab === 'history') && (
         <FlatList
           data={songs}
           keyExtractor={(x) => x.id}
           contentContainerStyle={pad}
-          ListHeaderComponent={tab === 'local' || songs.length ? (
+          ListHeaderComponent={tab === 'local' || tab === 'offline' || songs.length ? (
             <View>
               {tab === 'local' && (
                 <View style={{ paddingHorizontal: 16, marginBottom: 6, gap: 6 }}>
@@ -132,6 +147,44 @@ export default function Library() {
                   </View>
                 </View>
               )}
+              {tab === 'offline' && (
+                <View style={{ paddingHorizontal: 16, marginBottom: 8, gap: 6 }}>
+                  <Text style={s.sub}>
+                    検索した曲などを、アプリの中に保存して、通信なしで聞けるようにします。保存した曲は、このアプリの中だけで再生できます。曲を長押しすると、保存を削除できます。
+                  </Text>
+                  <Text style={{ color: colors.accentText, fontWeight: '700' }}>
+                    保存済み: {songs.length}曲 • {(offlineBytes / 1_000_000).toFixed(1)} MB
+                  </Text>
+                  {Object.entries(jobs).map(([id, j]) => (
+                    <View key={id} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <Text style={{ flex: 1, color: j.status === 'error' ? colors.danger : colors.text }} numberOfLines={1}>
+                        {names[id] ?? id}
+                      </Text>
+                      <Text style={{ color: j.status === 'error' ? colors.danger : colors.sub, fontSize: 12 }} numberOfLines={1}>
+                        {j.status === 'queued' ? '待機中' : j.status === 'downloading' ? `${Math.round(j.progress * 100)}%` : j.status === 'done' ? '完了' : (j.error ?? 'エラー').slice(0, 40)}
+                      </Text>
+                      <Pressable hitSlop={10} onPress={() => (j.status === 'error' || j.status === 'done' ? useOffline.getState().dismiss(id) : useOffline.getState().cancel(id))}>
+                        <Ionicons name="close-circle-outline" size={20} color={colors.sub} />
+                      </Pressable>
+                    </View>
+                  ))}
+                  {!!songs.length && (
+                    <View style={{ flexDirection: 'row' }}>
+                      <Button
+                        label="すべて削除"
+                        icon="trash-outline"
+                        secondary
+                        onPress={() =>
+                          Alert.alert('保存した曲を、すべて削除しますか？', '曲そのものは、ライブラリに残ります。', [
+                            { text: '削除', style: 'destructive', onPress: () => void useOffline.getState().removeAll() },
+                            { text: 'キャンセル', style: 'cancel' },
+                          ])
+                        }
+                      />
+                    </View>
+                  )}
+                </View>
+              )}
               {!!songs.length && (
             <View style={{ flexDirection: 'row', gap: 8, paddingHorizontal: 16 }}>
               <Button label="再生" icon="play" onPress={() => void play(songs, 0)} />
@@ -140,7 +193,7 @@ export default function Library() {
               )}
             </View>
           ) : null}
-          ListEmptyComponent={empty(tab === 'local' ? (isAndroid ? 'まだ曲がありません。「フォルダを選ぶ」で音楽のフォルダを選んで、「取り込む」を押してください' : 'まだ曲がありません。Music フォルダに音楽ファイルを入れて、「取り込む」を押してください') : tab === 'liked' ? 'お気に入りはまだありません。曲を長押しして追加できます' : tab === 'history' ? 'まだ再生した曲がありません' : '再生した曲、お気に入り、プレイリストの曲がここに並びます')}
+          ListEmptyComponent={empty(tab === 'offline' ? 'まだ保存した曲がありません。曲の「…」から「オフラインに保存」を選ぶと、ここに並びます' : tab === 'local' ? (isAndroid ? 'まだ曲がありません。「フォルダを選ぶ」で音楽のフォルダを選んで、「取り込む」を押してください' : 'まだ曲がありません。Music フォルダに音楽ファイルを入れて、「取り込む」を押してください') : tab === 'liked' ? 'お気に入りはまだありません。曲を長押しして追加できます' : tab === 'history' ? 'まだ再生した曲がありません' : '再生した曲、お気に入り、プレイリストの曲がここに並びます')}
           renderItem={({ item, index }) => <SongRow song={item} onChanged={load} onPress={() => void play(songs, index)} />}
         />
       )}

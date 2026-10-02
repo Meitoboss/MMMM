@@ -15,6 +15,7 @@ const TABLES = [
   'CREATE TABLE IF NOT EXISTS `Lyrics` (`songId` TEXT NOT NULL, `fixed` TEXT, `synced` TEXT, PRIMARY KEY(`songId`), FOREIGN KEY(`songId`) REFERENCES `Song`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )',
   'CREATE TABLE IF NOT EXISTS `Playlist` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, `browseId` TEXT)',
   // songs imported from files on the device: only the file NAME is stored (the app container path changes between installs)
+  'CREATE TABLE IF NOT EXISTS `Offline` (`songId` TEXT NOT NULL, `fileName` TEXT NOT NULL, `size` INTEGER, `mimeType` TEXT, `savedAt` INTEGER NOT NULL, PRIMARY KEY(`songId`), FOREIGN KEY(`songId`) REFERENCES `Song`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )',
   'CREATE TABLE IF NOT EXISTS `LocalImported` (`sourceKey` TEXT NOT NULL, `importedAt` INTEGER NOT NULL, PRIMARY KEY(`sourceKey`))',
   'CREATE TABLE IF NOT EXISTS `RecentPlay` (`songId` TEXT NOT NULL, `playedAt` INTEGER NOT NULL, PRIMARY KEY(`songId`), FOREIGN KEY(`songId`) REFERENCES `Song`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )',
   'CREATE TABLE IF NOT EXISTS `LocalFile` (`songId` TEXT NOT NULL, `fileName` TEXT NOT NULL, `size` INTEGER, `addedAt` INTEGER NOT NULL, PRIMARY KEY(`songId`), FOREIGN KEY(`songId`) REFERENCES `Song`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )',

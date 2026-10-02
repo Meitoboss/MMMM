@@ -16,6 +16,9 @@ import { useSettings } from '../src/state/settings';
 import { Cover, SongRow } from '../src/ui/components';
 import { useAddToPlaylist } from '../src/ui/actions';
 import { showActionSheet } from '../src/ui/dialogs';
+import { requestOfflineSave } from '../src/ui/offlineActions';
+import { useOffline } from '../src/state/offline';
+import { isLocalId } from '../src/core/localMeta';
 import { colors, useScheme } from '../src/ui/theme';
 
 const fmt = (sec: number) => `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, '0')}`;
@@ -85,7 +88,9 @@ export default function PlayerScreen() {
   const cover = Math.min(width - 48, 360);
 
   const menu = () => {
-    const opts = ['プレイリストに追加', `再生速度（${p.rate}×）`, p.sleepAt ? 'スリープタイマーを解除' : 'スリープタイマー', 'この曲のラジオを開始', 'キャンセル'];
+    const local = isLocalId(song.id);
+    const saved = !!useOffline.getState().ids[song.id];
+    const opts = ['プレイリストに追加', `再生速度（${p.rate}×）`, p.sleepAt ? 'スリープタイマーを解除' : 'スリープタイマー', 'この曲のラジオを開始', ...(local ? [] : [saved ? 'オフライン保存を削除' : 'オフラインに保存']), 'キャンセル'];
     showActionSheet({ options: opts, cancelButtonIndex: opts.length - 1 }, (i) => {
       if (i === 0) { useAddToPlaylist.setState({ song }); router.push('/add-to-playlist'); }
       if (i === 1) {
@@ -98,6 +103,10 @@ export default function PlayerScreen() {
         showActionSheet({ options: r, cancelButtonIndex: r.length - 1 }, (j) => { if (j < SLEEP.length) p.setSleepTimer(SLEEP[j]); });
       }
       if (i === 3) void p.playRadio(song);
+      if (i === 4 && !local) {
+        if (saved) void useOffline.getState().remove(song.id);
+        else void requestOfflineSave([song]);
+      }
     });
   };
 

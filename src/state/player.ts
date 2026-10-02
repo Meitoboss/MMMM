@@ -9,6 +9,7 @@ import type { SongItem } from '../core/types';
 import { openDb } from '../db/expo';
 import * as repo from '../db/repo';
 import { resolveLocal } from '../player/localFiles';
+import { resolveOffline } from '../player/offline';
 import { ensurePlayer } from '../player/setup';
 import { resolverOptions, useSettings } from './settings';
 
@@ -86,7 +87,9 @@ export const usePlayer = create<PlayerState>((set, get) => {
     get().log(`load ${song.id} (#${index + 1}/${get().queue.length})`);
     try {
       await ensurePlayer();
-      const src = isLocalId(song.id) ? await resolveLocal(song.id) : await resolveAudio(song.id, resolverOptions());
+      const src = isLocalId(song.id)
+        ? await resolveLocal(song.id)
+        : (await resolveOffline(song.id)) ?? (await resolveAudio(song.id, resolverOptions())); // a saved copy plays without the network
       if (token !== loadToken) return; // user skipped again while resolving
       get().log(`resolved via=${src.via} itag=${src.itag ?? '-'} ${src.mimeType ?? ''} host=${String(src.url).split('/')[2]}${src.note ? ` ${src.note}` : ''}`);
       await TrackPlayer.reset();

@@ -8,7 +8,9 @@ import { openDb } from '../db/expo';
 import * as repo from '../db/repo';
 import { removeLocalFile } from '../player/localFiles';
 import { usePlayer } from '../state/player';
+import { useOffline } from '../state/offline';
 import { showActionSheet } from './dialogs';
+import { requestOfflineSave } from './offlineActions';
 
 /** Song waiting to be added to a playlist (read by app/add-to-playlist.tsx) */
 export const useAddToPlaylist = create<{ song?: SongItem }>(() => ({}));
@@ -47,6 +49,8 @@ export function songMenu(router: Router, song: SongItem, onChanged?: () => void)
   const artist = song.artists.find((a) => a.id);
   const options = ['次に再生', 'キューに追加'];
   if (!local) options.push('この曲のラジオ');
+  const saved = !local && !!useOffline.getState().ids[song.id];
+  if (!local) options.push(saved ? 'オフライン保存を削除' : 'オフラインに保存');
   options.push('お気に入りに追加／解除', 'プレイリストに追加');
   if (song.album?.id) options.push('アルバムへ');
   if (artist) options.push('アーティストへ');
@@ -68,7 +72,11 @@ export function songMenu(router: Router, song: SongItem, onChanged?: () => void)
         if (label === '次に再生') p.playNext(song);
         else if (label === 'キューに追加') p.enqueue(song);
         else if (label === 'この曲のラジオ') await p.playRadio(song);
-        else if (label === 'お気に入りに追加／解除') {
+        else if (label === 'オフラインに保存') await requestOfflineSave([song]);
+        else if (label === 'オフライン保存を削除') {
+          await useOffline.getState().remove(song.id);
+          onChanged?.();
+        } else if (label === 'お気に入りに追加／解除') {
           await repo.toggleLike(await openDb(), song);
           onChanged?.();
         } else if (label === 'プレイリストに追加') {

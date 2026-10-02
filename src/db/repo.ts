@@ -416,6 +416,59 @@ export async function localFileName(db: Db, songId: string): Promise<string | nu
   return r?.fileName ?? null;
 }
 
+/* ------------------------------------------------------------------ *
+ * Offline copies of YouTube songs (kept inside the app, played instead of streaming)
+ * ------------------------------------------------------------------ */
+
+export interface OfflineRow {
+  songId: string;
+  fileName: string;
+  size: number | null;
+  mimeType: string | null;
+  savedAt: number;
+}
+
+export async function addOffline(db: Db, song: SongItem, f: { fileName: string; size?: number; mimeType?: string }): Promise<void> {
+  await upsertSong(db, song);
+  await db.run('INSERT OR REPLACE INTO Offline (songId, fileName, size, mimeType, savedAt) VALUES (?,?,?,?,?)', [
+    song.id,
+    f.fileName,
+    f.size ?? null,
+    f.mimeType ?? null,
+    now(),
+  ]);
+}
+
+export async function offlineFile(db: Db, songId: string): Promise<OfflineRow | null> {
+  return db.first<OfflineRow>('SELECT * FROM Offline WHERE songId = ?', [songId]);
+}
+
+export async function offlineIds(db: Db): Promise<string[]> {
+  return (await db.all<{ songId: string }>('SELECT songId FROM Offline')).map((r) => r.songId);
+}
+
+/** saved songs, newest first */
+export async function offlineSongs(db: Db): Promise<SongItem[]> {
+  const rows = await db.all<SongRow>('SELECT Song.* FROM Offline JOIN Song ON Song.id = Offline.songId ORDER BY Offline.savedAt DESC, Song.title COLLATE NOCASE');
+  return rows.map(songFromRow);
+}
+
+export async function offlineTotalSize(db: Db): Promise<number> {
+  const r = await db.first<{ n: number | null }>('SELECT SUM(size) AS n FROM Offline');
+  return r?.n ?? 0;
+}
+
+/** forgets the offline copy (the song itself stays in the library); returns the file name so the file can be deleted */
+export async function deleteOffline(db: Db, songId: string): Promise<string | null> {
+  const row = await offlineFile(db, songId);
+  await db.run('DELETE FROM Offline WHERE songId = ?', [songId]);
+  return row?.fileName ?? null;
+}
+
+export async function allOfflineFileNames(db: Db): Promise<string[]> {
+  return (await db.all<{ fileName: string }>('SELECT fileName FROM Offline')).map((r) => r.fileName);
+}
+
 /** Android copies files out of the folder the user picked, so the originals stay: remember what was already imported. */
 export async function isSourceImported(db: Db, sourceKey: string): Promise<boolean> {
   return !!(await db.first('SELECT 1 AS x FROM LocalImported WHERE sourceKey = ?', [sourceKey]));

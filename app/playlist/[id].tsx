@@ -9,9 +9,11 @@ import * as repo from '../../src/db/repo';
 import { usePlayer } from '../../src/state/player';
 import { Button, Cover, ErrorView, Loading, SongRow, s } from '../../src/ui/components';
 import { useAsync } from '../../src/ui/hooks';
-import { MINI_HEIGHT, colors } from '../../src/ui/theme';
+import { requestOfflineSave } from '../../src/ui/offlineActions';
+import { MINI_HEIGHT, colors, useScheme } from '../../src/ui/theme';
 
 export default function RemotePlaylist() {
+  useScheme();
   const { id } = useLocalSearchParams<{ id: string }>();
   const play = usePlayer((p) => p.playSongs);
   const { data, error, loading, reload } = useAsync(() => yt.playlist(id), [id]);
@@ -20,7 +22,7 @@ export default function RemotePlaylist() {
   const [busy, setBusy] = useState(false);
 
   if (loading && !data) return <Loading />;
-  if (error || !data) return <ErrorView message={error ?? 'Not found'} onRetry={reload} />;
+  if (error || !data) return <ErrorView message={error ?? '見つかりません'} onRetry={reload} />;
 
   const songs = [...data.songs, ...extra];
   const next = token === null ? data.continuation : token;
@@ -41,7 +43,7 @@ export default function RemotePlaylist() {
       onEndReached={more}
       onEndReachedThreshold={0.6}
       contentContainerStyle={{ paddingBottom: MINI_HEIGHT + 24 }}
-      ListFooterComponent={busy ? <ActivityIndicator color={colors.accent} style={{ margin: 16 }} /> : null}
+      ListFooterComponent={busy ? <ActivityIndicator color={colors.accentText} style={{ margin: 16 }} /> : null}
       ListHeaderComponent={
         <View style={{ alignItems: 'center', padding: 16, gap: 6 }}>
           <Stack.Screen options={{ title: '' }} />
@@ -49,9 +51,10 @@ export default function RemotePlaylist() {
           <Text style={[s.h1, { textAlign: 'center', marginTop: 8 }]}>{data.title}</Text>
           {!!data.author && <Text style={s.sub}>{data.author.name}</Text>}
           <View style={{ flexDirection: 'row', gap: 8 }}>
-            <Button label="Play" icon="play" onPress={() => void play(songs, 0)} />
-            <Button label="Shuffle" icon="shuffle" secondary onPress={() => { usePlayer.setState({ shuffle: true }); void play(songs, 0); }} />
-            <Button label="Save" icon="download-outline" secondary onPress={async () => {
+            <Button label="再生" icon="play" onPress={() => void play(songs, 0)} />
+            <Button label="シャッフル" icon="shuffle" secondary onPress={() => { usePlayer.setState({ shuffle: true }); void play(songs, 0); }} />
+            <Button label="オフライン" icon="arrow-down-circle-outline" secondary onPress={() => void requestOfflineSave(songs)} />
+            <Button label="ライブラリに追加" icon="add-circle-outline" secondary onPress={async () => {
               const full = await yt.playlistComplete({ ...data, songs, continuation: next ?? undefined });
               const db = await openDb();
               const pid = await repo.createPlaylist(db, data.title, id);

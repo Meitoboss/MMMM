@@ -7,6 +7,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { clearLastCrash, readLastCrash } from '../src/crash';
 import { openDb } from '../src/db/expo';
 import { ensureFolders } from '../src/player/localFiles';
+import { useOffline } from '../src/state/offline';
 import { ensurePlayer } from '../src/player/setup';
 import { applySettings, useSettings } from '../src/state/settings';
 import { DialogHost } from '../src/ui/dialogs';
@@ -24,6 +25,7 @@ export default function RootLayout() {
       Alert.alert('前回、アプリが異常終了しました', `${crash.message}\n\n${crash.stack}`.slice(0, 1200), [{ text: 'OK', onPress: clearLastCrash }]);
     }
     void openDb();
+    void useOffline.getState().load();
     void ensureFolders(); // creates Documents/Music, which then shows up in the Files app
     void ensurePlayer();
     // Android 13+: the media notification (lock-screen controls) needs this permission
