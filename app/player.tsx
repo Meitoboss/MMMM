@@ -18,7 +18,6 @@ import { useAddToPlaylist } from '../src/ui/actions';
 import { showActionSheet } from '../src/ui/dialogs';
 import { requestOfflineSave } from '../src/ui/offlineActions';
 import { useOffline } from '../src/state/offline';
-import { isLocalId } from '../src/core/localMeta';
 import { colors, useScheme } from '../src/ui/theme';
 
 const fmt = (sec: number) => `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, '0')}`;
