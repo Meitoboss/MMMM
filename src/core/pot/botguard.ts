@@ -62,3 +62,26 @@ export function u8CsvToPoToken(csv: string): string {
   const bytes = csv.split(',').map((x) => Number(x) & 0xff);
   return bytesToBase64(bytes).replace(/\+/g, '-').replace(/\//g, '_');
 }
+
+/** `visitorData` as returned by YouTube is percent-encoded base64 of a protobuf; undo the percent-encoding. */
+export function decodeVisitorData(v: string): string {
+  try {
+    return decodeURIComponent(v);
+  } catch {
+    return v;
+  }
+}
+
+/** The 11-character visitor id inside visitorData (protobuf field 1), as used by yt-dlp's `bind_to_visitor_id`. */
+export function extractVisitorId(visitorData: string): string | undefined {
+  try {
+    const bytes = ytBase64ToBytes(decodeVisitorData(visitorData));
+    if (bytes[0] !== 0x0a) return undefined;
+    const len = bytes[1];
+    if (!len || len > 64 || bytes.length < 2 + len) return undefined;
+    const id = utf8Decode(bytes.slice(2, 2 + len));
+    return /^[A-Za-z0-9_-]+$/.test(id) ? id : undefined;
+  } catch {
+    return undefined;
+  }
+}

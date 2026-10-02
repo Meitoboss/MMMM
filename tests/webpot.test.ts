@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, it } from 'node:test';
 import { configure, defaultConfig } from '../src/core/config';
 import { formatMatrix, resolveWithPoToken } from '../src/core/innertube/webpot';
 import { bytesToBase64 } from '../src/core/lyrics/base64';
-import { descramble, parseChallengeData, parseIntegrityTokenData, u8CsvToPoToken, ytBase64ToBytes } from '../src/core/pot/botguard';
+import { decodeVisitorData, descramble, extractVisitorId, parseChallengeData, parseIntegrityTokenData, u8CsvToPoToken, ytBase64ToBytes } from '../src/core/pot/botguard';
 import { JsEngine, setEngine } from '../src/core/pot/engine';
 import { poTokenProvider } from '../src/core/pot/potoken';
 import { getQueryParam, overrideSolverBundle, removeQueryParam, resetSolverState, setQueryParam } from '../src/core/pot/solver';
@@ -53,6 +53,27 @@ describe('botguard helpers', () => {
   });
 });
 
+
+/** visitorData the way YouTube returns it: percent-encoded base64 of a protobuf whose field 1 is the 11-char visitor id */
+function realisticVisitorData(id = 'ABCDEFGHIJK') {
+  const bytes = Buffer.from([0x0a, id.length, ...Buffer.from(id), 0x28, 0x80, 0xe2, 0xcf, 0xaa, 0x06]);
+  return encodeURIComponent(bytes.toString('base64').replace(/\+/g, '-').replace(/\//g, '_'));
+}
+
+describe('visitor data helpers', () => {
+  it('decodes the percent-encoding and extracts the bare visitor id', () => {
+    const vd = realisticVisitorData();
+    assert.match(vd, /%3D/);
+    assert.ok(!decodeVisitorData(vd).includes('%'));
+    assert.equal(extractVisitorId(vd), 'ABCDEFGHIJK');
+  });
+  it('returns undefined for values that are not that protobuf', () => {
+    assert.equal(extractVisitorId('VISITOR123'), undefined);
+    assert.equal(extractVisitorId('%%%'), undefined);
+    assert.equal(decodeVisitorData('%E0%A4%A'), '%E0%A4%A'); // invalid escape is left alone
+  });
+});
+
 describe('query helpers', () => {
   it('removes parameters', () => {
     assert.equal(removeQueryParam('https://a/b?x=1&pot=T&y=2#h', 'pot'), 'https://a/b?x=1&y=2#h');
@@ -95,14 +116,14 @@ const b64u = (t: string) => Buffer.from(t).toString('base64').replace(/\+/g, '-'
 const json = (d: unknown, status = 200) => new Response(JSON.stringify(d), { status, headers: { 'content-type': 'application/json' } });
 const text = (t: string, status = 200) => new Response(t, { status });
 
-function installNetwork(opts: { cipher?: boolean; probeStatus?: number; playability?: string; muxed?: boolean; probe?: (url: string, range: string) => number } = {}) {
+function installNetwork(opts: { cipher?: boolean; probeStatus?: number; playability?: string; muxed?: boolean; visitorData?: string; probe?: (url: string, range: string) => number } = {}) {
   calls.length = 0;
   globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
     const url = String(input);
     calls.push({ url, init });
     if (url.endsWith('/api/jnn/v1/Create')) return text(JSON.stringify([null, challengeArray]));
     if (url.endsWith('/api/jnn/v1/GenerateIT')) return text('["AQID", 43200]');
-    if (url.includes('get_search_suggestions')) return json({ responseContext: { visitorData: 'VISITOR123' } });
+    if (url.includes('get_search_suggestions')) return json({ responseContext: { visitorData: opts.visitorData ?? 'VISITOR123' } });
     if (url.endsWith('/iframe_api')) return text('var x="https:\\/\\/www.youtube.com\\/s\\/player\\/abcd1234\\/www-widgetapi.vflset\\/www-widgetapi.js";');
     if (url.includes('/s/player/abcd1234/')) return text('var a={signatureTimestamp:20512,foo:1};');
     if (url.includes('/youtubei/v1/player')) {
@@ -133,7 +154,7 @@ function installNetwork(opts: { cipher?: boolean; probeStatus?: number; playabil
 
 describe('PO-token playback (RiMusic web-potoken flow)', () => {
   beforeEach(() => {
-    configure({ ...defaultConfig });
+    configure({ ...defaultConfig, visitorData: undefined }); // configure() merges, so clear it explicitly
     clearStreamCache();
     resetSolverState();
     poTokenProvider.reset();
@@ -273,6 +294,32 @@ describe('PO-token playback (RiMusic web-potoken flow)', () => {
     const m18 = rows.find((r) => r.label.includes('itag 18'))!;
     assert.equal(m18.results, 'none 206 | video 403 | session 403');
     assert.match(rows.find((r) => r.label.includes('itag 140'))!.label, /\(cipher\)/);
+  });
+
+  it('sends no cookies with InnerTube requests (a stored visitor id would not match the request body)', async () => {
+    installNetwork();
+    await resolveWithPoToken('abcdefghijk');
+    const playerCall = calls.find((c) => c.url.includes('/youtubei/v1/player'))!;
+    assert.equal(playerCall.init?.credentials, 'omit');
+    assert.ok(calls.filter((c) => c.url.includes('/api/jnn/')).every((c) => c.init?.credentials === 'omit'));
+  });
+
+  it('also mints session tokens for the decoded visitorData and the bare visitor id, and can use them', async () => {
+    const vd = realisticVisitorData();
+    const decoded = decodeURIComponent(vd);
+    const visitorIdToken = b64u('pot-ABCDEFGHIJK');
+    installNetwork({ visitorData: vd, probe: (url) => (url.includes(`pot=${visitorIdToken}`) ? 206 : 403) });
+    const src = await resolveWithPoToken('abcdefghijk');
+    assert.deepEqual(mints, [vd, decoded, 'ABCDEFGHIJK', 'abcdefghijk']);
+    assert.equal(src.note, 'itag140 pot=visitor-id');
+    assert.ok(src.url.endsWith(`pot=${visitorIdToken}`));
+  });
+
+  it('format matrix shows the extra variants when they exist', async () => {
+    installNetwork({ visitorData: realisticVisitorData(), probe: () => 403 });
+    const rows = await formatMatrix('abcdefghijk');
+    const m4a = rows.find((r) => r.label.includes('itag 140'))!;
+    assert.match(m4a.results, /none 403 \| video 403 \| session 403 \| session-dec 403 \| visitor-id 403/);
   });
 
   it('is the first backend in the resolver', async () => {

@@ -1,5 +1,5 @@
 import { getEngine } from './engine';
-import { parseChallengeData, parseIntegrityTokenData, u8CsvToPoToken } from './botguard';
+import { decodeVisitorData, extractVisitorId, parseChallengeData, parseIntegrityTokenData, u8CsvToPoToken } from './botguard';
 
 /**
  * Port of PoTokenWebView.kt + PoTokenGenerator.kt (NewPipe, GPL-3.0).
@@ -17,11 +17,16 @@ export interface PoTokenResult {
   player: string;
   /** appended to the stream URL as `&pot=` */
   streaming: string;
+  /** same, but bound to the percent-DECODED visitorData (only when that differs from the raw value) */
+  streamingDecoded?: string;
+  /** same, but bound to the bare 11-character visitor id inside visitorData */
+  streamingVisitorId?: string;
 }
 
 async function botguardRequest(url: string, body: string): Promise<string> {
   const res = await fetch(url, {
     method: 'POST',
+    credentials: 'omit',
     headers: {
       'User-Agent': USER_AGENT,
       Accept: 'application/json',
@@ -39,6 +44,8 @@ export class WebPoTokenProvider {
   private lock: Promise<unknown> = Promise.resolve();
   private sessionId: string | null = null;
   private streamingPot: string | null = null;
+  private streamingDecoded: string | undefined;
+  private streamingVisitorId: string | undefined;
   private expiresAt = 0;
   private ready = false;
 
@@ -71,26 +78,36 @@ export class WebPoTokenProvider {
     return u8CsvToPoToken(csv);
   }
 
+  private async createSession(sessionId: string): Promise<void> {
+    this.ready = false;
+    this.sessionId = sessionId;
+    await this.initialize();
+    this.streamingPot = await this.mint(sessionId);
+    // Other tools bind the session token to slightly different spellings of the visitor data; keep them as candidates.
+    const decoded = decodeVisitorData(sessionId);
+    const visitorId = extractVisitorId(sessionId);
+    this.streamingDecoded = decoded !== sessionId ? await this.mint(decoded) : undefined;
+    this.streamingVisitorId = visitorId && visitorId !== sessionId && visitorId !== decoded ? await this.mint(visitorId) : undefined;
+  }
+
   /** The streaming token (bound to the session) must be minted exactly once before any player token. */
   getWebClientPoToken(videoId: string, sessionId: string, forceRecreate = false): Promise<PoTokenResult> {
     return this.serialized(async () => {
       const recreate = forceRecreate || !this.ready || Date.now() > this.expiresAt || this.sessionId !== sessionId;
-      if (recreate) {
-        this.ready = false;
-        this.sessionId = sessionId;
-        await this.initialize();
-        this.streamingPot = await this.mint(sessionId);
-      }
+      if (recreate) await this.createSession(sessionId);
+      const result = async (): Promise<PoTokenResult> => ({
+        player: await this.mint(videoId),
+        streaming: this.streamingPot as string,
+        streamingDecoded: this.streamingDecoded,
+        streamingVisitorId: this.streamingVisitorId,
+      });
       try {
-        return { player: await this.mint(videoId), streaming: this.streamingPot as string };
+        return await result();
       } catch (e) {
         if (recreate) throw e; // already a fresh generator – nothing more to try
         // WebView content may have been lost (app was in background): rebuild once
-        this.ready = false;
-        this.sessionId = sessionId;
-        await this.initialize();
-        this.streamingPot = await this.mint(sessionId);
-        return { player: await this.mint(videoId), streaming: this.streamingPot };
+        await this.createSession(sessionId);
+        return result();
       }
     });
   }

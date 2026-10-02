@@ -59,7 +59,7 @@ export type PotMode = 'streaming' | 'player' | 'none';
 async function probeStatus(url: string, size: number, userAgent?: string): Promise<number> {
   const mid = Math.max(1, Math.floor(size / 2));
   for (const range of ['bytes=0-1', `bytes=${mid}-${mid + 1}`]) {
-    const res = await fetch(url, { headers: { Range: range, ...(userAgent ? { 'User-Agent': userAgent } : {}) } });
+    const res = await fetch(url, { credentials: 'omit', headers: { Range: range, ...(userAgent ? { 'User-Agent': userAgent } : {}) } });
     if (res.status !== 206 && res.status !== 200) return res.status;
   }
   return 206;
@@ -71,7 +71,7 @@ export interface WebFormat2 extends WebFormat {
 
 export interface WebPlayerData {
   player: Awaited<ReturnType<typeof getPlayerJs>>;
-  pot: { player: string; streaming: string };
+  pot: { player: string; streaming: string; streamingDecoded?: string; streamingVisitorId?: string };
   formats: WebFormat2[];
   expiresInSeconds: number;
 }
@@ -117,7 +117,25 @@ export function pickMuxedFormat(formats: WebFormat[]): WebFormat | undefined {
     .sort((a, b) => a.bitrate - b.bitrate)[0];
 }
 
-type PotKind = 'video-bound' | 'session-bound' | 'no pot';
+type PotKind = 'video-bound' | 'session-bound' | 'session-decoded' | 'visitor-id' | 'no pot';
+
+function tokenFor(kind: PotKind, pot: WebPlayerData['pot']): string | undefined {
+  switch (kind) {
+    case 'video-bound':
+      return pot.player;
+    case 'session-bound':
+      return pot.streaming;
+    case 'session-decoded':
+      return pot.streamingDecoded;
+    case 'visitor-id':
+      return pot.streamingVisitorId;
+    default:
+      return undefined;
+  }
+}
+
+/** Token kinds worth trying, in order (variants that do not exist for this session are dropped). */
+const AUTO_KINDS: PotKind[] = ['video-bound', 'session-bound', 'session-decoded', 'visitor-id'];
 interface Candidate {
   kind: PotKind;
   url: string;
@@ -132,22 +150,21 @@ async function tryFormat(
 ): Promise<{ url: string; kind: PotKind }> {
   const baseUrl = await getStreamUrl(format, wp.player);
   const joiner = baseUrl.includes('?') ? '&' : '?';
-  const make = (kind: PotKind): Candidate => ({
-    kind,
-    url: kind === 'no pot' ? baseUrl : `${baseUrl}${joiner}pot=${kind === 'video-bound' ? wp.pot.player : wp.pot.streaming}`,
-  });
-  const candidates = kinds.map(make);
+  const candidates: Candidate[] = kinds
+    .filter((kind) => kind === 'no pot' || tokenFor(kind, wp.pot))
+    .map((kind) => ({
+      kind,
+      url: kind === 'no pot' ? baseUrl : `${baseUrl}${joiner}pot=${tokenFor(kind, wp.pot)}`,
+    }));
   if (!validate) return candidates[0];
 
   const ua = getConfig().web.userAgent;
   const size = format.contentLength ? Number(format.contentLength) : 2_000_000;
-  const failures: string[] = [];
-  for (const c of candidates) {
-    const status = await probeStatus(c.url, size, ua);
-    if (status === 206) return c;
-    failures.push(`${c.kind}: HTTP ${status}`);
-  }
-  throw new Error(`Stream URL rejected by YouTube (${failures.join(', ')})`);
+  // all candidates are asked at the same time; the first (by priority) that googlevideo serves wins
+  const statuses = await Promise.all(candidates.map((c) => probeStatus(c.url, size, ua).catch(() => 0)));
+  const winner = statuses.findIndex((st) => st === 206);
+  if (winner >= 0) return candidates[winner];
+  throw new Error(`Stream URL rejected by YouTube (${candidates.map((c, i) => `${c.kind}: HTTP ${statuses[i]}`).join(', ')})`);
 }
 
 export async function resolveWithPoToken(
@@ -182,7 +199,7 @@ export async function resolveWithPoToken(
   if (!audio) failures.push('No AAC (audio/mp4) format offered for this video');
   else {
     try {
-      const r = await tryFormat(audio, wp, forced ?? ['video-bound', 'session-bound'], validate);
+      const r = await tryFormat(audio, wp, forced ?? AUTO_KINDS, validate);
       return toSource(audio, r.url, r.kind, 'audio/mp4');
     } catch (e) {
       failures.push(e instanceof Error ? e.message : String(e));
@@ -193,7 +210,7 @@ export async function resolveWithPoToken(
   const muxed = forced ? undefined : pickMuxedFormat(wp.formats);
   if (muxed) {
     try {
-      const r = await tryFormat(muxed, wp, ['no pot', 'video-bound', 'session-bound'], validate);
+      const r = await tryFormat(muxed, wp, ['no pot', ...AUTO_KINDS], validate);
       return toSource(muxed, r.url, r.kind, 'video/mp4');
     } catch (e) {
       failures.push(`itag ${muxed.itag}: ${e instanceof Error ? e.message : String(e)}`);
@@ -221,9 +238,12 @@ export async function formatMatrix(videoId: string): Promise<{ label: string; re
         ['none', base],
         ['video', `${base}${j}pot=${wp.pot.player}`],
         ['session', `${base}${j}pot=${wp.pot.streaming}`],
+        ...(wp.pot.streamingDecoded ? ([['session-dec', `${base}${j}pot=${wp.pot.streamingDecoded}`]] as [string, string][]) : []),
+        ...(wp.pot.streamingVisitorId ? ([['visitor-id', `${base}${j}pot=${wp.pot.streamingVisitorId}`]] as [string, string][]) : []),
       ];
       const out: string[] = [];
-      for (const [name, url] of variants) out.push(`${name} ${await probeStatus(url, size, ua)}`);
+      const statuses = await Promise.all(variants.map(([, url]) => probeStatus(url, size, ua).catch(() => 0)));
+      variants.forEach(([name], i) => out.push(`${name} ${statuses[i]}`));
       rows.push({ label, results: out.join(' | ') });
     } catch (e) {
       rows.push({ label, results: e instanceof Error ? e.message : String(e) });

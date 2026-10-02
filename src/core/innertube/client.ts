@@ -87,6 +87,8 @@ export async function post<T = Json>(path: string, body: Json, opts: PostOptions
   try {
     const res = await fetch(url, {
       method: 'POST',
+      // iOS would silently attach stored YouTube cookies (a different visitor id than the one in the request body)
+      credentials: 'omit',
       headers: buildHeaders(cfg, profile, opts.headers),
       body: JSON.stringify(opts.rawBody ? body : { context: buildContext(cfg, profile), ...body }),
       signal: controller.signal,

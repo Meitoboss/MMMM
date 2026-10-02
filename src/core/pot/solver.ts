@@ -29,7 +29,7 @@ let solverLoaded = false;
 export async function getPlayerJs(maxAgeMs = 30 * 60_000): Promise<PlayerJs> {
   if (playerCache && Date.now() - playerCache.at < maxAgeMs) return playerCache.player;
 
-  const api = await (await fetch('https://www.youtube.com/iframe_api')).text();
+  const api = await (await fetch('https://www.youtube.com/iframe_api', { credentials: 'omit' })).text();
   const id = api.match(/player\\?\/([a-zA-Z0-9_-]{8})\\?\//)?.[1];
   if (!id) throw new Error('Could not find the current YouTube player id');
 
@@ -38,7 +38,7 @@ export async function getPlayerJs(maxAgeMs = 30 * 60_000): Promise<PlayerJs> {
     return playerCache.player;
   }
   const url = `https://www.youtube.com/s/player/${id}/player_ias.vflset/en_US/base.js`;
-  const res = await fetch(url);
+  const res = await fetch(url, { credentials: 'omit' });
   if (!res.ok) throw new Error(`Player JS download failed: HTTP ${res.status}`);
   const text = await res.text();
   const sts = text.match(/(?:signatureTimestamp|sts)\s*[:=]\s*(\d{5})/)?.[1];

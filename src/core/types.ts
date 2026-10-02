@@ -180,6 +180,6 @@ export interface AudioSource {
   /** free-form detail for debugging, e.g. which PO token kind was accepted */
   note?: string;
   /** PO tokens that were used (diagnostics) */
-  potTokens?: { player: string; streaming: string };
+  potTokens?: { player: string; streaming: string; streamingDecoded?: string; streamingVisitorId?: string };
   expiresAt?: number;
 }
