@@ -157,6 +157,13 @@ export function setQueryParam(url: string, name: string, value: string): string 
   return `${path}?${parts.join('&')}${hash ? `#${hash}` : ''}`;
 }
 
+export function removeQueryParam(url: string, name: string): string {
+  const [base, hash] = url.split('#');
+  const [path, q = ''] = base.split('?');
+  const parts = q.split('&').filter((p) => p && (p.indexOf('=') < 0 ? p : p.slice(0, p.indexOf('='))) !== name);
+  return `${path}${parts.length ? `?${parts.join('&')}` : ''}${hash ? `#${hash}` : ''}`;
+}
+
 export interface CipherFormat {
   url?: string;
   signatureCipher?: string;

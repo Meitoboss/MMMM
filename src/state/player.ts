@@ -86,7 +86,7 @@ export const usePlayer = create<PlayerState>((set, get) => {
       await ensurePlayer();
       const src = await resolveAudio(song.id, resolverOptions());
       if (token !== loadToken) return; // user skipped again while resolving
-      get().log(`resolved via=${src.via} itag=${src.itag ?? '-'} ${src.mimeType ?? ''} host=${String(src.url).split('/')[2]}`);
+      get().log(`resolved via=${src.via} itag=${src.itag ?? '-'} ${src.mimeType ?? ''} host=${String(src.url).split('/')[2]}${src.note ? ` ${src.note}` : ''}`);
       await TrackPlayer.reset();
       await TrackPlayer.add({
         id: song.id,

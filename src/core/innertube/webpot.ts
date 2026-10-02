@@ -49,7 +49,26 @@ export function pickM4aFormat(formats: WebFormat[]): WebFormat | undefined {
     .sort((a, b) => b.bitrate - a.bitrate)[0];
 }
 
-export async function resolveWithPoToken(videoId: string, opts: { validate?: boolean } = {}): Promise<AudioSource> {
+export type PotMode = 'streaming' | 'player' | 'none';
+
+/**
+ * Is this URL really playable? Checks a tiny range at the start AND one in the middle of the file.
+ * With an unacceptable PO token googlevideo serves the first bytes and then answers 403 – a check of
+ * bytes 0-1 alone does not notice that.
+ */
+async function probeStatus(url: string, size: number, userAgent?: string): Promise<number> {
+  const mid = Math.max(1, Math.floor(size / 2));
+  for (const range of ['bytes=0-1', `bytes=${mid}-${mid + 1}`]) {
+    const res = await fetch(url, { headers: { Range: range, ...(userAgent ? { 'User-Agent': userAgent } : {}) } });
+    if (res.status !== 206 && res.status !== 200) return res.status;
+  }
+  return 206;
+}
+
+export async function resolveWithPoToken(
+  videoId: string,
+  opts: { validate?: boolean; potMode?: PotMode } = {},
+): Promise<AudioSource> {
   const visitorData = await ensureVisitorData();
   const player = await getPlayerJs();
   const pot = await poTokenProvider.getWebClientPoToken(videoId, visitorData);
@@ -77,14 +96,42 @@ export async function resolveWithPoToken(videoId: string, opts: { validate?: boo
   const format = pickM4aFormat([...(sd?.adaptiveFormats ?? []), ...(sd?.formats ?? [])]);
   if (!format) throw new Error('No AAC (audio/mp4) format offered for this video');
 
-  let url = await getStreamUrl(format, player);
-  url += `${url.includes('?') ? '&' : '?'}pot=${pot.streaming}`;
+  const baseUrl = await getStreamUrl(format, player);
+  const joiner = baseUrl.includes('?') ? '&' : '?';
+
+  // Which token goes into the stream url's `pot=`?
+  //  - default (auto): YouTube is moving videos from session-bound to video-bound tokens (FreeTube #8137,
+  //    yt-dlp PO Token Guide) and the choice differs per video, so try the video-bound one first, then the
+  //    session-bound one, and keep whichever googlevideo really accepts.
+  //  - 'player' / 'streaming' / 'none' force one variant (used by Settings → Diagnostics experiments).
+  type Candidate = { kind: string; url: string };
+  const video: Candidate = { kind: 'video-bound', url: `${baseUrl}${joiner}pot=${pot.player}` };
+  const session: Candidate = { kind: 'session-bound', url: `${baseUrl}${joiner}pot=${pot.streaming}` };
+  const candidates: Candidate[] =
+    opts.potMode === 'none'
+      ? [{ kind: 'no pot', url: baseUrl }]
+      : opts.potMode === 'player'
+        ? [video]
+        : opts.potMode === 'streaming'
+          ? [session]
+          : [video, session];
 
   const ua = getConfig().web.userAgent;
+  const size = format.contentLength ? Number(format.contentLength) : 2_000_000;
+  let { url, kind } = candidates[0];
   if (opts.validate !== false) {
-    // Cheap check so errors are explained here instead of as a silent player failure
-    const probe = await fetch(url, { headers: { Range: 'bytes=0-1', ...(ua ? { 'User-Agent': ua } : {}) } });
-    if (!probe.ok && probe.status !== 206) throw new Error(`Stream URL rejected by YouTube (HTTP ${probe.status})`);
+    const failures: string[] = [];
+    let accepted = false;
+    for (const c of candidates) {
+      const status = await probeStatus(c.url, size, ua);
+      if (status === 206) {
+        ({ url, kind } = c);
+        accepted = true;
+        break;
+      }
+      failures.push(`${c.kind}: HTTP ${status}`);
+    }
+    if (!accepted) throw new Error(`Stream URL rejected by YouTube (${failures.join(', ')})`);
   }
 
   const expiresIn = sd?.expiresInSeconds ? Number(sd.expiresInSeconds) : 3600;
@@ -95,7 +142,9 @@ export async function resolveWithPoToken(videoId: string, opts: { validate?: boo
     itag: format.itag,
     contentLength: format.contentLength ? Number(format.contentLength) : undefined,
     via: 'webpot',
+    note: `pot=${kind}`,
     userAgent: ua,
+    potTokens: pot,
     expiresAt: Date.now() + expiresIn * 1000,
   };
 }

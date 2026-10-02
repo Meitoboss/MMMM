@@ -4,8 +4,10 @@ import type { SongItem } from '../core/types';
 import { usePlayer } from '../state/player';
 
 import type { StepResult } from '../core/diagnostics';
+import { resolveWithPoToken, ensureVisitorData } from '../core/innertube/webpot';
 import { ascii, codecInfo, hex, listBoxes } from '../core/mp4';
-import { resolveAudio } from '../core/streams/resolver';
+import { removeQueryParam, setQueryParam } from '../core/pot/solver';
+import { clearStreamCache, resolveAudio } from '../core/streams/resolver';
 import type { AudioSource } from '../core/types';
 import { resolverOptions } from '../state/settings';
 import { downloadToCache } from './localCache';
@@ -208,6 +210,7 @@ export async function runCurrentSongProbe(onStep: (r: StepResult) => void): Prom
     return false;
   }
   const t0 = Date.now();
+  clearStreamCache(); // always a fresh URL, never one cached from the first tap
   let src: AudioSource;
   try {
     src = await resolveAudio(song.id, { ...resolverOptions(), order: ['webpot'], serverUrl: '' });
@@ -220,7 +223,7 @@ export async function runCurrentSongProbe(onStep: (r: StepResult) => void): Prom
   onStep({
     name: `A. resolved ${song.title}`,
     ok: true,
-    detail: `itag=${src.itag} ${src.mimeType} ${Math.round((src.contentLength ?? 0) / 1024)}KB host=${u.split('/')[2]} params: n=${q('n') ? 'yes' : 'NO'} sig=${q('sig') ? 'yes' : 'no'} pot=${q('pot') ? 'yes' : 'NO'} c=${q('c') ?? '-'} mime=${q('mime') ?? '-'} clen=${q('clen') ?? '-'} dur=${q('dur') ?? '-'}`,
+    detail: `itag=${src.itag} ${src.mimeType} ${Math.round((src.contentLength ?? 0) / 1024)}KB host=${u.split('/')[2]} params: n=${q('n') ? 'yes' : 'NO'} sig=${q('sig') ? 'yes' : 'no'} pot=${q('pot') ? 'yes' : 'NO'} c=${q('c') ?? '-'} ${src.note ?? ''} mime=${q('mime') ?? '-'} clen=${q('clen') ?? '-'} dur=${q('dur') ?? '-'}`,
     ms: Date.now() - t0,
   });
 
@@ -267,4 +270,44 @@ export async function runCurrentSongProbe(onStep: (r: StepResult) => void): Prom
     await TrackPlayer.reset();
     return false;
   }
+}
+
+/**
+ * Which PO token does googlevideo accept for ranges beyond the first bytes?
+ * Runs for the current song and for the reference song, so "this video enforces tokens" and
+ * "our tokens are invalid" can be told apart.
+ */
+export async function runTokenExperiment(onStep: (r: StepResult) => void): Promise<boolean> {
+  const current = usePlayer.getState().current?.id;
+  const ids = [...(current && current !== 'dQw4w9WgXcQ' ? [current] : []), 'dQw4w9WgXcQ'];
+  let any = false;
+  for (const id of ids) {
+    const t0 = Date.now();
+    try {
+      const src = await resolveWithPoToken(id, { validate: false, potMode: 'none' });
+      const tokens = src.potTokens!;
+      const base = src.url;
+      const size = src.contentLength ?? 3_000_000;
+      const mid = Math.floor(size / 2);
+      const check = async (url: string) => (await rangeStatus(url, `bytes=${mid}-${mid + 15}`)).split('→')[1]?.trim() ?? '?';
+      const variants: [string, string][] = [
+        ['streaming (session) token', setQueryParam(base, 'pot', tokens.streaming)],
+        ['player (video) token', setQueryParam(base, 'pot', tokens.player)],
+        ['no pot', removeQueryParam(base, 'pot')],
+      ];
+      const lines: string[] = [];
+      for (const [name, url] of variants) lines.push(`${name}: ${await check(url)}`);
+      const ok = lines.some((l) => l.includes('206'));
+      any = any || ok;
+      onStep({
+        name: `T. ${id === 'dQw4w9WgXcQ' ? 'reference song' : 'current song'} (${id}) – range @${mid}`,
+        ok,
+        detail: `${lines.join(' | ')} | tokens: player ${tokens.player.length} chars, streaming ${tokens.streaming.length} chars`,
+        ms: Date.now() - t0,
+      });
+    } catch (e) {
+      onStep({ name: `T. ${id}`, ok: false, detail: e instanceof Error ? e.message : String(e), ms: Date.now() - t0 });
+    }
+  }
+  return any;
 }

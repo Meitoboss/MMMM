@@ -177,5 +177,9 @@ export interface AudioSource {
   via: 'piped' | 'invidious' | 'innertube' | 'server' | 'webpot';
   /** user agent the player must send (googlevideo URLs are client-bound) */
   userAgent?: string;
+  /** free-form detail for debugging, e.g. which PO token kind was accepted */
+  note?: string;
+  /** PO tokens that were used (diagnostics) */
+  potTokens?: { player: string; streaming: string };
   expiresAt?: number;
 }

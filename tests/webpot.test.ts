@@ -7,7 +7,7 @@ import { bytesToBase64 } from '../src/core/lyrics/base64';
 import { descramble, parseChallengeData, parseIntegrityTokenData, u8CsvToPoToken, ytBase64ToBytes } from '../src/core/pot/botguard';
 import { JsEngine, setEngine } from '../src/core/pot/engine';
 import { poTokenProvider } from '../src/core/pot/potoken';
-import { getQueryParam, overrideSolverBundle, resetSolverState, setQueryParam } from '../src/core/pot/solver';
+import { getQueryParam, overrideSolverBundle, removeQueryParam, resetSolverState, setQueryParam } from '../src/core/pot/solver';
 import { resolveAudio, clearStreamCache } from '../src/core/streams/resolver';
 
 /** inverse of descramble(): subtract 97 from each byte, then YouTube-style base64 */
@@ -54,6 +54,10 @@ describe('botguard helpers', () => {
 });
 
 describe('query helpers', () => {
+  it('removes parameters', () => {
+    assert.equal(removeQueryParam('https://a/b?x=1&pot=T&y=2#h', 'pot'), 'https://a/b?x=1&y=2#h');
+    assert.equal(removeQueryParam('https://a/b?pot=T', 'pot'), 'https://a/b');
+  });
   it('reads and replaces parameters without URL()', () => {
     const u = 'https://rr1.googlevideo.com/videoplayback?expire=1&n=abc%2Bdef&x=y#frag';
     assert.equal(getQueryParam(u, 'n'), 'abc+def');
@@ -87,10 +91,11 @@ const fakeEngine: JsEngine = {
   },
 };
 
+const b64u = (t: string) => Buffer.from(t).toString('base64').replace(/\+/g, '-').replace(/\//g, '_');
 const json = (d: unknown, status = 200) => new Response(JSON.stringify(d), { status, headers: { 'content-type': 'application/json' } });
 const text = (t: string, status = 200) => new Response(t, { status });
 
-function installNetwork(opts: { cipher?: boolean; probeStatus?: number; playability?: string } = {}) {
+function installNetwork(opts: { cipher?: boolean; probeStatus?: number; playability?: string; probe?: (url: string, range: string) => number } = {}) {
   calls.length = 0;
   globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
     const url = String(input);
@@ -115,7 +120,10 @@ function installNetwork(opts: { cipher?: boolean; probeStatus?: number; playabil
         },
       });
     }
-    if (url.includes('googlevideo.com')) return new Response(null, { status: opts.probeStatus ?? 206 });
+    if (url.includes('googlevideo.com')) {
+      const range = String((init?.headers as Record<string, string>)?.Range ?? '');
+      return new Response(null, { status: opts.probe ? opts.probe(url, range) : (opts.probeStatus ?? 206) });
+    }
     return json({}, 404);
   }) as typeof fetch;
 }
@@ -145,9 +153,9 @@ describe('PO-token playback (RiMusic web-potoken flow)', () => {
     assert.equal(src.itag, 140);
     assert.equal(src.mimeType, 'audio/mp4');
 
-    // cipher: s "ABC" -> "CBA" in the `sig` param; n "nval" -> "lavn"; streaming pot (url-safe base64 of "pot-VISITOR123") appended
-    const pot = Buffer.from('pot-VISITOR123').toString('base64').replace(/\+/g, '-').replace(/\//g, '_');
-    assert.equal(src.url, `https://rr1.googlevideo.com/videoplayback?expire=1&n=lavn&x=1&sig=CBA&pot=${pot}`);
+    // cipher: s "ABC" -> "CBA" in the `sig` param; n "nval" -> "lavn"; the video-bound token (preferred) is appended
+    assert.equal(src.url, `https://rr1.googlevideo.com/videoplayback?expire=1&n=lavn&x=1&sig=CBA&pot=${b64u('pot-dQw4w9WgXcQ')}`);
+    assert.equal(src.note, 'pot=video-bound');
 
     const playerCall = calls.find((c) => c.url.includes('/youtubei/v1/player'))!;
     const body = JSON.parse(String(playerCall.init?.body));
@@ -156,6 +164,16 @@ describe('PO-token playback (RiMusic web-potoken flow)', () => {
     assert.equal(body.playbackContext.contentPlaybackContext.signatureTimestamp, 20512);
     assert.equal(body.serviceIntegrityDimensions.poToken, Buffer.from('pot-dQw4w9WgXcQ').toString('base64').replace(/\+/g, '-').replace(/\//g, '_'));
     assert.equal((playerCall.init?.headers as Record<string, string>)['X-Goog-Visitor-Id'], 'VISITOR123');
+  });
+
+  it('can build the url with the player token, or without any pot (experiments)', async () => {
+    installNetwork();
+    const player = Buffer.from('pot-aaaaaaaaaaa').toString('base64').replace(/\+/g, '-').replace(/\//g, '_');
+    const withPlayer = await resolveWithPoToken('aaaaaaaaaaa', { potMode: 'player' });
+    assert.ok(withPlayer.url.endsWith(`&pot=${player}`));
+    const none = await resolveWithPoToken('aaaaaaaaaaa', { potMode: 'none' });
+    assert.ok(!none.url.includes('pot='));
+    assert.ok(withPlayer.potTokens && none.potTokens);
   });
 
   it('works with plain (non-ciphered) urls and only solves n', async () => {
@@ -180,7 +198,37 @@ describe('PO-token playback (RiMusic web-potoken flow)', () => {
     installNetwork({ playability: 'LOGIN_REQUIRED' });
     await assert.rejects(() => resolveWithPoToken('zzzzzzzzzzz'), /LOGIN_REQUIRED/);
     installNetwork({ probeStatus: 403 });
-    await assert.rejects(() => resolveWithPoToken('zzzzzzzzzzz'), /HTTP 403/);
+    await assert.rejects(() => resolveWithPoToken('zzzzzzzzzzz'), /video-bound: HTTP 403, session-bound: HTTP 403/);
+    // like the real AIZO case: the first bytes are served, anything further in is refused
+    installNetwork();
+    const real = globalThis.fetch;
+    globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+      const range = (init?.headers as Record<string, string> | undefined)?.Range;
+      if (String(input).includes('googlevideo.com') && range && range !== 'bytes=0-1') return new Response(null, { status: 403 });
+      return real(input, init);
+    }) as typeof fetch;
+    await assert.rejects(() => resolveWithPoToken('zzzzzzzzzzz'), /rejected by YouTube \(video-bound: HTTP 403, session-bound: HTTP 403\)/);
+  });
+
+  it('falls back to the session-bound token when the video-bound one is refused', async () => {
+    const videoPot = b64u('pot-dQw4w9WgXcQ');
+    installNetwork({ probe: (url) => (url.includes(`pot=${videoPot}`) ? 403 : 206) });
+    const src = await resolveWithPoToken('dQw4w9WgXcQ');
+    assert.equal(src.note, 'pot=session-bound');
+    assert.ok(src.url.endsWith(`pot=${b64u('pot-VISITOR123')}`));
+  });
+
+  it('also checks the MIDDLE of the file (a token can allow the first bytes only)', async () => {
+    const seen: string[] = [];
+    installNetwork({
+      probe: (_url, range) => {
+        seen.push(range);
+        return range === 'bytes=0-1' ? 206 : 403; // exactly the AIZO symptom
+      },
+    });
+    await assert.rejects(() => resolveWithPoToken('abcdefghijk'), /HTTP 403/);
+    // contentLength 3456789 -> middle = 1728394
+    assert.ok(seen.includes('bytes=1728394-1728395'), seen.join(' | '));
   });
 
   it('is the first backend in the resolver', async () => {
