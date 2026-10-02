@@ -69,6 +69,43 @@ export async function search(query: string, filter?: SearchFilter): Promise<Item
   return merged;
 }
 
+/**
+ * "すべて" (no filter). YouTube's unfiltered response is a mix of "top result" cards and several shelves whose
+ * shape changes often and came back empty; the filtered searches are reliable. So ask for each type
+ * (in parallel) and merge: songs, artists, albums, playlists, videos.
+ */
+export async function searchAll(query: string): Promise<ItemsPage<MusicItem>> {
+  const plan: [SearchFilter, number][] = [
+    ['song', 8],
+    ['artist', 3],
+    ['album', 4],
+    ['community_playlist', 3],
+    ['video', 4],
+  ];
+  const results = await Promise.allSettled(plan.map(([filter]) => search(query, filter)));
+
+  const items: MusicItem[] = [];
+  const seen = new Set<string>();
+  let anyOk = false;
+  let firstError: unknown;
+  results.forEach((r, i) => {
+    if (r.status === 'rejected') {
+      firstError ??= r.reason;
+      return;
+    }
+    anyOk = true;
+    for (const it of r.value.items.slice(0, plan[i][1])) {
+      // a music video often is the same video id as a song
+      const key = it.kind === 'video' ? `song:${it.id}` : `${it.kind}:${it.id}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      items.push(it);
+    }
+  });
+  if (!anyOk) throw firstError instanceof Error ? firstError : new Error('search failed');
+  return { items, continuation: undefined };
+}
+
 export async function searchContinuation(continuation: string): Promise<ItemsPage<MusicItem>> {
   const res = await post('search', { continuation }, { query: { continuation, ctoken: continuation, type: 'next' } });
   return itemsFromShelf(res?.continuationContents?.musicShelfContinuation);

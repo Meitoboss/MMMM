@@ -1,29 +1,78 @@
-import { useCallback, useState } from 'react';
-import { RefreshControl, ScrollView } from 'react-native';
+import { useFocusEffect } from 'expo-router';
+import { Image } from 'expo-image';
+import { useCallback, useMemo, useState } from 'react';
+import { RefreshControl, ScrollView, Text, View } from 'react-native';
 
 import { yt } from '../../src/core';
-import { ErrorView, Loading, SectionCarousel } from '../../src/ui/components';
+import { recentInsertIndex } from '../../src/core/homeLayout';
+import type { Section, SongItem } from '../../src/core/types';
+import { openDb } from '../../src/db/expo';
+import * as repo from '../../src/db/repo';
+import { Button, ErrorView, Loading, SectionCarousel } from '../../src/ui/components';
 import { useAsync } from '../../src/ui/hooks';
-import { MINI_HEIGHT, colors } from '../../src/ui/theme';
+import { MINI_HEIGHT, colors, useScheme } from '../../src/ui/theme';
+
+/** "Music space" wordmark with the three-U mark, like the sidebar of the web version */
+function BrandHeader() {
+  useScheme();
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingBottom: 16 }}>
+      <Image source={require('../../assets/logo-mark.png')} style={{ width: 30, height: 32 }} contentFit="contain" />
+      <Text style={{ color: colors.text, fontSize: 24, fontWeight: '900', letterSpacing: -0.5 }}>
+        Music <Text style={{ fontWeight: '300' }}>space</Text>
+      </Text>
+    </View>
+  );
+}
 
 export default function Home() {
+  useScheme();
   const { data, error, loading, reload } = useAsync(() => yt.home(), []);
   const [refreshing, setRefreshing] = useState(false);
+  const [recent, setRecent] = useState<SongItem[]>([]);
+
+  // songs played on this device, newest first – refreshed every time the home tab comes back into view
+  useFocusEffect(
+    useCallback(() => {
+      let alive = true;
+      openDb()
+        .then((db) => repo.history(db, 20))
+        .then((rows) => alive && setRecent(rows))
+        .catch(() => undefined);
+      return () => {
+        alive = false;
+      };
+    }, []),
+  );
+
   const onRefresh = useCallback(() => {
     setRefreshing(true);
     reload();
     setTimeout(() => setRefreshing(false), 600);
   }, [reload]);
 
-  if (loading && !data) return <Loading />;
-  if (error && !data) return <ErrorView message={error} onRetry={reload} />;
+  const sections: Section[] = data?.sections ?? [];
+  const recentSection: Section | null = useMemo(() => (recent.length ? { title: '最近聞いた曲', items: recent } : null), [recent]);
+  const at = recentInsertIndex(sections.map((s) => s.title));
+
+  if (loading && !data && !recentSection) return <Loading />;
 
   return (
     <ScrollView
       contentContainerStyle={{ paddingTop: 12, paddingBottom: MINI_HEIGHT + 24 }}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accentText} />}
     >
-      {data?.sections.map((s, i) => <SectionCarousel key={`${s.title}-${i}`} section={s} />)}
+      <BrandHeader />
+      {sections.slice(0, at).map((s, i) => <SectionCarousel key={`${s.title}-${i}`} section={s} />)}
+      {/* directly below "Today's hits" / "Trending" */}
+      {recentSection && <SectionCarousel section={recentSection} />}
+      {sections.slice(at).map((s, i) => <SectionCarousel key={`${s.title}-${at + i}`} section={s} />)}
+      {error && !data && (
+        <View style={{ alignItems: 'center', padding: 24 }}>
+          <ErrorView message={error} />
+          <Button label="再試行" icon="refresh" onPress={reload} />
+        </View>
+      )}
     </ScrollView>
   );
 }

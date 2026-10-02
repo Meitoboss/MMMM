@@ -2,9 +2,11 @@ import { ActionSheetIOS, Alert } from 'react-native';
 import type { Router } from 'expo-router';
 import { create } from 'zustand';
 
+import { isLocalId } from '../core/localMeta';
 import type { MusicItem, SongItem, VideoItem } from '../core/types';
 import { openDb } from '../db/expo';
 import * as repo from '../db/repo';
+import { removeLocalFile } from '../player/localFiles';
 import { usePlayer } from '../state/player';
 
 /** Song waiting to be added to a playlist (read by app/add-to-playlist.tsx) */
@@ -37,33 +39,57 @@ export function openItem(router: Router, item: MusicItem, context?: SongItem[]) 
   }
 }
 
-/** Long-press menu for a song (RiMusic's "Play next / Enqueue / Add to playlist / Radio / Like"). */
+/** Long-press menu for a song. */
 export function songMenu(router: Router, song: SongItem, onChanged?: () => void) {
   const p = usePlayer.getState();
+  const local = isLocalId(song.id);
   const artist = song.artists.find((a) => a.id);
-  const options = ['Play next', 'Add to queue', 'Start radio', 'Like / Unlike', 'Add to playlist'];
-  if (song.album?.id) options.push('Go to album');
-  if (artist) options.push('Go to artist');
-  options.push('Cancel');
+  const options = ['次に再生', 'キューに追加'];
+  if (!local) options.push('この曲のラジオ');
+  options.push('お気に入りに追加／解除', 'プレイリストに追加');
+  if (song.album?.id) options.push('アルバムへ');
+  if (artist) options.push('アーティストへ');
+  if (local) options.push('ライブラリから削除');
+  options.push('キャンセル');
+  const destructive = local ? options.indexOf('ライブラリから削除') : undefined;
 
   ActionSheetIOS.showActionSheetWithOptions(
-    { title: song.title, message: song.artists.map((a) => a.name).join(', '), options, cancelButtonIndex: options.length - 1 },
+    {
+      title: song.title,
+      message: song.artists.map((a) => a.name).join(', '),
+      options,
+      cancelButtonIndex: options.length - 1,
+      destructiveButtonIndex: destructive,
+    },
     async (i) => {
       const label = options[i];
       try {
-        if (label === 'Play next') p.playNext(song);
-        else if (label === 'Add to queue') p.enqueue(song);
-        else if (label === 'Start radio') await p.playRadio(song);
-        else if (label === 'Like / Unlike') {
+        if (label === '次に再生') p.playNext(song);
+        else if (label === 'キューに追加') p.enqueue(song);
+        else if (label === 'この曲のラジオ') await p.playRadio(song);
+        else if (label === 'お気に入りに追加／解除') {
           await repo.toggleLike(await openDb(), song);
           onChanged?.();
-        } else if (label === 'Add to playlist') {
+        } else if (label === 'プレイリストに追加') {
           useAddToPlaylist.setState({ song });
           router.push('/add-to-playlist');
-        } else if (label === 'Go to album') router.push({ pathname: '/album/[id]', params: { id: song.album!.id! } });
-        else if (label === 'Go to artist') router.push({ pathname: '/artist/[id]', params: { id: artist!.id! } });
+        } else if (label === 'アルバムへ') router.push({ pathname: '/album/[id]', params: { id: song.album!.id! } });
+        else if (label === 'アーティストへ') router.push({ pathname: '/artist/[id]', params: { id: artist!.id! } });
+        else if (label === 'ライブラリから削除') {
+          Alert.alert('削除しますか？', `「${song.title}」を、ライブラリと端末内のコピーから消します。元のファイルは消えません。`, [
+            {
+              text: '削除',
+              style: 'destructive',
+              onPress: async () => {
+                await removeLocalFile(song.id);
+                onChanged?.();
+              },
+            },
+            { text: 'キャンセル', style: 'cancel' },
+          ]);
+        }
       } catch (e) {
-        Alert.alert('Error', e instanceof Error ? e.message : String(e));
+        Alert.alert('エラー', e instanceof Error ? e.message : String(e));
       }
     },
   );

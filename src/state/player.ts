@@ -2,11 +2,13 @@ import TrackPlayer from 'react-native-track-player';
 import { create } from 'zustand';
 
 import { getConfig } from '../core/config';
+import { isLocalId } from '../core/localMeta';
 import { yt } from '../core';
 import { resolveAudio } from '../core/streams/resolver';
 import type { SongItem } from '../core/types';
 import { openDb } from '../db/expo';
 import * as repo from '../db/repo';
+import { resolveLocal } from '../player/localFiles';
 import { ensurePlayer } from '../player/setup';
 import { resolverOptions, useSettings } from './settings';
 
@@ -84,7 +86,7 @@ export const usePlayer = create<PlayerState>((set, get) => {
     get().log(`load ${song.id} (#${index + 1}/${get().queue.length})`);
     try {
       await ensurePlayer();
-      const src = await resolveAudio(song.id, resolverOptions());
+      const src = isLocalId(song.id) ? await resolveLocal(song.id) : await resolveAudio(song.id, resolverOptions());
       if (token !== loadToken) return; // user skipped again while resolving
       get().log(`resolved via=${src.via} itag=${src.itag ?? '-'} ${src.mimeType ?? ''} host=${String(src.url).split('/')[2]}${src.note ? ` ${src.note}` : ''}`);
       await TrackPlayer.reset();
@@ -107,7 +109,7 @@ export const usePlayer = create<PlayerState>((set, get) => {
       set({ status: 'playing' });
       // warm the URL cache for the next song so skipping is instant
       const upcoming = get().queue[index + 1];
-      if (upcoming) resolveAudio(upcoming.id, resolverOptions()).catch(() => undefined);
+      if (upcoming && !isLocalId(upcoming.id)) resolveAudio(upcoming.id, resolverOptions()).catch(() => undefined);
     } catch (e) {
       if (token === loadToken) {
         const msg = e instanceof Error ? e.message : String(e);
@@ -118,6 +120,7 @@ export const usePlayer = create<PlayerState>((set, get) => {
   }
 
   async function appendRadio(from: SongItem): Promise<number> {
+    if (isLocalId(from.id)) return 0; // no YouTube radio for a file on the device
     try {
       const page = await yt.radio(from.id);
       const known = new Set(get().queue.map((s) => s.id));

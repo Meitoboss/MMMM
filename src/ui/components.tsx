@@ -2,17 +2,26 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { ReactNode } from 'react';
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, Text, View } from 'react-native';
 
 import type { MusicItem, Section, SongItem } from '../core/types';
 import { songMenu, openItem } from './actions';
-import { colors } from './theme';
+import { colors, dynamicStyles, useScheme } from './theme';
 
 export function Cover({ uri, size, round }: { uri?: string; size: number; round?: boolean }) {
+  useScheme();
+  const radius = round ? size / 2 : 6;
+  if (!uri) {
+    return (
+      <View style={{ width: size, height: size, borderRadius: radius, backgroundColor: colors.surface2, alignItems: 'center', justifyContent: 'center' }}>
+        <Ionicons name="musical-notes" size={Math.round(size * 0.42)} color={colors.sub} />
+      </View>
+    );
+  }
   return (
     <Image
-      source={uri ? { uri } : undefined}
-      style={{ width: size, height: size, borderRadius: round ? size / 2 : 6, backgroundColor: colors.surface2 }}
+      source={{ uri }}
+      style={{ width: size, height: size, borderRadius: radius, backgroundColor: colors.surface2 }}
       contentFit="cover"
       transition={150}
     />
@@ -33,6 +42,7 @@ export function SongRow({
   onChanged?: () => void;
 }) {
   const router = useRouter();
+  useScheme();
   return (
     <Pressable
       onPress={onPress}
@@ -70,14 +80,15 @@ function itemSubtitle(i: MusicItem): string {
     case 'album':
       return [i.artists.map((a) => a.name).join(', '), i.year].filter(Boolean).join(' • ');
     case 'artist':
-      return i.subscribersText ?? 'Artist';
+      return i.subscribersText ?? 'アーティスト';
     case 'playlist':
-      return [i.channel?.name, i.songCount ? `${i.songCount} songs` : undefined].filter(Boolean).join(' • ');
+      return [i.channel?.name, i.songCount ? `${i.songCount}曲` : undefined].filter(Boolean).join(' • ');
   }
 }
 
 /** Square card used in carousels */
 export function ItemCard({ item, onPress, size = 140 }: { item: MusicItem; onPress: () => void; size?: number }) {
+  useScheme();
   return (
     <Pressable onPress={onPress} style={{ width: size }}>
       <Cover uri={item.thumbnail} size={size} round={item.kind === 'artist'} />
@@ -94,6 +105,7 @@ export function ItemCard({ item, onPress, size = 140 }: { item: MusicItem; onPre
 /** Generic row for search results of any kind */
 export function ItemRow({ item, context }: { item: MusicItem; context?: SongItem[] }) {
   const router = useRouter();
+  useScheme();
   if (item.kind === 'song') {
     return <SongRow song={item} onPress={() => openItem(router, item, context)} />;
   }
@@ -105,7 +117,7 @@ export function ItemRow({ item, context }: { item: MusicItem; context?: SongItem
           {itemTitle(item)}
         </Text>
         <Text style={s.sub} numberOfLines={1}>
-          {capitalize(item.kind)}
+          {KIND_LABEL[item.kind]}
           {itemSubtitle(item) ? ` • ${itemSubtitle(item)}` : ''}
         </Text>
       </View>
@@ -113,10 +125,11 @@ export function ItemRow({ item, context }: { item: MusicItem; context?: SongItem
   );
 }
 
-const capitalize = (x: string) => x.charAt(0).toUpperCase() + x.slice(1);
+const KIND_LABEL: Record<MusicItem['kind'], string> = { song: '曲', video: 'ビデオ', album: 'アルバム', artist: 'アーティスト', playlist: 'プレイリスト' };
 
 export function SectionCarousel({ section }: { section: Section }) {
   const router = useRouter();
+  useScheme();
   const songs = section.items.filter((i): i is SongItem => i.kind === 'song');
   return (
     <View style={{ marginBottom: 20 }}>
@@ -134,21 +147,23 @@ export function SectionCarousel({ section }: { section: Section }) {
 }
 
 export function Loading() {
+  useScheme();
   return (
     <View style={s.center}>
-      <ActivityIndicator color={colors.accent} />
+      <ActivityIndicator color={colors.accentText} />
     </View>
   );
 }
 
 export function ErrorView({ message, onRetry }: { message: string; onRetry?: () => void }) {
+  useScheme();
   return (
     <View style={s.center}>
       <Ionicons name="cloud-offline-outline" size={36} color={colors.sub} />
       <Text style={[s.sub, { textAlign: 'center', marginTop: 8, paddingHorizontal: 24 }]}>{message}</Text>
       {onRetry && (
         <Pressable onPress={onRetry} style={s.btn}>
-          <Text style={{ color: '#000', fontWeight: '600' }}>Retry</Text>
+          <Text style={{ color: colors.onAccent, fontWeight: '600' }}>再試行</Text>
         </Pressable>
       )}
     </View>
@@ -156,22 +171,24 @@ export function ErrorView({ message, onRetry }: { message: string; onRetry?: () 
 }
 
 export function Button({ label, onPress, icon, secondary }: { label: string; onPress: () => void; icon?: keyof typeof Ionicons.glyphMap; secondary?: boolean }) {
+  useScheme();
   return (
     <Pressable onPress={onPress} style={[s.btn, secondary && { backgroundColor: colors.surface2 }]}>
-      {icon && <Ionicons name={icon} size={18} color={secondary ? colors.text : '#000'} style={{ marginRight: 6 }} />}
-      <Text style={{ color: secondary ? colors.text : '#000', fontWeight: '600' }}>{label}</Text>
+      {icon && <Ionicons name={icon} size={18} color={secondary ? colors.text : colors.onAccent} style={{ marginRight: 6 }} />}
+      <Text style={{ color: secondary ? colors.text : colors.onAccent, fontWeight: '600' }}>{label}</Text>
     </Pressable>
   );
 }
 
-export const s = StyleSheet.create({
+export const s = dynamicStyles((c) => ({
   row: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 8, gap: 12 },
   rowText: { flex: 1 },
-  index: { width: 24, color: colors.sub, textAlign: 'center' },
-  title: { color: colors.text, fontSize: 15, fontWeight: '500' },
-  sub: { color: colors.sub, fontSize: 13, marginTop: 2 },
-  h1: { color: colors.text, fontSize: 24, fontWeight: '700' },
-  h2: { color: colors.text, fontSize: 18, fontWeight: '700', paddingHorizontal: 16, marginBottom: 10 },
+  index: { width: 24, color: c.sub, textAlign: 'center' },
+  title: { color: c.text, fontSize: 15, fontWeight: '500' },
+  sub: { color: c.sub, fontSize: 13, marginTop: 2 },
+  h1: { color: c.text, fontSize: 24, fontWeight: '800', letterSpacing: -0.3 },
+  h2: { color: c.text, fontSize: 18, fontWeight: '700', paddingHorizontal: 16, marginBottom: 10 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
-  btn: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.accent, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20, marginTop: 12 },
-});
+  btn: { flexDirection: 'row', alignItems: 'center', backgroundColor: c.accent, paddingHorizontal: 18, paddingVertical: 10, borderRadius: 22, marginTop: 12 },
+  card: { backgroundColor: c.surface, borderRadius: 14, borderWidth: 1, borderColor: c.border },
+}));

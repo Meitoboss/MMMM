@@ -1,5 +1,5 @@
 {
-  "name": "rimusic-ts",
+  "name": "music-space",
   "version": "0.1.0",
   "private": true,
   "license": "GPL-3.0-or-later",
@@ -21,6 +21,7 @@
     "expo-asset": "~12.0.0",
     "expo-build-properties": "~1.0.0",
     "expo-constants": "~18.0.0",
+    "expo-document-picker": "~14.0.0",
     "expo-font": "~14.0.0",
     "expo-image": "~3.0.0",
     "expo-linking": "~8.0.0",

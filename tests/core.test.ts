@@ -317,3 +317,53 @@ describe('stream server backend', () => {
     await assert.rejects(() => resolveAudio('abcdefghijk', { order: [], serverUrl: '192.168.1.5:8787' }), /must start with http/);
   });
 });
+
+/* ---------- search "all" (no filter) ---------- */
+
+describe('searchAll', () => {
+  const shelfOf = (...rows: unknown[]) => ({
+    contents: { tabbedSearchResultsRenderer: { tabs: [{ tabRenderer: { content: { sectionListRenderer: { contents: [{ musicShelfRenderer: { contents: rows.map((r) => ({ musicResponsiveListItemRenderer: r })) } }] } } } }] } },
+  });
+  const byFilter: Record<string, unknown> = {
+    EgWKAQIIAWoKEAkQBRAKEAMQBA: shelfOf(songRow),
+    EgWKAQIgAWoKEAkQChAFEAMQBA: shelfOf(artistRow),
+    EgWKAQIYAWoKEAkQChAFEAMQBA: shelfOf(albumRow),
+    EgeKAQQoAEABagoQAxAEEAoQCRAF: shelfOf(playlistRow),
+  };
+  const answer = (init?: RequestInit) => {
+    const params = String(JSON.parse(String(init?.body)).params ?? '').replace(/%3D/g, '');
+    return json(byFilter[params] ?? { contents: {} });
+  };
+
+  it('merges the filtered searches (songs, artists, albums, playlists) into one list', async () => {
+    mockFetch((_url, init) => answer(init));
+    const page = await yt.searchAll('daft punk');
+    assert.deepEqual(page.items.map((i) => i.kind), ['song', 'artist', 'album', 'playlist']);
+    assert.equal(page.continuation, undefined);
+    assert.equal(calls.length, 5, 'one request per type, no unfiltered request');
+    assert.ok(calls.every((c) => JSON.parse(String(c.init?.body)).params), 'every request is a filtered one');
+  });
+
+  it('still returns what it can when one of the searches fails', async () => {
+    mockFetch((_url, init) => (String(JSON.parse(String(init?.body)).params).startsWith('EgWKAQIgAW') ? json({}, 500) : answer(init)));
+    const page = await yt.searchAll('daft punk');
+    assert.deepEqual(page.items.map((i) => i.kind), ['song', 'album', 'playlist']);
+  });
+
+  it('fails only when every search fails', async () => {
+    mockFetch(() => json({}, 500));
+    await assert.rejects(() => yt.searchAll('x'), /InnerTube search failed/);
+  });
+
+  it('drops a video that has the same id as a song', async () => {
+    const omv = structuredClone(songRow);
+    omv.flexColumns[0].musicResponsiveListItemFlexColumnRenderer.text.runs[0].navigationEndpoint.watchEndpoint.watchEndpointMusicSupportedConfigs.watchEndpointMusicConfig.musicVideoType = 'MUSIC_VIDEO_TYPE_OMV';
+    const withVideo = { ...byFilter, EgWKAQIQAWoKEAkQChAFEAMQBA: shelfOf(omv) };
+    mockFetch((_url, init) => {
+      const params = String(JSON.parse(String(init?.body)).params ?? '').replace(/%3D/g, '');
+      return json(withVideo[params] ?? { contents: {} });
+    });
+    const page = await yt.searchAll('x');
+    assert.equal(page.items.filter((i) => i.id === 'vid123').length, 1);
+  });
+});

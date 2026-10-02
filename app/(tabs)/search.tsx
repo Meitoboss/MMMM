@@ -1,25 +1,26 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, FlatList, Keyboard, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, FlatList, Keyboard, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 
 import { yt } from '../../src/core';
 import type { MusicItem, SearchFilter, SongItem } from '../../src/core/types';
 import * as repo from '../../src/db/repo';
 import { ErrorView, ItemRow } from '../../src/ui/components';
 import { useDb } from '../../src/ui/hooks';
-import { MINI_HEIGHT, colors } from '../../src/ui/theme';
+import { MINI_HEIGHT, colors, dynamicStyles, useScheme } from '../../src/ui/theme';
 
 const FILTERS: { label: string; value?: SearchFilter }[] = [
-  { label: 'All' },
-  { label: 'Songs', value: 'song' },
-  { label: 'Videos', value: 'video' },
-  { label: 'Albums', value: 'album' },
-  { label: 'Artists', value: 'artist' },
-  { label: 'Playlists', value: 'community_playlist' },
-  { label: 'Featured', value: 'featured_playlist' },
+  { label: 'すべて' },
+  { label: '曲', value: 'song' },
+  { label: 'ビデオ', value: 'video' },
+  { label: 'アルバム', value: 'album' },
+  { label: 'アーティスト', value: 'artist' },
+  { label: 'プレイリスト', value: 'community_playlist' },
+  { label: 'おすすめ', value: 'featured_playlist' },
 ];
 
 export default function Search() {
+  useScheme();
   const db = useDb();
   const [text, setText] = useState('');
   const [submitted, setSubmitted] = useState<string>();
@@ -56,7 +57,7 @@ export default function Search() {
     setToken(undefined);
     try {
       if (db) await repo.addSearchQuery(db, query);
-      const page = await yt.search(query, f);
+      const page = f ? await yt.search(query, f) : await yt.searchAll(query);
       if (my !== seq.current) return;
       setItems(page.items);
       setToken(page.continuation);
@@ -92,7 +93,7 @@ export default function Search() {
           value={text}
           onChangeText={setText}
           onSubmitEditing={() => run(text, filter)}
-          placeholder="Songs, albums, artists…"
+          placeholder="曲、アルバム、アーティストを検索"
           placeholderTextColor={colors.sub}
           returnKeyType="search"
           autoCorrect={false}
@@ -113,7 +114,7 @@ export default function Search() {
             onPress={() => { setFilter(f.value); if (submitted) void run(submitted, f.value); }}
             style={[st.chip, filter === f.value && { backgroundColor: colors.accent }]}
           >
-            <Text style={{ color: filter === f.value ? '#000' : colors.text }}>{f.label}</Text>
+            <Text style={{ color: filter === f.value ? colors.onAccent : colors.text, fontWeight: filter === f.value ? '700' : '500' }}>{f.label}</Text>
           </Pressable>
         ))}
       </ScrollView>
@@ -142,8 +143,8 @@ export default function Search() {
           onEndReached={more}
           onEndReachedThreshold={0.6}
           contentContainerStyle={{ paddingBottom: MINI_HEIGHT + 24 }}
-          ListFooterComponent={loading ? <ActivityIndicator color={colors.accent} style={{ margin: 16 }} /> : null}
-          ListEmptyComponent={!loading ? <Text style={{ color: colors.sub, textAlign: 'center', marginTop: 40 }}>No results</Text> : null}
+          ListFooterComponent={loading ? <ActivityIndicator color={colors.accentText} style={{ margin: 16 }} /> : null}
+          ListEmptyComponent={!loading ? <Text style={{ color: colors.sub, textAlign: 'center', marginTop: 40 }}>見つかりませんでした</Text> : null}
           keyboardShouldPersistTaps="handled"
         />
       )}
@@ -151,9 +152,9 @@ export default function Search() {
   );
 }
 
-const st = StyleSheet.create({
-  box: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: colors.surface2, margin: 12, paddingHorizontal: 12, height: 42, borderRadius: 21 },
-  input: { flex: 1, color: colors.text, fontSize: 16 },
-  chip: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 16, backgroundColor: colors.surface2 },
+const st = dynamicStyles((c) => ({
+  box: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: c.surface2, margin: 12, paddingHorizontal: 14, height: 44, borderRadius: 22 },
+  input: { flex: 1, color: c.text, fontSize: 16 },
+  chip: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 16, backgroundColor: c.surface2 },
   hint: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 12 },
-});
+}));

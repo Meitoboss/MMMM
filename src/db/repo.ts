@@ -1,3 +1,4 @@
+import { LOCAL_ARTIST } from '../core/localMeta';
 import type { AlbumItem, ArtistItem, Lyrics, SongItem } from '../core/types';
 import type { Db } from './driver';
 
@@ -366,4 +367,41 @@ export async function saveFormat(
     'INSERT OR REPLACE INTO Format (songId, itag, mimeType, bitrate, contentLength, lastModified, loudnessDb) VALUES (?,?,?,?,?,?,?)',
     [song.id, f.itag ?? null, f.mimeType ?? null, f.bitrate ?? null, f.contentLength ?? null, now(), f.loudnessDb ?? null],
   );
+}
+
+/* ------------------------------------------------------------------ *
+ * Local files (songs imported from the device)
+ * ------------------------------------------------------------------ */
+
+export async function addLocalFile(
+  db: Db,
+  f: { id: string; fileName: string; title: string; artist?: string; size?: number },
+): Promise<SongItem> {
+  await db.transaction(async () => {
+    await db.run(
+      'INSERT INTO Song (id, title, artistsText, durationText, thumbnailUrl, likedAt, totalPlayTimeMs) VALUES (?,?,?,NULL,NULL,NULL,0)',
+      [f.id, f.title, f.artist ?? LOCAL_ARTIST],
+    );
+    await db.run('INSERT INTO LocalFile (songId, fileName, size, addedAt) VALUES (?,?,?,?)', [f.id, f.fileName, f.size ?? null, now()]);
+  });
+  return (await getSong(db, f.id)) as SongItem;
+}
+
+export async function localSongs(db: Db): Promise<SongItem[]> {
+  const rows = await db.all<SongRow>(
+    'SELECT Song.* FROM LocalFile JOIN Song ON Song.id = LocalFile.songId ORDER BY LocalFile.addedAt DESC, Song.title COLLATE NOCASE',
+  );
+  return rows.map(songFromRow);
+}
+
+export async function localFileName(db: Db, songId: string): Promise<string | null> {
+  const r = await db.first<{ fileName: string }>('SELECT fileName FROM LocalFile WHERE songId = ?', [songId]);
+  return r?.fileName ?? null;
+}
+
+/** Removes the song everywhere (playlists, history … via ON DELETE CASCADE); returns the stored file name so the file can be deleted too. */
+export async function deleteLocalFile(db: Db, songId: string): Promise<string | null> {
+  const name = await localFileName(db, songId);
+  await db.run('DELETE FROM Song WHERE id = ?', [songId]);
+  return name;
 }
