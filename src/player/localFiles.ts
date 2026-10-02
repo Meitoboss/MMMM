@@ -1,4 +1,3 @@
-import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 
 import { LOCAL_PREFIX, fileExtension, makeLocalId, parseLocalName } from '../core/localMeta';
@@ -6,6 +5,14 @@ import type { AudioSource, SongItem } from '../core/types';
 import type { Db } from '../db/driver';
 import { openDb } from '../db/expo';
 import * as repo from '../db/repo';
+
+declare const require: (id: string) => any;
+
+/**
+ * The file picker is a native module that is only needed when the user taps "ファイルを追加". It is loaded on demand,
+ * so a problem with it can never stop the app from starting.
+ */
+const documentPicker = (): typeof import('expo-document-picker') => require('expo-document-picker');
 
 /**
  * Songs imported from the device. Files are copied into the app's own Documents folder so they keep working
@@ -23,7 +30,7 @@ export interface ImportResult {
 
 export async function importLocalFiles(db?: Db): Promise<ImportResult> {
   const database = db ?? (await openDb());
-  const res = await DocumentPicker.getDocumentAsync({ type: ['audio/*'], multiple: true, copyToCacheDirectory: true });
+  const res = await documentPicker().getDocumentAsync({ type: ['audio/*'], multiple: true, copyToCacheDirectory: true });
   if (res.canceled) return { added: [], failed: [], cancelled: true };
 
   await FileSystem.makeDirectoryAsync(dir(), { intermediates: true }).catch(() => undefined);

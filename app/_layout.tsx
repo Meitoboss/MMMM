@@ -1,19 +1,26 @@
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
-import { View } from 'react-native';
+import { Alert, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { clearLastCrash, readLastCrash } from '../src/crash';
 import { openDb } from '../src/db/expo';
 import { ensurePlayer } from '../src/player/setup';
 import { applySettings, useSettings } from '../src/state/settings';
 import { EngineHost } from '../src/ui/EngineHost';
 import { MiniPlayer } from '../src/ui/MiniPlayer';
-import { colors } from '../src/ui/theme';
+import { colors, useScheme } from '../src/ui/theme';
 
 export default function RootLayout() {
+  const scheme = useScheme();
   useEffect(() => {
     applySettings(useSettings.getState());
+    // the app closed unexpectedly last time: show why (one time)
+    const crash = readLastCrash();
+    if (crash) {
+      Alert.alert('前回、アプリが異常終了しました', `${crash.message}\n\n${crash.stack}`.slice(0, 1200), [{ text: 'OK', onPress: clearLastCrash }]);
+    }
     void openDb();
     void ensurePlayer();
   }, []);
@@ -21,22 +28,23 @@ export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <View style={{ flex: 1, backgroundColor: colors.bg }}>
-        <StatusBar style="light" />
+        <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
         <Stack
           screenOptions={{
             headerStyle: { backgroundColor: colors.bg },
             headerTintColor: colors.text,
             headerShadowVisible: false,
+            headerTitleStyle: { fontWeight: '800' },
             contentStyle: { backgroundColor: colors.bg },
           }}
         >
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen name="player" options={{ presentation: 'modal', headerShown: false }} />
-          <Stack.Screen name="add-to-playlist" options={{ presentation: 'modal', title: 'Add to playlist' }} />
+          <Stack.Screen name="add-to-playlist" options={{ presentation: 'modal', title: 'プレイリストに追加' }} />
           <Stack.Screen name="album/[id]" options={{ title: '' }} />
           <Stack.Screen name="artist/[id]" options={{ title: '' }} />
           <Stack.Screen name="playlist/[id]" options={{ title: '' }} />
-          <Stack.Screen name="local-playlist/[id]" options={{ title: 'Playlist' }} />
+          <Stack.Screen name="local-playlist/[id]" options={{ title: 'プレイリスト' }} />
         </Stack>
         <MiniPlayer />
         <EngineHost />
