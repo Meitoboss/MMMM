@@ -208,6 +208,7 @@ export default function Library() {
               <TextInput value={newName} onChangeText={setNewName} placeholder="新しいプレイリスト名" placeholderTextColor={colors.sub}
                 style={{ flex: 1, color: colors.text, backgroundColor: colors.surface2, borderRadius: 10, paddingHorizontal: 12, height: 40 }} />
               <Button label="作成" onPress={async () => { if (!newName.trim()) return; await repo.createPlaylist(await openDb(), newName.trim()); setNewName(''); void load(); }} />
+              <Button label="取り込み" secondary onPress={() => router.push('/import-playlist')} />
             </View>
           }
           ListEmptyComponent={empty('プレイリストがありません')}
