@@ -173,6 +173,8 @@ export interface AudioSource {
   bitrate?: number;
   itag?: number;
   contentLength?: number;
+  /** how much louder than YouTube's reference level this video is (dB) – used to even out the volume */
+  loudnessDb?: number;
   /** Where the URL came from, for debugging */
   via: 'piped' | 'invidious' | 'innertube' | 'server' | 'webpot' | 'offline' | 'local';
   /** user agent the player must send (googlevideo URLs are client-bound) */

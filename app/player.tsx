@@ -69,7 +69,8 @@ export default function PlayerScreen() {
   }, [song?.id, autoLyrics, view === 'lyrics']);
 
   const lines = lyrics && lyrics !== 'loading' ? lyrics.lines : [];
-  const active = lyrics && lyrics !== 'loading' && lyrics.synced ? activeLineIndex(lines, position * 1000) : -1;
+  const livePosition = p.needsLoad ? (p.resumePosition ?? 0) : position; // a restored song has not been loaded yet
+  const active = lyrics && lyrics !== 'loading' && lyrics.synced ? activeLineIndex(lines, livePosition * 1000) : -1;
   useEffect(() => {
     if (view === 'lyrics' && active > 0) listRef.current?.scrollToIndex({ index: active, viewPosition: 0.4, animated: true });
   }, [active, view]);
@@ -83,7 +84,7 @@ export default function PlayerScreen() {
     );
   }
 
-  const shown = seeking ?? position;
+  const shown = seeking ?? livePosition;
   const cover = Math.min(width - 48, 360);
 
   const menu = () => {

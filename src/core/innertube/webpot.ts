@@ -41,6 +41,7 @@ interface WebFormat {
   mimeType: string;
   bitrate: number;
   contentLength?: string;
+  loudnessDb?: number;
 }
 
 /**
@@ -89,6 +90,8 @@ export interface WebPlayerData {
   remoteError?: string;
   formats: WebFormat2[];
   expiresInSeconds: number;
+  /** video-level loudness (dB above YouTube's reference), when the response has it */
+  loudnessDb?: number;
 }
 
 /** Steps 1-3 of the flow: visitorData, player JS, PO tokens, then the `player` request. */
@@ -134,6 +137,7 @@ export async function fetchWebFormats(videoId: string): Promise<WebPlayerData> {
     remoteError,
     formats: [...(sd?.adaptiveFormats ?? []), ...(sd?.formats ?? [])],
     expiresInSeconds: sd?.expiresInSeconds ? Number(sd.expiresInSeconds) : 3600,
+    loudnessDb: typeof res?.playerConfig?.audioConfig?.loudnessDb === 'number' ? res.playerConfig.audioConfig.loudnessDb : undefined,
   };
 }
 
@@ -207,6 +211,7 @@ export async function resolveWithPoToken(
     bitrate: format.bitrate,
     itag: format.itag,
     contentLength: format.contentLength ? Number(format.contentLength) : undefined,
+    loudnessDb: typeof format.loudnessDb === 'number' ? format.loudnessDb : wp.loudnessDb,
     via: 'webpot',
     note: `itag${format.itag} pot=${kind}${wp.pot.source === 'remote' ? ' (token server)' : wp.remoteError ? ' (token server failed: ' + wp.remoteError + ')' : ''}`,
     userAgent: ua,

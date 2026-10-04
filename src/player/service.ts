@@ -1,6 +1,7 @@
 import TrackPlayer, { Event, State } from 'react-native-track-player';
 
 import { usePlayer } from '../state/player';
+import { noteProgress } from '../state/resume';
 
 /** Registered in index.ts – handles lock-screen / Control Center / headset buttons and track events. */
 export async function playbackService() {
@@ -17,7 +18,10 @@ export async function playbackService() {
     p().log('event: queueEnded');
     void p().onEnded();
   });
-  TrackPlayer.addEventListener(Event.PlaybackProgressUpdated, () => p().tick());
+  TrackPlayer.addEventListener(Event.PlaybackProgressUpdated, (e) => {
+    p().tick();
+    noteProgress(e.position);
+  });
   TrackPlayer.addEventListener(Event.PlaybackActiveTrackChanged, (e) => p().log(`event: activeTrack idx=${e.index ?? '-'}`));
   TrackPlayer.addEventListener(Event.PlaybackError, (e) => {
     p().log(`event: ERROR ${JSON.stringify(e)}`);

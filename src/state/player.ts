@@ -2,10 +2,11 @@ import TrackPlayer from 'react-native-track-player';
 import { create } from 'zustand';
 
 import { getConfig } from '../core/config';
+import { normalizedVolume } from '../core/loudness';
 import { isLocalId } from '../core/localMeta';
 import { yt } from '../core';
 import { resolveAudio } from '../core/streams/resolver';
-import type { SongItem } from '../core/types';
+import type { AudioSource, SongItem } from '../core/types';
 import { openDb } from '../db/expo';
 import * as repo from '../db/repo';
 import { resolveLocal } from '../player/localFiles';
@@ -27,6 +28,10 @@ interface PlayerState {
   rate: number;
   /** epoch ms when the sleep timer fires */
   sleepAt?: number;
+  /** restored from the last session: nothing is loaded in the player yet – pressing play loads it and jumps to `resumePosition` */
+  needsLoad: boolean;
+  /** seconds into the current song, while `needsLoad` */
+  resumePosition?: number;
   /** last playback events, shown on the player screen to explain silent failures */
   debug: string[];
   log: (line: string) => void;
@@ -77,13 +82,36 @@ function shuffleTail<T>(arr: T[], from: number): T[] {
   return [...head, ...tail];
 }
 
+/**
+ * Evens out the volume between songs (Settings → Playback). Uses the loudness YouTube reports for the video;
+ * for a saved copy it is read from the database. Never allowed to get in the way of playing.
+ */
+async function applyVolume(song: SongItem, src: AudioSource, log: (line: string) => void): Promise<void> {
+  try {
+    const mode = useSettings.getState().volumeNormalize;
+    let loudness = src.loudnessDb;
+    if (!isLocalId(song.id)) {
+      const db = await openDb();
+      if (loudness === undefined) loudness = (await repo.loudnessFor(db, song.id)) ?? undefined;
+      else if (src.via !== 'offline') {
+        repo.saveFormat(db, song, { itag: src.itag, mimeType: src.mimeType, bitrate: src.bitrate, contentLength: src.contentLength, loudnessDb: loudness }).catch(() => undefined);
+      }
+    }
+    const volume = normalizedVolume(loudness, mode);
+    await TrackPlayer.setVolume(volume);
+    log(`volume=${volume.toFixed(2)} (${mode}, loudness ${loudness === undefined ? 'unknown' : `${loudness.toFixed(1)} dB`})`);
+  } catch {
+    await TrackPlayer.setVolume(1).catch(() => undefined);
+  }
+}
+
 export const usePlayer = create<PlayerState>((set, get) => {
-  async function loadAt(index: number) {
+  async function loadAt(index: number, startAt = 0) {
     const song = get().queue[index];
     if (!song) return;
     const token = ++loadToken;
     await flushPlayTime(get().current);
-    set({ index, current: song, status: 'loading', error: undefined });
+    set({ index, current: song, status: 'loading', error: undefined, needsLoad: false, resumePosition: undefined });
     get().log(`load ${song.id} (#${index + 1}/${get().queue.length})`);
     try {
       await ensurePlayer();
@@ -106,6 +134,8 @@ export const usePlayer = create<PlayerState>((set, get) => {
         contentType: src.mimeType,
       });
       await TrackPlayer.setRate(get().rate);
+      await applyVolume(song, src, get().log);
+      if (startAt > 0) await TrackPlayer.seekTo(startAt); // continuing a restored session
       await TrackPlayer.play();
       loadedAt = Date.now();
       get().log('play() called');
@@ -141,6 +171,7 @@ export const usePlayer = create<PlayerState>((set, get) => {
     queue: [],
     index: 0,
     status: 'idle',
+    needsLoad: false,
     debug: [],
     log: (line) => {
       const t = new Date();
@@ -200,6 +231,12 @@ export const usePlayer = create<PlayerState>((set, get) => {
 
     previous: async () => {
       const { index } = get();
+      if (get().needsLoad) {
+        // nothing loaded yet: "back" restarts the restored song, or goes to the one before it
+        if ((get().resumePosition ?? 0) > 3 || index === 0) set({ resumePosition: 0 });
+        else await loadAt(index - 1);
+        return;
+      }
       const { position } = await TrackPlayer.getProgress();
       if (position > 3 || index === 0) {
         await TrackPlayer.seekTo(0);
@@ -209,6 +246,10 @@ export const usePlayer = create<PlayerState>((set, get) => {
     },
 
     togglePlay: async () => {
+      if (get().needsLoad) {
+        await loadAt(get().index, get().resumePosition ?? 0);
+        return;
+      }
       const { status } = get();
       if (status === 'playing') {
         await TrackPlayer.pause();
@@ -221,7 +262,10 @@ export const usePlayer = create<PlayerState>((set, get) => {
       }
     },
 
-    seekTo: (s) => TrackPlayer.seekTo(s),
+    seekTo: async (s) => {
+      if (get().needsLoad) set({ resumePosition: s });
+      else await TrackPlayer.seekTo(s);
+    },
 
     setRepeat: (repeat) => set({ repeat }),
 

@@ -1,5 +1,6 @@
 import Storage from 'expo-sqlite/kv-store';
 import { Platform } from 'react-native';
+import { type NormalizeMode } from '../core/loudness';
 import { create } from 'zustand';
 
 import { DEFAULT_INVIDIOUS_INSTANCES, DEFAULT_PIPED_INSTANCES, IOS, WEB_REMIX, configure } from '../core/config';
@@ -22,6 +23,10 @@ export interface Settings {
   /** a bgutil token server, e.g. https://1-2-3-4.sslip.io – mints PO tokens instead of this phone's WebView */
   potServerUrl: string;
   potServerKey: string;
+  /** even out the volume between songs */
+  volumeNormalize: NormalizeMode;
+  /** keep the queue and position, and offer them again at the next start */
+  resumeOnLaunch: boolean;
   /** show the playback event log on the player screen */
   showDebug: boolean;
   autoRadio: boolean;
@@ -42,6 +47,8 @@ export const DEFAULT_SETTINGS: Settings = {
   streamServerKey: '',
   potServerUrl: '',
   potServerKey: '',
+  volumeNormalize: 'standard',
+  resumeOnLaunch: true,
   showDebug: false,
   autoRadio: true,
   autoLyrics: true,

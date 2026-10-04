@@ -117,7 +117,7 @@ const b64u = (t: string) => Buffer.from(t).toString('base64').replace(/\+/g, '-'
 const json = (d: unknown, status = 200) => new Response(JSON.stringify(d), { status, headers: { 'content-type': 'application/json' } });
 const text = (t: string, status = 200) => new Response(t, { status });
 
-function installNetwork(opts: { cipher?: boolean; probeStatus?: number; playability?: string; muxed?: boolean; visitorData?: string; probe?: (url: string, range: string) => number } = {}) {
+function installNetwork(opts: { cipher?: boolean; probeStatus?: number; playability?: string; muxed?: boolean; visitorData?: string; probe?: (url: string, range: string) => number; loudnessDb?: number } = {}) {
   calls.length = 0;
   globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
     const url = String(input);
@@ -131,6 +131,7 @@ function installNetwork(opts: { cipher?: boolean; probeStatus?: number; playabil
       const stream = 'https://rr1.googlevideo.com/videoplayback?expire=1&n=nval&x=1';
       return json({
         playabilityStatus: { status: opts.playability ?? 'OK' },
+        ...(opts.loudnessDb !== undefined ? { playerConfig: { audioConfig: { loudnessDb: opts.loudnessDb } } } : {}),
         streamingData: {
           expiresInSeconds: '21540',
           formats: opts.muxed
@@ -325,6 +326,23 @@ describe('PO-token playback (RiMusic web-potoken flow)', () => {
     assert.match(m4a.results, /none 403 \| video 403 \| session 403 \| session-dec 403 \| visitor-id 403/);
   });
 
+  describe('loudness', () => {
+    it('is read from the player response and travels with the stream', async () => {
+      installNetwork({ loudnessDb: 4.2 });
+      const src = await resolveWithPoToken('abcdefghijk');
+      assert.equal(src.loudnessDb, 4.2);
+    });
+    it('is simply absent when the response has none', async () => {
+      installNetwork();
+      assert.equal((await resolveWithPoToken('abcdefghijk')).loudnessDb, undefined);
+    });
+    it('also comes with the muxed fallback', async () => {
+      installNetwork({ loudnessDb: -2.5, muxed: true, probe: (url) => (url.includes('/webm') || url.includes('mime=audio') ? 403 : 206) });
+      const src = await resolveWithPoToken('abcdefghijk');
+      assert.equal(src.loudnessDb, -2.5);
+    });
+  });
+
   describe('token server (bgutil)', () => {
     /** wraps the installed mock: answers https://pot.example/* itself */
     function withTokenServer(handler: (path: string, init?: RequestInit) => Response) {
@@ -386,6 +404,18 @@ describe('PO-token playback (RiMusic web-potoken flow)', () => {
       const src = await resolveWithPoToken('abcdefghijk');
       assert.deepEqual(mints, ['VISITOR123', 'abcdefghijk']); // local WebView did the work
       assert.match(src.note ?? '', /token server failed: token server HTTP 502/);
+    });
+
+    it('server down: after the first failures the next songs skip it at once (no waiting, no requests)', async () => {
+      installNetwork();
+      const seen = withTokenServer(() => new Response('bad gateway', { status: 502 }));
+      configureRemotePot({ url: 'https://pot.example' });
+      await resolveWithPoToken('aaaaaaaaaaa'); // the failures that open the breaker happen here
+      const requests = seen.length;
+      const second = await resolveWithPoToken('bbbbbbbbbbb');
+      assert.equal(seen.length, requests, 'the paused server is not contacted again');
+      assert.match(second.note ?? '', /token server failed: token server paused/);
+      assert.ok(second.url.includes('pot='), 'the song still plays, with the on-phone tokens');
     });
 
     it('explains a rejected key', async () => {

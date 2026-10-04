@@ -115,10 +115,10 @@ export default function Library() {
 
   return (
     <View style={{ flex: 1 }}>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }} contentContainerStyle={{ padding: 12, gap: 8 }}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, flexShrink: 0 }} contentContainerStyle={{ padding: 12, gap: 8, alignItems: 'center' }}>
         {TABS.map((t) => (
-          <Pressable key={t.key} onPress={() => setTab(t.key)} style={{ paddingHorizontal: 14, paddingVertical: 7, borderRadius: 16, backgroundColor: tab === t.key ? colors.accent : colors.surface2 }}>
-            <Text style={{ color: tab === t.key ? colors.onAccent : colors.text, fontWeight: tab === t.key ? '700' : '500' }}>{t.label}</Text>
+          <Pressable key={t.key} onPress={() => setTab(t.key)} style={{ paddingHorizontal: 14, paddingVertical: 8, minHeight: 36, justifyContent: 'center', borderRadius: 18, backgroundColor: tab === t.key ? colors.accent : colors.surface2 }}>
+            <Text style={{ color: tab === t.key ? colors.onAccent : colors.text, fontWeight: tab === t.key ? '700' : '500', fontSize: 14, lineHeight: 20 }}>{t.label}</Text>
           </Pressable>
         ))}
       </ScrollView>

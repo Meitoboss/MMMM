@@ -8,6 +8,7 @@ import { clearLastCrash, readLastCrash } from '../src/crash';
 import { openDb } from '../src/db/expo';
 import { ensureFolders } from '../src/player/localFiles';
 import { useOffline } from '../src/state/offline';
+import { restoreResume, startResumeSaving } from '../src/state/resume';
 import { ensurePlayer } from '../src/player/setup';
 import { applySettings, useSettings } from '../src/state/settings';
 import { DialogHost } from '../src/ui/dialogs';
@@ -19,6 +20,8 @@ export default function RootLayout() {
   const scheme = useScheme();
   useEffect(() => {
     applySettings(useSettings.getState());
+    restoreResume(); // last session's queue, paused (nothing starts by itself)
+    startResumeSaving();
     // the app closed unexpectedly last time: show why (one time)
     const crash = readLastCrash();
     if (crash) {

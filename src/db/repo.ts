@@ -386,6 +386,12 @@ export async function saveFormat(
   );
 }
 
+/** the loudness stored for a song, or null – lets saved copies be evened out without the network */
+export async function loudnessFor(db: Db, songId: string): Promise<number | null> {
+  const r = await db.first<{ loudnessDb: number | null }>('SELECT loudnessDb FROM Format WHERE songId = ?', [songId]);
+  return r?.loudnessDb ?? null;
+}
+
 /* ------------------------------------------------------------------ *
  * Local files (songs imported from the device)
  * ------------------------------------------------------------------ */

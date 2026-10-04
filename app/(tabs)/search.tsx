@@ -1,8 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, FlatList, Keyboard, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 
 import { yt } from '../../src/core';
+import { groupResults, toRows } from '../../src/core/searchGroups';
 import type { MusicItem, SearchFilter, SongItem } from '../../src/core/types';
 import * as repo from '../../src/db/repo';
 import { ErrorView, ItemRow } from '../../src/ui/components';
@@ -84,6 +85,8 @@ export default function Search() {
 
   const showHints = !submitted || text !== submitted;
   const songs = items.filter((i): i is SongItem => i.kind === 'song');
+  // "すべて": songs with songs, videos with videos, albums with albums … each block under its own heading
+  const rows = useMemo(() => toRows(groupResults(items)), [items]);
 
   return (
     <View style={{ flex: 1 }}>
@@ -107,14 +110,14 @@ export default function Search() {
         )}
       </View>
 
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }} contentContainerStyle={{ paddingHorizontal: 12, gap: 8, paddingBottom: 8 }}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, flexShrink: 0 }} contentContainerStyle={{ paddingHorizontal: 12, gap: 8, paddingBottom: 10, alignItems: 'center' }}>
         {FILTERS.map((f) => (
           <Pressable
             key={f.label}
             onPress={() => { setFilter(f.value); if (submitted) void run(submitted, f.value); }}
             style={[st.chip, filter === f.value && { backgroundColor: colors.accent }]}
           >
-            <Text style={{ color: filter === f.value ? colors.onAccent : colors.text, fontWeight: filter === f.value ? '700' : '500' }}>{f.label}</Text>
+            <Text style={{ color: filter === f.value ? colors.onAccent : colors.text, fontWeight: filter === f.value ? '700' : '500', fontSize: 14, lineHeight: 20 }}>{f.label}</Text>
           </Pressable>
         ))}
       </ScrollView>
@@ -135,6 +138,31 @@ export default function Search() {
         </ScrollView>
       ) : error ? (
         <ErrorView message={error} onRetry={() => run(text, filter)} />
+      ) : filter === undefined ? (
+        <FlatList
+          data={rows}
+          keyExtractor={(r, i) => (r.type === 'header' ? `h-${r.group.kind}` : `${r.item.kind}-${r.item.id}-${i}`)}
+          renderItem={({ item: r }) =>
+            r.type === 'header' ? (
+              <Pressable
+                onPress={() => {
+                  setFilter(r.group.filter);
+                  if (submitted) void run(submitted, r.group.filter);
+                }}
+                style={st.groupHeader}
+              >
+                <Text style={{ color: colors.text, fontSize: 17, fontWeight: '800' }}>{r.group.label}</Text>
+                <Text style={{ color: colors.accentText, fontWeight: '700' }}>すべて見る ›</Text>
+              </Pressable>
+            ) : (
+              <ItemRow item={r.item} context={songs} />
+            )
+          }
+          contentContainerStyle={{ paddingBottom: MINI_HEIGHT + 24 }}
+          ListFooterComponent={loading ? <ActivityIndicator color={colors.accentText} style={{ margin: 16 }} /> : null}
+          ListEmptyComponent={!loading ? <Text style={{ color: colors.sub, textAlign: 'center', marginTop: 40 }}>見つかりませんでした</Text> : null}
+          keyboardShouldPersistTaps="handled"
+        />
       ) : (
         <FlatList
           data={items}
@@ -155,6 +183,7 @@ export default function Search() {
 const st = dynamicStyles((c) => ({
   box: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: c.surface2, margin: 12, paddingHorizontal: 14, height: 44, borderRadius: 22 },
   input: { flex: 1, color: c.text, fontSize: 16 },
-  chip: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 16, backgroundColor: c.surface2 },
+  chip: { paddingHorizontal: 14, paddingVertical: 8, minHeight: 36, justifyContent: 'center', borderRadius: 18, backgroundColor: c.surface2 },
+  groupHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingTop: 18, paddingBottom: 6 },
   hint: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 12 },
 }));

@@ -76,11 +76,11 @@ export async function search(query: string, filter?: SearchFilter): Promise<Item
  */
 export async function searchAll(query: string): Promise<ItemsPage<MusicItem>> {
   const plan: [SearchFilter, number][] = [
-    ['song', 8],
+    ['song', 10],
     ['artist', 3],
-    ['album', 4],
+    ['album', 5],
     ['community_playlist', 3],
-    ['video', 4],
+    ['video', 6],
   ];
   const results = await Promise.allSettled(plan.map(([filter]) => search(query, filter)));
 

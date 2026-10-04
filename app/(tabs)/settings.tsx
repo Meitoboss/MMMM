@@ -9,6 +9,7 @@ import { runCurrentSongProbe, runFormatMatrix, runPlaybackProbe, runRealPathTest
 import { usePlayer } from '../../src/state/player';
 import { DEFAULT_SETTINGS, useSettings } from '../../src/state/settings';
 import { s } from '../../src/ui/components';
+import { type NormalizeMode } from '../../src/core/loudness';
 import { MINI_HEIGHT, colors, useScheme } from '../../src/ui/theme';
 import { Chips, Row, Section } from '../../src/ui/SettingsParts';
 import { ThemeEditor } from '../../src/ui/ThemeEditor';
@@ -17,6 +18,12 @@ const ORDERS: { label: string; value: StreamBackend[] }[] = [
   { label: 'YouTube（トークン）→ Piped → Invidious', value: ['webpot', 'piped', 'invidious'] },
   { label: 'Piped → Invidious → YouTube（トークン）', value: ['piped', 'invidious', 'webpot'] },
   { label: 'YouTube（トークン）のみ', value: ['webpot'] },
+];
+
+const VOLUME_OPTIONS: { label: string; value: NormalizeMode }[] = [
+  { label: 'オフ', value: 'off' },
+  { label: '弱め', value: 'light' },
+  { label: '標準', value: 'standard' },
 ];
 
 const SLEEP_OPTIONS: { label: string; minutes: number | null }[] = [
@@ -125,6 +132,11 @@ export default function Settings() {
         <Row title="歌詞を自動で取得" sub="LRCLIB、KuGou の順に探します">
           <Switch value={st.autoLyrics} onValueChange={(v) => st.update({ autoLyrics: v })} trackColor={{ true: colors.accent }} />
         </Row>
+        <Row title="音量の自動調整" sub="曲ごとの音量の差を小さくします（大きい曲の音を下げます）。次の曲から反映されます" last />
+        <Chips options={VOLUME_OPTIONS} value={st.volumeNormalize} onChange={(v) => st.update({ volumeNormalize: v })} />
+        <Row title="前回の続きから再生" sub="アプリを閉じても、キューと再生位置を覚えています。起動しても、自動では再生しません">
+          <Switch value={st.resumeOnLaunch} onValueChange={(v) => st.update({ resumeOnLaunch: v })} trackColor={{ true: colors.accent }} />
+        </Row>
         <Row title="スリープタイマー" sub="指定した時間が経つと、再生を止めます" last />
         <Chips
           options={SLEEP_OPTIONS.map((o) => ({ label: o.label, value: o.minutes }))}
@@ -192,6 +204,7 @@ export default function Settings() {
         <Text style={{ color: colors.text, fontWeight: '800' }}>Music space</Text>
         <Text style={s.sub}>バージョン {VERSION}</Text>
         <Text style={[s.sub, { textAlign: 'center', marginTop: 6 }]}>
+          fast4x 氏の RiMusic をもとにした派生ソフトです（GPL-3.0）。
         </Text>
       </View>
     </ScrollView>

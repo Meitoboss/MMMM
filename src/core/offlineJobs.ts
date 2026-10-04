@@ -62,6 +62,9 @@ export async function runDownload(
   }
   try {
     await repo.addOffline(db, song, { fileName, size, mimeType: src.mimeType });
+    if (src.loudnessDb !== undefined) {
+      await repo.saveFormat(db, song, { itag: src.itag, mimeType: src.mimeType, bitrate: src.bitrate, contentLength: src.contentLength, loudnessDb: src.loudnessDb });
+    }
   } catch (e) {
     await deps.remove(fileName).catch(() => undefined); // never keep a file the database does not know about
     throw e;

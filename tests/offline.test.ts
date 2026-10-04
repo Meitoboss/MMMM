@@ -95,6 +95,16 @@ describe('saving a song offline', () => {
     assert.deepEqual(await repo.offlineIds(db), ['abc']);
   });
 
+  it('remembers the loudness so a saved copy can be evened out without the network', async () => {
+    const f = fakeDeps({ resolve: async (id) => ({ url: `https://cdn/${id}`, mimeType: 'audio/mp4', via: 'webpot', itag: 140, loudnessDb: 5.5 }) });
+    await runDownload(db, f.deps, song('abc'));
+    assert.equal(await repo.loudnessFor(db, 'abc'), 5.5);
+    assert.equal(await repo.loudnessFor(db, 'unknown'), null);
+    // a song without loudness information leaves nothing behind
+    await runDownload(db, fakeDeps().deps, song('plain'));
+    assert.equal(await repo.loudnessFor(db, 'plain'), null);
+  });
+
   it('does not download twice', async () => {
     const f = fakeDeps();
     await runDownload(db, f.deps, song('abc'));
