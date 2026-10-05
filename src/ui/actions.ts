@@ -4,10 +4,10 @@ import { create } from 'zustand';
 
 import { isLocalId } from '../core/localMeta';
 import type { MusicItem, SongItem, VideoItem } from '../core/types';
-import { openDb } from '../db/expo';
-import * as repo from '../db/repo';
 import { removeLocalFile } from '../player/localFiles';
 import { usePlayer } from '../state/player';
+import { encodeSong } from '../core/songParam';
+import { toggleLikeSong } from '../state/likes';
 import { useOffline } from '../state/offline';
 import { showActionSheet } from './dialogs';
 import { requestOfflineSave } from './offlineActions';
@@ -51,7 +51,7 @@ export function songMenu(router: Router, song: SongItem, onChanged?: () => void)
   if (!local) options.push('この曲のラジオ');
   const saved = !local && !!useOffline.getState().ids[song.id];
   if (!local) options.push(saved ? 'オフライン保存を削除' : 'オフラインに保存');
-  options.push('お気に入りに追加／解除', 'プレイリストに追加');
+  options.push('お気に入りに追加／解除', 'プレイリストに追加', 'タグを編集');
   if (song.album?.id) options.push('アルバムへ');
   if (artist) options.push('アーティストへ');
   if (local) options.push('ライブラリから削除');
@@ -77,8 +77,10 @@ export function songMenu(router: Router, song: SongItem, onChanged?: () => void)
           await useOffline.getState().remove(song.id);
           onChanged?.();
         } else if (label === 'お気に入りに追加／解除') {
-          await repo.toggleLike(await openDb(), song);
+          await toggleLikeSong(song);
           onChanged?.();
+        } else if (label === 'タグを編集') {
+          router.push({ pathname: '/song-tags', params: { song: encodeSong(song) } });
         } else if (label === 'プレイリストに追加') {
           useAddToPlaylist.setState({ song });
           router.push('/add-to-playlist');

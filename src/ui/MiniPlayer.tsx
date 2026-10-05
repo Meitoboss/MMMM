@@ -4,6 +4,7 @@ import { Pressable, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useProgress } from 'react-native-track-player';
 
+import { useIsLiked, toggleLikeSong } from '../state/likes';
 import { usePlayer } from '../state/player';
 import { Cover } from './components';
 import { MINI_HEIGHT, TAB_HEIGHT, colors, dynamicStyles, useScheme } from './theme';
@@ -15,6 +16,7 @@ export function MiniPlayer() {
   const { current, status, togglePlay, next, needsLoad, resumePosition } = usePlayer();
   const { position, duration } = useProgress(1000);
   useScheme();
+  const liked = useIsLiked(current?.id);
 
   if (!current || segments[0] === 'player') return null;
   const inTabs = segments[0] === '(tabs)';
@@ -37,6 +39,9 @@ export function MiniPlayer() {
           {status === 'loading' ? '読み込み中…' : status === 'error' ? '再生エラー（タップで詳細）' : current.artists.map((a) => a.name).join(', ')}
         </Text>
       </View>
+      <Pressable hitSlop={10} onPress={() => void toggleLikeSong(current)}>
+        <Ionicons name={liked ? 'heart' : 'heart-outline'} size={24} color={liked ? colors.accentText : colors.text} />
+      </Pressable>
       <Pressable hitSlop={10} onPress={() => void togglePlay()}>
         <Ionicons name={status === 'playing' ? 'pause' : 'play'} size={28} color={colors.text} />
       </Pressable>
