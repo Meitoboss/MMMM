@@ -73,5 +73,7 @@ The same TypeScript code builds for Android (Expo / React Native). Platform diff
 | Notifications | – | Android 13+ asks for the notification permission (lock-screen controls) |
 | Build | `.github/workflows/ios-ipa.yml` → unsigned `.ipa` | `.github/workflows/android-apk.yml` → `MusicSpace-android.apk` (signed with the debug key, for sideloading) |
 
+Note: `react-native-track-player` 4.x cannot be loaded by the New Architecture on Android (issue #2489), so the Android workflow builds with `newArchEnabled=false`. iOS keeps the new architecture.
+
 Build the APK: push to `main` (or run the *Build Android APK* workflow) and download the `MusicSpace-android-apk` artifact.
 Locally: `npx expo prebuild --platform android && cd android && ./gradlew assembleRelease`.
