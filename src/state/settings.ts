@@ -23,6 +23,8 @@ export interface Settings {
   /** a bgutil token server, e.g. https://1-2-3-4.sslip.io – mints PO tokens instead of this phone's WebView */
   potServerUrl: string;
   potServerKey: string;
+  /** seconds of fade out / fade in between songs (0 = off) */
+  fadeSeconds: number;
   /** even out the volume between songs */
   volumeNormalize: NormalizeMode;
   /** keep the queue and position, and offer them again at the next start */
@@ -47,6 +49,7 @@ export const DEFAULT_SETTINGS: Settings = {
   streamServerKey: '',
   potServerUrl: '',
   potServerKey: '',
+  fadeSeconds: 0,
   volumeNormalize: 'standard',
   resumeOnLaunch: true,
   showDebug: false,

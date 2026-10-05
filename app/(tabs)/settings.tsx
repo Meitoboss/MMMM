@@ -9,6 +9,7 @@ import { runCurrentSongProbe, runFormatMatrix, runPlaybackProbe, runRealPathTest
 import { usePlayer } from '../../src/state/player';
 import { DEFAULT_SETTINGS, useSettings } from '../../src/state/settings';
 import { s } from '../../src/ui/components';
+import { FADE_OPTIONS } from '../../src/core/dj';
 import { type NormalizeMode } from '../../src/core/loudness';
 import { MINI_HEIGHT, colors, useScheme } from '../../src/ui/theme';
 import { Chips, Row, Section } from '../../src/ui/SettingsParts';
@@ -25,6 +26,8 @@ const VOLUME_OPTIONS: { label: string; value: NormalizeMode }[] = [
   { label: '弱め', value: 'light' },
   { label: '標準', value: 'standard' },
 ];
+
+const FADE_CHOICES: { label: string; value: number }[] = FADE_OPTIONS.map((v) => ({ label: v === 0 ? 'オフ' : `${v}秒`, value: v }));
 
 const SLEEP_OPTIONS: { label: string; minutes: number | null }[] = [
   { label: 'OFF', minutes: null },
@@ -134,6 +137,8 @@ export default function Settings() {
         </Row>
         <Row title="音量の自動調整" sub="曲ごとの音量の差を小さくします（大きい曲の音を下げます）。次の曲から反映されます" last />
         <Chips options={VOLUME_OPTIONS} value={st.volumeNormalize} onChange={(v) => st.update({ volumeNormalize: v })} />
+        <Row title="フェードつなぎ" sub="曲の終わりをフェードアウトして、次の曲をフェードインでつなぎます。曲は重ならないので、わずかな間ができます。自動で次の曲へ進むときだけ働きます" last />
+        <Chips options={FADE_CHOICES} value={st.fadeSeconds} onChange={(v) => st.update({ fadeSeconds: v })} />
         <Row title="前回の続きから再生" sub="アプリを閉じても、キューと再生位置を覚えています。起動しても、自動では再生しません">
           <Switch value={st.resumeOnLaunch} onValueChange={(v) => st.update({ resumeOnLaunch: v })} trackColor={{ true: colors.accent }} />
         </Row>

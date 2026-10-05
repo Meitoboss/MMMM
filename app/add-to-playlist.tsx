@@ -6,9 +6,10 @@ import { openDb } from '../src/db/expo';
 import * as repo from '../src/db/repo';
 import { useAddToPlaylist } from '../src/ui/actions';
 import { Button, s } from '../src/ui/components';
-import { colors } from '../src/ui/theme';
+import { colors, useScheme } from '../src/ui/theme';
 
 export default function AddToPlaylist() {
+  useScheme();
   const router = useRouter();
   const song = useAddToPlaylist((x) => x.song);
   const [lists, setLists] = useState<repo.PlaylistRow[]>([]);
@@ -20,16 +21,16 @@ export default function AddToPlaylist() {
   async function add(id: number) {
     if (!song) return;
     const n = await repo.addToPlaylist(await openDb(), id, [song]);
-    if (n === 0) Alert.alert('Already in this playlist');
+    if (n === 0) Alert.alert('すでにこのプレイリストに入っています');
     router.back();
   }
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
       <View style={{ flexDirection: 'row', gap: 8, padding: 16 }}>
-        <TextInput value={name} onChangeText={setName} placeholder="New playlist" placeholderTextColor={colors.sub}
+        <TextInput value={name} onChangeText={setName} placeholder="新しいプレイリスト" placeholderTextColor={colors.sub}
           style={{ flex: 1, color: colors.text, backgroundColor: colors.surface2, borderRadius: 10, paddingHorizontal: 12, height: 40 }} />
-        <Button label="Create" onPress={async () => { if (!name.trim()) return; const id = await repo.createPlaylist(await openDb(), name.trim()); await add(id); }} />
+        <Button label="作成" onPress={async () => { if (!name.trim()) return; const id = await repo.createPlaylist(await openDb(), name.trim()); await add(id); }} />
       </View>
       <FlatList
         data={lists}
@@ -38,7 +39,7 @@ export default function AddToPlaylist() {
           <Pressable style={s.row} onPress={() => void add(item.id)}>
             <View style={s.rowText}>
               <Text style={s.title}>{item.name}</Text>
-              <Text style={s.sub}>{item.songCount ?? 0} songs</Text>
+              <Text style={s.sub}>{item.songCount ?? 0}曲</Text>
             </View>
           </Pressable>
         )}

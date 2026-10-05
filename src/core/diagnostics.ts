@@ -1,7 +1,7 @@
 import { resolveWithPoToken, ensureVisitorData } from './innertube/webpot';
 import { engineStatus, getEngine } from './pot/engine';
 import { poTokenProvider } from './pot/potoken';
-import { getRemotePotConfig, isRemotePotConfigured, mintRemote, pingRemote } from './pot/remote';
+import { getRemotePotConfig, isRemotePotConfigured, mintRemote, pingRemote, remotePauseSecondsLeft, resetRemoteBreaker } from './pot/remote';
 import { SOLVER_VERSION } from './pot/solver.generated';
 import { getPlayerJs, solveChallenges } from './pot/solver';
 
@@ -67,6 +67,10 @@ export async function runTokenServerTest(onStep: (r: StepResult) => void, videoI
     return false;
   }
   const cfg = getRemotePotConfig()!;
+  if (remotePauseSecondsLeft() > 0) {
+    onStep({ name: '0. 一時休止中', ok: true, detail: `連続で失敗したため休止していました（あと${remotePauseSecondsLeft()}秒）。テストのため、解除します。`, ms: 0 });
+  }
+  resetRemoteBreaker();
   let t0 = Date.now();
   try {
     const pong = await pingRemote();

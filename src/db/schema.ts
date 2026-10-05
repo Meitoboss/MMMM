@@ -15,6 +15,11 @@ const TABLES = [
   'CREATE TABLE IF NOT EXISTS `Lyrics` (`songId` TEXT NOT NULL, `fixed` TEXT, `synced` TEXT, PRIMARY KEY(`songId`), FOREIGN KEY(`songId`) REFERENCES `Song`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )',
   'CREATE TABLE IF NOT EXISTS `Playlist` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, `browseId` TEXT)',
   // songs imported from files on the device: only the file NAME is stored (the app container path changes between installs)
+  'CREATE TABLE IF NOT EXISTS `HotCue` (`songId` TEXT NOT NULL, `slot` INTEGER NOT NULL, `position` REAL NOT NULL, `label` TEXT, PRIMARY KEY(`songId`, `slot`), FOREIGN KEY(`songId`) REFERENCES `Song`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )',
+  'CREATE TABLE IF NOT EXISTS `SongTrim` (`songId` TEXT NOT NULL, `startSec` REAL, `endSec` REAL, PRIMARY KEY(`songId`), FOREIGN KEY(`songId`) REFERENCES `Song`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )',
+  'CREATE TABLE IF NOT EXISTS `Tag` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, `createdAt` INTEGER NOT NULL)',
+  'CREATE TABLE IF NOT EXISTS `SongTag` (`songId` TEXT NOT NULL, `tagId` INTEGER NOT NULL, PRIMARY KEY(`songId`, `tagId`), FOREIGN KEY(`songId`) REFERENCES `Song`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE, FOREIGN KEY(`tagId`) REFERENCES `Tag`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )',
+  'CREATE TABLE IF NOT EXISTS `SmartPlaylist` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, `rules` TEXT NOT NULL, `createdAt` INTEGER NOT NULL)',
   'CREATE TABLE IF NOT EXISTS `Offline` (`songId` TEXT NOT NULL, `fileName` TEXT NOT NULL, `size` INTEGER, `mimeType` TEXT, `savedAt` INTEGER NOT NULL, PRIMARY KEY(`songId`), FOREIGN KEY(`songId`) REFERENCES `Song`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )',
   'CREATE TABLE IF NOT EXISTS `LocalImported` (`sourceKey` TEXT NOT NULL, `importedAt` INTEGER NOT NULL, PRIMARY KEY(`sourceKey`))',
   'CREATE TABLE IF NOT EXISTS `RecentPlay` (`songId` TEXT NOT NULL, `playedAt` INTEGER NOT NULL, PRIMARY KEY(`songId`), FOREIGN KEY(`songId`) REFERENCES `Song`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )',
@@ -26,6 +31,8 @@ const TABLES = [
 ];
 
 const INDICES = [
+  'CREATE UNIQUE INDEX IF NOT EXISTS `index_Tag_name` ON `Tag` (`name` COLLATE NOCASE)',
+  'CREATE INDEX IF NOT EXISTS `index_SongTag_tagId` ON `SongTag` (`tagId`)',
   'CREATE INDEX IF NOT EXISTS `index_RecentPlay_playedAt` ON `RecentPlay` (`playedAt`)',
   'CREATE INDEX IF NOT EXISTS `index_Event_songId` ON `Event` (`songId`)',
   'CREATE UNIQUE INDEX IF NOT EXISTS `index_SearchQuery_query` ON `SearchQuery` (`query`)',

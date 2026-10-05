@@ -3,6 +3,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { Alert, FlatList, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 
+import { describeRules } from '../../src/core/smart';
 import type { AlbumItem, ArtistItem, SongItem } from '../../src/core/types';
 import { openDb } from '../../src/db/expo';
 import * as repo from '../../src/db/repo';
@@ -10,14 +11,16 @@ import { chooseAndroidFolder, importLocalFiles, isAndroid, listInbox, savedAndro
 import { useOffline } from '../../src/state/offline';
 import { usePlayer } from '../../src/state/player';
 import { Button, Cover, ItemRow, SongRow, s } from '../../src/ui/components';
+import { promptText, showActionSheet } from '../../src/ui/dialogs';
 import { MINI_HEIGHT, colors, useScheme } from '../../src/ui/theme';
 
-type Tab = 'songs' | 'local' | 'offline' | 'liked' | 'playlists' | 'albums' | 'artists' | 'history' | 'stats';
+type Tab = 'songs' | 'local' | 'offline' | 'liked' | 'tags' | 'playlists' | 'albums' | 'artists' | 'history' | 'stats';
 const TABS: { key: Tab; label: string }[] = [
   { key: 'songs', label: '曲' },
   { key: 'local', label: 'ローカル' },
   { key: 'offline', label: 'オフライン' },
   { key: 'liked', label: 'お気に入り' },
+  { key: 'tags', label: 'タグ' },
   { key: 'playlists', label: 'プレイリスト' },
   { key: 'albums', label: 'アルバム' },
   { key: 'artists', label: 'アーティスト' },
@@ -45,6 +48,10 @@ export default function Library() {
   const [importing, setImporting] = useState(false);
   const [waiting, setWaiting] = useState(0);
   const [offlineBytes, setOfflineBytes] = useState(0);
+  const [tagList, setTagList] = useState<repo.TagRow[]>([]);
+  const [selectedTags, setSelectedTags] = useState<number[]>([]);
+  const [tagMode, setTagMode] = useState<'any' | 'all'>('any');
+  const [smartList, setSmartList] = useState<repo.SmartPlaylistRow[]>([]);
   const jobs = useOffline((st) => st.jobs);
   const names = useOffline((st) => st.names);
   const offlineVersion = useOffline((st) => st.version);
@@ -62,14 +69,23 @@ export default function Library() {
     }
     if (tab === 'liked') setSongs(await repo.likedSongs(db));
     if (tab === 'history') setSongs(await repo.history(db));
-    if (tab === 'playlists') setPlaylists(await repo.playlists(db));
+    if (tab === 'tags') {
+      const all = await repo.tags(db);
+      setTagList(all);
+      setSongs(await repo.songsByTags(db, selectedTags.filter((id) => all.some((t) => t.id === id)), tagMode));
+    }
+    if (tab === 'playlists') {
+      setPlaylists(await repo.playlists(db));
+      setSmartList(await repo.smartPlaylists(db));
+      setTagList(await repo.tags(db));
+    }
     if (tab === 'albums') setAlbums(await repo.bookmarkedAlbums(db));
     if (tab === 'artists') setArtists(await repo.bookmarkedArtists(db));
     if (tab === 'stats') {
       setTop(await repo.topSongs(db, range));
       setTotal(await repo.totalListeningMs(db, range));
     }
-  }, [tab, range]);
+  }, [tab, range, selectedTags, tagMode]);
   useFocusEffect(useCallback(() => { void load(); }, [load]));
   // a download finished / a copy was removed
   useEffect(() => {
@@ -102,6 +118,25 @@ export default function Library() {
     }
   };
 
+  const manageTag = (t: repo.TagRow) =>
+    showActionSheet({ title: t.name, message: `${t.songCount}曲`, options: ['名前を変更', '削除', 'キャンセル'], destructiveButtonIndex: 1, cancelButtonIndex: 2 }, (i) => {
+      if (i === 0) {
+        promptText('タグの名前を変更', undefined, t.name, async (v) => {
+          try {
+            await repo.renameTag(await openDb(), t.id, v);
+            void load();
+          } catch (e) {
+            Alert.alert('変更できません', e instanceof Error ? e.message : String(e));
+          }
+        });
+      } else if (i === 1) {
+        Alert.alert(`「${t.name}」を削除しますか？`, 'このタグが付いた曲から、タグが外れます。曲は消えません。', [
+          { text: '削除', style: 'destructive', onPress: async () => { await repo.deleteTag(await openDb(), t.id); setSelectedTags((cur) => cur.filter((x) => x !== t.id)); void load(); } },
+          { text: 'キャンセル', style: 'cancel' },
+        ]);
+      }
+    });
+
   const pickFolder = async () => {
     try {
       if (await chooseAndroidFolder()) await load();
@@ -123,12 +158,12 @@ export default function Library() {
         ))}
       </ScrollView>
 
-      {(tab === 'songs' || tab === 'local' || tab === 'offline' || tab === 'liked' || tab === 'history') && (
+      {(tab === 'songs' || tab === 'local' || tab === 'offline' || tab === 'liked' || tab === 'tags' || tab === 'history') && (
         <FlatList
           data={songs}
           keyExtractor={(x) => x.id}
           contentContainerStyle={pad}
-          ListHeaderComponent={tab === 'local' || tab === 'offline' || songs.length ? (
+          ListHeaderComponent={tab === 'local' || tab === 'offline' || tab === 'tags' || songs.length ? (
             <View>
               {tab === 'local' && (
                 <View style={{ paddingHorizontal: 16, marginBottom: 6, gap: 6 }}>
@@ -145,6 +180,41 @@ export default function Library() {
                     {isAndroid && <View style={{ width: 8 }} />}
                     {isAndroid && <Button label={savedAndroidFolder() ? 'フォルダを変える' : 'フォルダを選ぶ'} icon="folder-open-outline" secondary onPress={() => void pickFolder()} />}
                   </View>
+                </View>
+              )}
+              {tab === 'tags' && (
+                <View style={{ paddingHorizontal: 16, marginBottom: 8, gap: 8 }}>
+                  <Text style={s.sub}>タグを選ぶと、その曲が並びます。複数選ぶと、組み合わせられます。曲の「…」→「タグを編集」で、タグを付けられます。長押しで、名前の変更と削除ができます。</Text>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                    {tagList.map((t) => {
+                      const on = selectedTags.includes(t.id);
+                      return (
+                        <Pressable
+                          key={t.id}
+                          onPress={() => setSelectedTags((cur) => (cur.includes(t.id) ? cur.filter((x) => x !== t.id) : [...cur, t.id]))}
+                          onLongPress={() => manageTag(t)}
+                          style={{ paddingHorizontal: 14, paddingVertical: 8, minHeight: 36, justifyContent: 'center', borderRadius: 18, backgroundColor: on ? colors.accent : colors.surface2 }}
+                        >
+                          <Text style={{ color: on ? colors.onAccent : colors.text, fontWeight: on ? '700' : '500', fontSize: 14, lineHeight: 20 }}>{t.name} · {t.songCount}</Text>
+                        </Pressable>
+                      );
+                    })}
+                    {!tagList.length && <Text style={s.sub}>まだタグがありません</Text>}
+                  </View>
+                  {selectedTags.length > 1 && (
+                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                      {([['any', 'どれかのタグ'], ['all', 'すべてのタグ']] as const).map(([m, label]) => (
+                        <Pressable key={m} onPress={() => setTagMode(m)} style={{ paddingHorizontal: 12, paddingVertical: 7, borderRadius: 16, backgroundColor: tagMode === m ? colors.accent : colors.surface2 }}>
+                          <Text style={{ color: tagMode === m ? colors.onAccent : colors.text, fontWeight: tagMode === m ? '700' : '500', fontSize: 13 }}>{label}</Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                  )}
+                  {!!selectedTags.length && (
+                    <View style={{ flexDirection: 'row' }}>
+                      <Button label="スマートプレイリストにする" secondary icon="sparkles-outline" onPress={() => router.push({ pathname: '/smart/[id]', params: { id: 'new', tags: selectedTags.join(','), mode: tagMode } })} />
+                    </View>
+                  )}
                 </View>
               )}
               {tab === 'offline' && (
@@ -193,7 +263,7 @@ export default function Library() {
               )}
             </View>
           ) : null}
-          ListEmptyComponent={empty(tab === 'offline' ? 'まだ保存した曲がありません。曲の「…」から「オフラインに保存」を選ぶと、ここに並びます' : tab === 'local' ? (isAndroid ? 'まだ曲がありません。「フォルダを選ぶ」で音楽のフォルダを選んで、「取り込む」を押してください' : 'まだ曲がありません。Music フォルダに音楽ファイルを入れて、「取り込む」を押してください') : tab === 'liked' ? 'お気に入りはまだありません。曲を長押しして追加できます' : tab === 'history' ? 'まだ再生した曲がありません' : '再生した曲、お気に入り、プレイリストの曲がここに並びます')}
+          ListEmptyComponent={empty(tab === 'tags' ? (selectedTags.length ? 'このタグの曲は、まだありません' : 'タグを選ぶと、その曲が並びます') : tab === 'offline' ? 'まだ保存した曲がありません。曲の「…」から「オフラインに保存」を選ぶと、ここに並びます' : tab === 'local' ? (isAndroid ? 'まだ曲がありません。「フォルダを選ぶ」で音楽のフォルダを選んで、「取り込む」を押してください' : 'まだ曲がありません。Music フォルダに音楽ファイルを入れて、「取り込む」を押してください') : tab === 'liked' ? 'お気に入りはまだありません。曲を長押しして追加できます' : tab === 'history' ? 'まだ再生した曲がありません' : '再生した曲、お気に入り、プレイリストの曲がここに並びます')}
           renderItem={({ item, index }) => <SongRow song={item} onChanged={load} onPress={() => void play(songs, index)} />}
         />
       )}
@@ -204,11 +274,27 @@ export default function Library() {
           keyExtractor={(x) => String(x.id)}
           contentContainerStyle={pad}
           ListHeaderComponent={
+            <View>
             <View style={{ flexDirection: 'row', gap: 8, paddingHorizontal: 16, marginBottom: 8 }}>
               <TextInput value={newName} onChangeText={setNewName} placeholder="新しいプレイリスト名" placeholderTextColor={colors.sub}
                 style={{ flex: 1, color: colors.text, backgroundColor: colors.surface2, borderRadius: 10, paddingHorizontal: 12, height: 40 }} />
               <Button label="作成" onPress={async () => { if (!newName.trim()) return; await repo.createPlaylist(await openDb(), newName.trim()); setNewName(''); void load(); }} />
               <Button label="取り込み" secondary onPress={() => router.push('/import-playlist')} />
+            </View>
+            <View style={{ paddingHorizontal: 16, marginBottom: 8, flexDirection: 'row' }}>
+              <Button label="スマートプレイリストを作る" secondary icon="sparkles-outline" onPress={() => router.push({ pathname: '/smart/[id]', params: { id: 'new' } })} />
+            </View>
+            {smartList.map((sp) => (
+              <Pressable key={`smart-${sp.id}`} style={s.row} onPress={() => router.push({ pathname: '/smart/[id]', params: { id: String(sp.id) } })}>
+                <View style={{ width: 48, height: 48, borderRadius: 6, backgroundColor: colors.surface2, alignItems: 'center', justifyContent: 'center' }}>
+                  <Ionicons name="sparkles" size={22} color={colors.accentText} />
+                </View>
+                <View style={s.rowText}>
+                  <Text style={s.title}>{sp.name}</Text>
+                  <Text style={s.sub} numberOfLines={1}>スマート • {describeRules(sp.rules, (tid) => tagList.find((t) => t.id === tid)?.name ?? '？')}</Text>
+                </View>
+              </Pressable>
+            ))}
             </View>
           }
           ListEmptyComponent={empty('プレイリストがありません')}

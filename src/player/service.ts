@@ -20,6 +20,8 @@ export async function playbackService() {
   });
   TrackPlayer.addEventListener(Event.PlaybackProgressUpdated, (e) => {
     p().tick();
+    p().checkLoop(e.position);
+    p().checkTransition(e.position, e.duration);
     noteProgress(e.position);
   });
   TrackPlayer.addEventListener(Event.PlaybackActiveTrackChanged, (e) => p().log(`event: activeTrack idx=${e.index ?? '-'}`));
