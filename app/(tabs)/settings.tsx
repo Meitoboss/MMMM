@@ -209,6 +209,7 @@ export default function Settings() {
         <Text style={{ color: colors.text, fontWeight: '800' }}>Music space</Text>
         <Text style={s.sub}>バージョン {VERSION}</Text>
         <Text style={[s.sub, { textAlign: 'center', marginTop: 6 }]}>
+          fast4x 氏の RiMusic をもとにした派生ソフトです（GPL-3.0）。
         </Text>
       </View>
     </ScrollView>
