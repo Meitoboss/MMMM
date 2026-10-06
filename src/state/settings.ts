@@ -3,7 +3,7 @@ import { Platform } from 'react-native';
 import { type NormalizeMode } from '../core/loudness';
 import { create } from 'zustand';
 
-import { DEFAULT_INVIDIOUS_INSTANCES, DEFAULT_PIPED_INSTANCES, IOS, WEB_REMIX, configure } from '../core/config';
+import { type AudioQuality, DEFAULT_INVIDIOUS_INSTANCES, DEFAULT_PIPED_INSTANCES, IOS, WEB_REMIX, configure } from '../core/config';
 import { configureRemotePot } from '../core/pot/remote';
 import type { ResolverOptions, StreamBackend } from '../core/streams/resolver';
 
@@ -23,6 +23,13 @@ export interface Settings {
   /** a bgutil token server, e.g. https://1-2-3-4.sslip.io – mints PO tokens instead of this phone's WebView */
   potServerUrl: string;
   potServerKey: string;
+  /** which audio stream to play: standard (AAC ≈128 kbps) / saver (the smallest) / high (Android: the highest bitrate) */
+  audioQuality: AudioQuality;
+  /** Apple Music chart: storefront (jp, us, kr …) and how many songs (10 / 25 / 50 / 100) */
+  trendingCountry: string;
+  trendingLimit: number;
+  /** where the "a new version is out" information lives (version.json); empty = never look */
+  updateFeedUrl: string;
   /** seconds of fade out / fade in between songs (0 = off) */
   fadeSeconds: number;
   /** even out the volume between songs */
@@ -49,6 +56,10 @@ export const DEFAULT_SETTINGS: Settings = {
   streamServerKey: '',
   potServerUrl: '',
   potServerKey: '',
+  audioQuality: 'standard',
+  trendingCountry: 'jp',
+  trendingLimit: 25,
+  updateFeedUrl: '',
   fadeSeconds: 0,
   volumeNormalize: 'standard',
   resumeOnLaunch: true,
@@ -78,6 +89,7 @@ export function applySettings(s: Settings) {
   configureRemotePot({ url: s.potServerUrl, key: s.potServerKey });
   configure({
     platform: Platform.OS === 'android' ? 'android' : 'ios',
+    quality: s.audioQuality === 'saver' || s.audioQuality === 'high' ? s.audioQuality : 'standard',
     hl: s.hl,
     gl: s.gl,
     web: { ...WEB_REMIX, clientVersion: s.webClientVersion },

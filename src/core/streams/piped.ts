@@ -1,6 +1,7 @@
-import { DEFAULT_PIPED_INSTANCES } from '../config';
+import { DEFAULT_PIPED_INSTANCES, getConfig } from '../config';
 import type { AudioSource } from '../types';
-import { expiryFromUrl, fetchJson, firstSuccess, isPlayableMime } from './util';
+import { chooseByQuality } from './quality';
+import { expiryFromUrl, fetchJson, firstSuccess } from './util';
 
 /** Port of extensions/piped/.../Piped.kt (`Piped.media.audioStreams` + `PipedResponse`). */
 export interface PipedAudioStream {
@@ -33,8 +34,9 @@ export async function audioStreams(apiBase: string, videoId: string, timeoutMs =
 
 export function pickAudio(streams: PipedAudioStream[], iosOnly = true): AudioSource | null {
   const audio = streams.filter((s) => !s.videoOnly && (!s.mimeType || s.mimeType.startsWith('audio/')));
-  const candidates = iosOnly ? audio.filter((s) => isPlayableMime(s.mimeType)) : audio;
-  const best = [...candidates].sort((a, b) => b.bitrate - a.bitrate)[0];
+  const { quality, platform } = getConfig();
+  // iosOnly = "only what this phone can play"; without it any audio counts
+  const best = chooseByQuality(audio, quality, iosOnly ? platform : 'android');
   if (!best) return null;
   return {
     url: best.url,

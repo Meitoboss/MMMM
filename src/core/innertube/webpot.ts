@@ -1,3 +1,4 @@
+import { chooseByQuality } from '../streams/quality';
 import { configure, getConfig } from '../config';
 import { poTokenProvider } from '../pot/potoken';
 import { getRemotePoTokens, isRemotePotConfigured } from '../pot/remote';
@@ -49,11 +50,8 @@ interface WebFormat {
  * AVPlayer (iOS) cannot play WebM/Opus; Android's player can – so there it is the fallback when no AAC is offered.
  */
 export function pickAudioFormat(formats: WebFormat[]): WebFormat | undefined {
-  const m4a = pickM4aFormat(formats);
-  if (m4a || getConfig().platform !== 'android') return m4a;
-  return formats
-    .filter((f) => f.mimeType?.startsWith('audio/'))
-    .sort((a, b) => b.bitrate - a.bitrate)[0];
+  const { quality, platform } = getConfig();
+  return chooseByQuality(formats.filter((f) => f.mimeType?.startsWith('audio/')), quality, platform);
 }
 
 /** AVPlayer can play AAC in MP4 (itag 140 / 141) but not WebM/Opus. */

@@ -17,10 +17,15 @@ export function isIosPlayable(mime?: string): boolean {
   return !!mime && /audio\/(mp4|m4a|mpeg|aac)/i.test(mime);
 }
 
-/** Can THIS platform's player play it? Android (ExoPlayer) also takes WebM/Opus and friends. */
-export function isPlayableMime(mime?: string): boolean {
+/** Can a player of this platform play it? Android (ExoPlayer) also takes WebM/Opus and friends. */
+export function playableOn(platform: 'ios' | 'android', mime?: string): boolean {
   if (!mime) return false;
-  return getConfig().platform === 'android' ? mime.startsWith('audio/') : isIosPlayable(mime);
+  return platform === 'android' ? mime.startsWith('audio/') : isIosPlayable(mime);
+}
+
+/** Can THIS platform's player play it? */
+export function isPlayableMime(mime?: string): boolean {
+  return playableOn(getConfig().platform, mime);
 }
 
 export function expiryFromUrl(url: string): number | undefined {

@@ -139,13 +139,20 @@ export function ItemRow({ item, context }: { item: MusicItem; context?: SongItem
 
 const KIND_LABEL: Record<MusicItem['kind'], string> = { song: '曲', video: 'ビデオ', album: 'アルバム', artist: 'アーティスト', playlist: 'プレイリスト' };
 
-export function SectionCarousel({ section }: { section: Section }) {
+export function SectionCarousel({ section, onMore }: { section: Section; onMore?: () => void }) {
   const router = useRouter();
   useScheme();
   const songs = section.items.filter((i): i is SongItem => i.kind === 'song');
   return (
     <View style={{ marginBottom: 20 }}>
-      <Text style={s.h2}>{section.title}</Text>
+      <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', paddingRight: 16 }}>
+        <Text style={s.h2}>{section.title}</Text>
+        {onMore && (
+          <Pressable hitSlop={8} onPress={onMore}>
+            <Text style={{ color: colors.accentText, fontWeight: '700' }}>すべて見る ›</Text>
+          </Pressable>
+        )}
+      </View>
       <FlatList
         horizontal
         showsHorizontalScrollIndicator={false}

@@ -4,7 +4,9 @@ import type { AudioSource } from '../types';
 import * as invidious from './invidious';
 import * as piped from './piped';
 import * as server from './server';
-import { expiryFromUrl, isPlayableMime } from './util';
+import { getConfig } from '../config';
+import { expiryFromUrl } from './util';
+import { chooseByQuality } from './quality';
 
 export type StreamBackend = 'server' | 'webpot' | 'innertube' | 'piped' | 'invidious';
 
@@ -23,9 +25,12 @@ const cache = new Map<string, AudioSource>();
 async function viaInnerTube(videoId: string): Promise<AudioSource> {
   const r = await player(videoId, 'ios');
   if (r.status && r.status !== 'OK') throw new Error(`InnerTube: ${r.status} ${r.reason ?? ''}`.trim());
-  const best = r.formats
-    .filter((f) => f.url && isPlayableMime(f.mimeType.split(';')[0]) && f.mimeType.startsWith('audio/'))
-    .sort((a, b) => b.bitrate - a.bitrate)[0];
+  const { quality, platform } = getConfig();
+  const best = chooseByQuality(
+    r.formats.filter((f) => f.url && f.mimeType.startsWith('audio/')).map((f) => ({ ...f, mimeType: f.mimeType.split(';')[0] })),
+    quality,
+    platform,
+  );
   if (!best?.url) throw new Error('InnerTube: no directly playable audio format (ciphered or PO-token protected)');
   return {
     url: best.url,
