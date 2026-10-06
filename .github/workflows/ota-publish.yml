@@ -1,0 +1,47 @@
+name: Publish an over-the-air update
+
+# Sends the new JavaScript (screens, features) to the update server. The apps take it the next time they start –
+# no IPA / APK to install. Changes to NATIVE parts (new native packages, permissions, ...) still need a new build;
+# an app whose native part differs simply gets nothing (the server matches on the native fingerprint).
+#
+# Needs two secrets (Settings → Secrets and variables → Actions): OTA_ADMIN_TOKEN and OTA_PRIVATE_KEY. See ota/README.md.
+
+on:
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: 'trial = 試験用のアプリ / main = 本番のアプリ'
+        type: choice
+        options: [trial, main]
+        default: trial
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: npm install
+      - name: Check that every imported file exists
+        run: npx tsx --test tests/lint.test.ts
+      - name: Bundle the YouTube challenge solver (yt-dlp-ejs)
+        run: npm run fetch-solver
+      # exactly what the build does, so that the update is made from the same packages
+      - name: Align native module versions with the installed Expo SDK
+        run: npx expo install --fix
+      - name: Set up the app for updates (${{ inputs.channel == 'main' && 'prod' || 'trial' }})
+        run: node scripts/apply-ota.mjs --variant ${{ inputs.channel == 'main' && 'prod' || 'trial' }}
+
+      - name: Export the JavaScript for both platforms
+        run: npx expo export --platform all --output-dir dist
+
+      - name: The app's public settings (they travel with the update)
+        run: npx expo config --json --type public > expo-config.json
+
+      - name: Sign and publish
+        env:
+          OTA_ADMIN_TOKEN: ${{ secrets.OTA_ADMIN_TOKEN }}
+          OTA_PRIVATE_KEY: ${{ secrets.OTA_PRIVATE_KEY }}
+        run: node ota/publish.mjs update --dist dist --channel ${{ inputs.channel }} --expo-config expo-config.json

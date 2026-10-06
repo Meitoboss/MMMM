@@ -1,0 +1,38 @@
+name: Roll back an over-the-air update
+
+# Tells the apps to go back to the version that is INSIDE the installed app (the IPA / APK), instead of the update
+# they downloaded. For when an update turns out to be broken. Fix it, then publish a new update.
+
+on:
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: 'trial = 試験用のアプリ / main = 本番のアプリ'
+        type: choice
+        options: [trial, main]
+        default: trial
+
+jobs:
+  rollback:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: npm install
+      - name: Check that every imported file exists
+        run: npx tsx --test tests/lint.test.ts
+      - name: Bundle the YouTube challenge solver (yt-dlp-ejs)
+        run: npm run fetch-solver
+      # exactly what the build does, so that the update is made from the same packages
+      - name: Align native module versions with the installed Expo SDK
+        run: npx expo install --fix
+      - name: Set up the app for updates (${{ inputs.channel == 'main' && 'prod' || 'trial' }})
+        run: node scripts/apply-ota.mjs --variant ${{ inputs.channel == 'main' && 'prod' || 'trial' }}
+
+      - name: Sign and send the instruction
+        env:
+          OTA_ADMIN_TOKEN: ${{ secrets.OTA_ADMIN_TOKEN }}
+          OTA_PRIVATE_KEY: ${{ secrets.OTA_PRIVATE_KEY }}
+        run: node ota/publish.mjs rollback --channel ${{ inputs.channel }}
