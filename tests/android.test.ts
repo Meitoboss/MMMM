@@ -56,14 +56,17 @@ describe('Android: which audio the player can take', () => {
     assert.equal(isIosPlayable('audio/webm'), false, 'the iOS check itself does not change');
   });
 
-  it('Piped: Android takes the best stream whatever its container; iOS only AAC', () => {
+  it('Piped: AAC is the standard everywhere; Android takes the higher-bitrate Opus only on "高音質"', () => {
     const streams = [
       { itag: 251, url: 'opus', bitrate: 160000, mimeType: 'audio/webm' },
       { itag: 140, url: 'aac', bitrate: 128000, mimeType: 'audio/mp4' },
     ];
     assert.equal(pickAudio(streams)?.itag, 140);
     configure({ platform: 'android' });
+    assert.equal(pickAudio(streams)?.itag, 140, 'standard = AAC, as for the YouTube formats');
+    configure({ quality: 'high' });
     assert.equal(pickAudio(streams)?.itag, 251);
+    configure({ quality: 'standard' });
   });
 
   it('YouTube formats: AAC is always preferred; Android falls back to WebM only when there is no AAC', () => {

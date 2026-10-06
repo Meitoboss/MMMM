@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import Slider from '@react-native-community/slider';
 import { useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { Alert, FlatList, Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
+import { Alert, Animated, FlatList, Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useProgress } from 'react-native-track-player';
 
@@ -20,7 +20,9 @@ import { usePlayer } from '../src/state/player';
 import { useSettings } from '../src/state/settings';
 import { Cover, SongRow } from '../src/ui/components';
 import { useAddToPlaylist } from '../src/ui/actions';
+import { Aurora } from '../src/ui/Aurora';
 import { promptText, showActionSheet } from '../src/ui/dialogs';
+import { useSwipeDown } from '../src/ui/useSwipeDown';
 import { requestOfflineSave } from '../src/ui/offlineActions';
 import { useOffline } from '../src/state/offline';
 import { colors, useScheme } from '../src/ui/theme';
@@ -38,6 +40,8 @@ export default function PlayerScreen() {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const p = usePlayer();
+  const swipe = useSwipeDown(() => router.back()); // swipe down on the top, the cover or the title to close
+  const showLog = showDebug || p.status === 'error'; // the playback log takes the aurora's place
   const { position, duration } = useProgress(500);
   const [view, setView] = useState<View_>('cover');
   const [seeking, setSeeking] = useState<number | null>(null);
@@ -98,7 +102,7 @@ export default function PlayerScreen() {
   }
 
   const shown = seeking ?? livePosition;
-  const cover = Math.min(width - 48, 360);
+  const cover = Math.min(width - 96, 300); // a little smaller than before: the aurora lives under it
 
   const reloadCues = async () => {
     if (song) setCues(await repo.hotCues(await openDb(), song.id));
@@ -195,8 +199,8 @@ export default function PlayerScreen() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.bg, paddingTop: 12, paddingBottom: insets.bottom + 12 }}>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20 }}>
+    <Animated.View testID="player-root" style={{ flex: 1, backgroundColor: colors.bg, paddingTop: 12, paddingBottom: insets.bottom + 12, transform: [{ translateY: swipe.translateY }] }}>
+      <View testID="player-header" {...swipe.panHandlers} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20 }}>
         <Pressable hitSlop={12} onPress={() => router.back()}><Ionicons name="chevron-down" size={28} color={colors.text} /></Pressable>
         <View style={{ flexDirection: 'row', gap: 16 }}>
           {(['cover', 'lyrics', 'queue', 'dj'] as const).map((v) => (
@@ -210,18 +214,24 @@ export default function PlayerScreen() {
 
       <View style={{ flex: 1, marginTop: 16 }}>
         {view === 'cover' && (
-          <View style={{ alignItems: 'center' }}>
-            <Cover uri={song.thumbnail} size={cover} />
-            {(showDebug || p.status === 'error') && (
-              <Text selectable style={{ color: colors.sub, fontSize: 10, marginTop: 8, paddingHorizontal: 20, alignSelf: 'stretch' }}>
-                {p.debug.join('\n')}
-              </Text>
-            )}
-            {p.status === 'error' && (
-              <ScrollView style={{ maxHeight: 140, marginTop: 12, paddingHorizontal: 16 }}>
-                <Text selectable style={{ color: colors.danger, textAlign: 'center', fontSize: 12 }}>{p.error}</Text>
-                <Text style={{ color: colors.sub, textAlign: 'center', fontSize: 12, marginTop: 6 }}>設定の「トークンサーバー」を確認すると直る場合があります。</Text>
+          <View testID="player-cover" {...swipe.panHandlers} style={{ flex: 1 }}>
+            <View style={{ alignItems: 'center' }}>
+              <Cover uri={song.thumbnail} size={cover} />
+            </View>
+            {showLog ? (
+              <ScrollView style={{ flex: 1, marginTop: 8 }} contentContainerStyle={{ paddingHorizontal: 20 }}>
+                <Text selectable style={{ color: colors.sub, fontSize: 10 }}>
+                  {p.debug.join('\n')}
+                </Text>
+                {p.status === 'error' && (
+                  <View style={{ marginTop: 12 }}>
+                    <Text selectable style={{ color: colors.danger, textAlign: 'center', fontSize: 12 }}>{p.error}</Text>
+                    <Text style={{ color: colors.sub, textAlign: 'center', fontSize: 12, marginTop: 6 }}>設定の「トークンサーバー」を確認すると直る場合があります。</Text>
+                  </View>
+                )}
               </ScrollView>
+            ) : (
+              <Aurora testID="aurora" playing={p.status === 'playing'} rate={p.rate} style={{ flex: 1, marginTop: 16, marginHorizontal: 24 }} />
             )}
           </View>
         )}
@@ -325,7 +335,7 @@ export default function PlayerScreen() {
       </View>
 
       <View style={{ paddingHorizontal: 24 }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        <View testID="player-title" {...swipe.panHandlers} style={{ flexDirection: 'row', alignItems: 'center' }}>
           <View style={{ flex: 1 }}>
             <Text style={{ color: colors.text, fontSize: 20, fontWeight: '700' }} numberOfLines={1}>{song.title}</Text>
             <Text style={{ color: colors.sub, fontSize: 15 }} numberOfLines={1}>{song.artists.map((a) => a.name).join(', ')}</Text>
@@ -361,7 +371,7 @@ export default function PlayerScreen() {
           </Pressable>
         )}
 
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12 }}>
+        <View testID="player-controls" style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12 }}>
           <Pressable onPress={p.toggleShuffle}><Ionicons name="shuffle" size={26} color={p.shuffle ? colors.accentText : colors.sub} /></Pressable>
           <Pressable onPress={() => void p.previous()}><Ionicons name="play-skip-back" size={34} color={colors.text} /></Pressable>
           <Pressable onPress={() => void p.togglePlay()} style={{ width: 68, height: 68, borderRadius: 34, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' }}>
@@ -374,6 +384,6 @@ export default function PlayerScreen() {
           </Pressable>
         </View>
       </View>
-    </View>
+    </Animated.View>
   );
 }

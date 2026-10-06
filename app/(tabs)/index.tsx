@@ -9,6 +9,8 @@ import type { Section, SongItem } from '../../src/core/types';
 import { openDb } from '../../src/db/expo';
 import * as repo from '../../src/db/repo';
 import { Button, ErrorView, Loading, SectionCarousel, s } from '../../src/ui/components';
+import { TrendingShelf } from '../../src/ui/TrendingShelf';
+import { UpdateBanner } from '../../src/ui/UpdateBanner';
 import { useAsync } from '../../src/ui/hooks';
 import { MINI_HEIGHT, colors, useScheme } from '../../src/ui/theme';
 
@@ -63,6 +65,8 @@ export default function Home() {
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accentText} />}
     >
       <BrandHeader />
+      <UpdateBanner />
+      <TrendingShelf />
       {sections.slice(0, at).map((x, i) => <SectionCarousel key={`${x.title}-${i}`} section={x} />)}
       {/* directly below "Today's hits" / "Trending" */}
       {recent.length ? (

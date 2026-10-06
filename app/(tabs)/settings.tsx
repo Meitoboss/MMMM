@@ -1,16 +1,20 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
-import { Alert, Pressable, ScrollView, Switch, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, Platform, Pressable, ScrollView, Switch, Text, TextInput, View } from 'react-native';
 
 import { clearStreamCache } from '../../src/core';
 import { runSelfTest, runTokenServerTest, StepResult } from '../../src/core/diagnostics';
 import type { StreamBackend } from '../../src/core/streams/resolver';
 import { runCurrentSongProbe, runFormatMatrix, runPlaybackProbe, runRealPathTest, runTokenExperiment } from '../../src/player/probe';
 import { usePlayer } from '../../src/state/player';
+import { useUpdate } from '../../src/state/update';
 import { DEFAULT_SETTINGS, useSettings } from '../../src/state/settings';
 import { s } from '../../src/ui/components';
+import { APP_VERSION } from '../../src/appVersion';
 import { FADE_OPTIONS } from '../../src/core/dj';
+import { type AudioQuality } from '../../src/core/config';
 import { type NormalizeMode } from '../../src/core/loudness';
+import { QUALITY_LABELS, qualitiesFor } from '../../src/core/streams/quality';
 import { MINI_HEIGHT, colors, useScheme } from '../../src/ui/theme';
 import { Chips, Row, Section } from '../../src/ui/SettingsParts';
 import { ThemeEditor } from '../../src/ui/ThemeEditor';
@@ -20,6 +24,9 @@ const ORDERS: { label: string; value: StreamBackend[] }[] = [
   { label: 'Piped → Invidious → YouTube（トークン）', value: ['piped', 'invidious', 'webpot'] },
   { label: 'YouTube（トークン）のみ', value: ['webpot'] },
 ];
+
+/** what is offered depends on the phone: "高音質" only exists on Android */
+const QUALITY_CHOICES: { label: string; value: AudioQuality }[] = qualitiesFor(Platform.OS === 'android' ? 'android' : 'ios').map((q) => ({ label: QUALITY_LABELS[q], value: q }));
 
 const VOLUME_OPTIONS: { label: string; value: NormalizeMode }[] = [
   { label: 'オフ', value: 'off' },
@@ -86,7 +93,6 @@ function Results({ steps }: { steps: StepResult[] }) {
   );
 }
 
-const VERSION = '1.0.0';
 
 export default function Settings() {
   useScheme();
@@ -117,6 +123,17 @@ export default function Settings() {
     }
   };
 
+  const upd = useUpdate();
+  const updateStatus = !st.updateFeedUrl.trim()
+    ? '上のURLを入れると、アプリを開くたびに、新しい版があるか確認します'
+    : upd.result?.kind === 'newer'
+      ? `新しい版 ${upd.result.feed.version} があります（今は ${APP_VERSION}）`
+      : upd.result?.kind === 'current'
+        ? `最新です（${APP_VERSION}）`
+        : upd.result?.kind === 'error'
+          ? upd.result.message
+          : `いまの版は ${APP_VERSION} です`;
+
   return (
     <ScrollView contentContainerStyle={{ paddingTop: 4, paddingBottom: MINI_HEIGHT + 40 }}>
       <View style={{ flexDirection: 'row', marginHorizontal: 16, marginTop: 8, padding: 4, borderRadius: 14, backgroundColor: colors.surface2 }}>
@@ -137,6 +154,19 @@ export default function Settings() {
         </Row>
         <Row title="音量の自動調整" sub="曲ごとの音量の差を小さくします（大きい曲の音を下げます）。次の曲から反映されます" last />
         <Chips options={VOLUME_OPTIONS} value={st.volumeNormalize} onChange={(v) => st.update({ volumeNormalize: v })} />
+        <Row
+          title="音質"
+          sub={`標準: 約128kbps（1時間で約58MB）\n節約: 約48kbps（約22MB）。曲によっては用意がなく、標準になります${Platform.OS === 'android' ? '\n高音質: 約130〜160kbps（約70MB）' : ''}\n切り替えは、次に再生する曲から。保存した曲は、保存したときの音質のままです`}
+          last
+        />
+        <Chips
+          options={QUALITY_CHOICES}
+          value={st.audioQuality}
+          onChange={(v) => {
+            st.update({ audioQuality: v });
+            clearStreamCache(); // already resolved songs would keep the old stream
+          }}
+        />
         <Row title="フェードつなぎ" sub="曲の終わりをフェードアウトして、次の曲をフェードインでつなぎます。曲は重ならないので、わずかな間ができます。自動で次の曲へ進むときだけ働きます" last />
         <Chips options={FADE_CHOICES} value={st.fadeSeconds} onChange={(v) => st.update({ fadeSeconds: v })} />
         <Row title="前回の続きから再生" sub="アプリを閉じても、キューと再生位置を覚えています。起動しても、自動では再生しません">
@@ -158,6 +188,15 @@ export default function Settings() {
         <Field label="キー" value={st.potServerKey} secure onSave={(v) => { clearStreamCache(); st.update({ potServerKey: v }); }} />
         <Action title="接続テスト" sub="届くか、キーが合っているか、トークンを作れるかを確認します" disabled={running} onPress={() => void runTests(setTokenSteps, runTokenServerTest)} right="テスト" />
         <Results steps={tokenSteps} />
+      </Section>
+
+      <Section title="アプリの更新">
+        <Field label="更新情報のURL（version.json）" value={st.updateFeedUrl} onSave={(v) => st.update({ updateFeedUrl: v })} />
+        <Pressable onPress={() => void upd.check(true)}>
+          <Row title="新しい版を確認" sub={updateStatus} last>
+            {upd.checking ? <ActivityIndicator color={colors.accentText} /> : <Text style={{ color: colors.accentText, fontWeight: '700' }}>確認</Text>}
+          </Row>
+        </Pressable>
       </Section>
 
       <Section title="詳細設定">
@@ -207,7 +246,7 @@ export default function Settings() {
 
       <View style={{ alignItems: 'center', paddingHorizontal: 24, paddingTop: 28, gap: 4 }}>
         <Text style={{ color: colors.text, fontWeight: '800' }}>Music space</Text>
-        <Text style={s.sub}>バージョン {VERSION}</Text>
+        <Text style={s.sub}>バージョン {APP_VERSION}</Text>
         <Text style={[s.sub, { textAlign: 'center', marginTop: 6 }]}>
           fast4x 氏の RiMusic をもとにした派生ソフトです（GPL-3.0）。
         </Text>

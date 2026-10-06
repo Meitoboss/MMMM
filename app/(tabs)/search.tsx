@@ -163,6 +163,9 @@ export default function Search() {
     }
   }
 
+  // The keyboard closes when anything other than the text box / the suggestions is touched, or a list is dragged.
+  // (On release, never on touch-down: closing it earlier would move the list under the finger and the tap would be lost.)
+  const dismiss = () => Keyboard.dismiss();
   const online = mode === 'online';
   const q = text.trim();
   const songs = items.filter((i): i is SongItem => i.kind === 'song');
@@ -203,7 +206,7 @@ export default function Search() {
         keyExtractor={(it, i) => `${it.id}-${i}`}
         renderItem={({ item }) => <ItemRow item={item} context={offItems} />}
         contentContainerStyle={{ paddingBottom: MINI_HEIGHT + 24 }}
-        keyboardShouldPersistTaps="handled"
+        keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" onTouchEnd={dismiss}
         ListHeaderComponent={<Text style={[st.count]}>{offItems.length}曲</Text>}
         ListEmptyComponent={
           <Text style={{ color: colors.sub, textAlign: 'center', marginTop: 40, paddingHorizontal: 24 }}>
@@ -214,7 +217,7 @@ export default function Search() {
     );
   } else if (!q) {
     body = (
-      <ScrollView keyboardShouldPersistTaps="handled">
+      <ScrollView keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" onTouchEnd={dismiss}>
         {history.length > 0 && <Text style={st.count}>最近の検索（最大{repo.SEARCH_HISTORY_LIMIT}件）</Text>}
         {history.map((h) => (
           <Pressable key={h} onPress={() => pick(h)} style={st.hint}>
@@ -237,7 +240,9 @@ export default function Search() {
     body = (
       <View style={{ flex: 1 }}>
         {suggestionRow}
-        <ErrorView message={error} onRetry={() => void live.current?.now(text, filter, true)} />
+        <View style={{ flex: 1 }} onTouchEnd={dismiss}>
+          <ErrorView message={error} onRetry={() => void live.current?.now(text, filter, true)} />
+        </View>
       </View>
     );
   } else if (filter === undefined) {
@@ -268,7 +273,7 @@ export default function Search() {
           ListHeaderComponent={progress}
           ListFooterComponent={loading && !items.length ? <ActivityIndicator color={colors.accentText} style={{ margin: 16 }} /> : null}
           ListEmptyComponent={noResults ? <Text style={{ color: colors.sub, textAlign: 'center', marginTop: 40 }}>見つかりませんでした</Text> : null}
-          keyboardShouldPersistTaps="handled"
+          keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" onTouchEnd={dismiss}
         />
       </View>
     );
@@ -286,7 +291,7 @@ export default function Search() {
           ListHeaderComponent={progress}
           ListFooterComponent={loading && !items.length ? <ActivityIndicator color={colors.accentText} style={{ margin: 16 }} /> : null}
           ListEmptyComponent={noResults ? <Text style={{ color: colors.sub, textAlign: 'center', marginTop: 40 }}>見つかりませんでした</Text> : null}
-          keyboardShouldPersistTaps="handled"
+          keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" onTouchEnd={dismiss}
         />
       </View>
     );
@@ -314,7 +319,7 @@ export default function Search() {
         )}
       </View>
 
-      <View style={st.switch}>
+      <View style={st.switch} onTouchEnd={dismiss}>
         {([['online', 'オンライン', 'cloud-outline'], ['offline', 'オフライン', 'download-outline']] as const).map(([m, label, icon]) => (
           <Pressable key={m} onPress={() => setMode(m)} style={[st.switchSeg, mode === m && { backgroundColor: colors.accent }]}>
             <Ionicons name={icon} size={16} color={mode === m ? colors.onAccent : colors.sub} />
@@ -323,7 +328,7 @@ export default function Search() {
         ))}
       </View>
 
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="always" style={{ flexGrow: 0, flexShrink: 0 }} contentContainerStyle={{ paddingHorizontal: 12, gap: 8, paddingBottom: 10, alignItems: 'center' }}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="always" onTouchEnd={dismiss} style={{ flexGrow: 0, flexShrink: 0 }} contentContainerStyle={{ paddingHorizontal: 12, gap: 8, paddingBottom: 10, alignItems: 'center' }}>
         {online
           ? FILTERS.map((f) => (
               <Pressable

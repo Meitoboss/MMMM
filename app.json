@@ -3,7 +3,7 @@
     "name": "Music space",
     "slug": "music-space",
     "scheme": "musicspace",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -27,7 +27,8 @@
         "NSLocalNetworkUsageDescription": "あなたの自宅サーバー（ローカルネットワーク上）に接続するために使います。",
         "UIFileSharingEnabled": true,
         "LSSupportsOpeningDocumentsInPlace": true
-      }
+      },
+      "buildNumber": "2"
     },
     "plugins": [
       "expo-router",
@@ -49,7 +50,7 @@
     },
     "android": {
       "package": "app.musicspace.player",
-      "versionCode": 1,
+      "versionCode": 2,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-foreground.png",
         "monochromeImage": "./assets/adaptive-monochrome.png",
