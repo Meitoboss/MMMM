@@ -62,6 +62,9 @@
         "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",
         "android.permission.WAKE_LOCK"
       ]
+    },
+    "updates": {
+      "enabled": false
     }
   }
 }

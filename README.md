@@ -103,3 +103,7 @@ Locally: `npx expo prebuild --platform android && cd android && ./gradlew assemb
 3. AltStore とアプリには、`--base` のアドレス配下の `altstore.json` と `version.json` を入れます。
 
 注意: 無料の Apple ID で署名した iPhone のアプリは、**7 日ごとの再署名**が必要です（AltStore の自動更新が行います）。アプリの中身だけを、入れ直さずに差し替える方式（OTA）は、まだ入れていません。
+
+## アプリの中身だけを更新する（OTA）
+
+画面や機能の変更を、IPA / APK を入れ直さずに配信できます（自分のサーバーを使います）。手順は [`ota/README.md`](ota/README.md) を見てください。最初は「試験用アプリ」（Music space β）だけで有効にし、確認できてから本番に広げます（`ota/config.json` の `enabledFor`）。
