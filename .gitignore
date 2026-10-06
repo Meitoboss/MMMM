@@ -7,3 +7,8 @@ build/
 *.ipa
 *.log
 .DS_Store
+
+# signing keys for over-the-air updates: never commit these
+private-key*.pem
+*.key
+ota/keys/
