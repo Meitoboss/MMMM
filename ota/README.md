@@ -16,6 +16,8 @@ GitHub Actions ──作って署名──▶ あなたのサーバー（OCI）�
 
 ## 手順
 
+ビルド（IPA / APK）は、**手で実行したとき（Actions → Run workflow）と、リリースのタグ（`v1.0.2` など）を付けたときだけ**始まります。ファイルを書き換えるたびには、始まりません。
+
 ### 1. サーバーに入れる（OCI に SSH でつないで）
 
 1. この `ota` フォルダの中の **`server.mjs`、`lib.mjs`、`deploy/` の 3 つのファイル**（`musicspace-ota.container`、`setup.sh`、`make-keys.sh`）を、サーバーの 1 つのフォルダにまとめて置きます（別途お渡しする `musicspace-ota-server.zip` を、そのまま展開すれば揃います）。

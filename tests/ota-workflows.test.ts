@@ -30,6 +30,21 @@ describe('the build workflows set the app up for updates before the native proje
   });
 });
 
+describe('nothing is built just because a file was changed', () => {
+  for (const f of ['ios-ipa', 'android-apk', 'ota-publish', 'ota-rollback']) {
+    it(`${f}: no start on a push to a branch`, () => {
+      const t = read(`.github/workflows/${f}.yml`);
+      const on = t.slice(at(t, '\non:'), at(t, '\njobs:'));
+      assert.ok(!/branches/.test(on), 'no branch is listed, so no branch push starts it');
+      assert.ok(on.includes('workflow_dispatch:'), 'it can be started by hand');
+    });
+  }
+  it('the builds still start for a release tag (and the OTA workflows only by hand)', () => {
+    for (const f of ['ios-ipa', 'android-apk']) assert.match(read(`.github/workflows/${f}.yml`), /push:\n {4}tags: \['v\*'\]/);
+    for (const f of ['ota-publish', 'ota-rollback']) assert.ok(!read(`.github/workflows/${f}.yml`).includes('push:'));
+  });
+});
+
 describe('the publish and roll-back workflows', () => {
   const pub = read('.github/workflows/ota-publish.yml');
   const rb = read('.github/workflows/ota-rollback.yml');
