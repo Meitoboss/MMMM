@@ -17,6 +17,7 @@ import { type NormalizeMode } from '../../src/core/loudness';
 import { QUALITY_LABELS, qualitiesFor } from '../../src/core/streams/quality';
 import { MINI_HEIGHT, colors, useScheme } from '../../src/ui/theme';
 import { Chips, Row, Section } from '../../src/ui/SettingsParts';
+import { OtaSection } from '../../src/ui/OtaSection';
 import { ThemeEditor } from '../../src/ui/ThemeEditor';
 
 const ORDERS: { label: string; value: StreamBackend[] }[] = [
@@ -190,7 +191,9 @@ export default function Settings() {
         <Results steps={tokenSteps} />
       </Section>
 
-      <Section title="アプリの更新">
+      <OtaSection />
+
+      <Section title="新しい版のお知らせ（IPA・APK）">
         <Field label="更新情報のURL（version.json）" value={st.updateFeedUrl} onSave={(v) => st.update({ updateFeedUrl: v })} />
         <Pressable onPress={() => void upd.check(true)}>
           <Row title="新しい版を確認" sub={updateStatus} last>
