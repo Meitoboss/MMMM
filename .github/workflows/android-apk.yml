@@ -32,6 +32,11 @@ jobs:
       - name: Install JS dependencies
         run: npm install
 
+      # In a few seconds, and with the NAME of the missing file – instead of failing after a 5 minute build.
+      # (Catches a file that was not uploaded, a name imported twice, a typo in a path.)
+      - name: Check that every imported file exists
+        run: npx tsx --test tests/lint.test.ts
+
       - name: Bundle the YouTube challenge solver (yt-dlp-ejs)
         run: npm run fetch-solver
 
@@ -108,8 +113,14 @@ jobs:
           path: gradle.log
           if-no-files-found: ignore
 
+      - name: Make the release feed
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: npx tsx scripts/make-release-feed.ts --only version --notes "$(git log -1 --pretty=%s)"
+
       - name: Attach the APK to the GitHub release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: MusicSpace-android.apk
+          files: |
+            MusicSpace-android.apk
+            feed/version.json
