@@ -1,10 +1,17 @@
 name: Build iOS IPA (unsigned)
 
+# A build starts only when YOU start it (Actions → this workflow → Run workflow), or when a release tag (v1.0.2 …) is pushed.
+# Not on every change of a file: only the tags are listed under "push", so changes to branches start nothing.
 on:
   push:
-    branches: [main]
     tags: ['v*']
   workflow_dispatch:
+    inputs:
+      variant:
+        description: 'prod = 本番のアプリ / trial = 試験用のアプリ（別のアプリとして入ります。更新の配信を試すために使います）'
+        type: choice
+        options: [prod, trial]
+        default: prod
 
 jobs:
   test:
@@ -51,6 +58,11 @@ jobs:
       - name: Align native module versions with the installed Expo SDK
         run: npx expo install --fix
 
+      # Over-the-air updates. "prod" is the real app (updates stay off until enabled in ota/config.json);
+      # "trial" is a separate test app (own id and name) that takes updates from the "trial" channel.
+      - name: Set up over-the-air updates (${{ inputs.variant || 'prod' }})
+        run: node scripts/apply-ota.mjs --variant ${{ inputs.variant || 'prod' }}
+
       - name: Generate the native iOS project
         run: npx expo prebuild --platform ios --clean
 
@@ -90,7 +102,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: MusicSpace-unsigned-ipa
+          name: ${{ inputs.variant == 'trial' && 'MusicSpace-trial-unsigned-ipa' || 'MusicSpace-unsigned-ipa' }}
           path: MusicSpace-unsigned.ipa
 
       - uses: actions/upload-artifact@v4
