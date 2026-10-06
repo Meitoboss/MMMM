@@ -77,3 +77,29 @@ Note: `react-native-track-player` 4.x cannot be loaded by the New Architecture o
 
 Build the APK: push to `main` (or run the *Build Android APK* workflow) and download the `MusicSpace-android-apk` artifact.
 Locally: `npx expo prebuild --platform android && cd android && ./gradlew assembleRelease`.
+
+## 更新の配信（IPA / APK を入れ直すとき・新しい版のお知らせ）
+
+タグ（`v1.0.2` のような名前）を付けて公開すると、GitHub Actions が IPA と APK を作り、次の 4 つを **Release** に置きます。
+
+| ファイル | 役目 |
+|---|---|
+| `MusicSpace-unsigned.ipa` | iPhone 用（AltStore などで署名して入れます） |
+| `MusicSpace-android.apk` | Android 用 |
+| `altstore.json` | AltStore の「ソース」。AltStore が、新しい版を見つけて、更新を勧めます |
+| `version.json` | アプリが「新しい版があります」と知らせるための小さなファイル |
+
+**リポジトリが public のとき**（Release のファイルを、ログインなしで取れます）
+
+- iPhone: AltStore → Sources → ＋ に `https://github.com/<ユーザー名>/<リポジトリ名>/releases/latest/download/altstore.json` を入れます。以後、AltStore の画面に新しい版が出ます。
+- アプリ: 設定 → 一般 → アプリの更新 に `https://github.com/<ユーザー名>/<リポジトリ名>/releases/latest/download/version.json` を入れます。アプリを開くたびに確認し、新しい版があればホームに知らせます。
+- Android: [Obtainium](https://github.com/ImranR98/Obtainium) にリポジトリの URL を入れると、新しい APK を見つけて入れてくれます。
+
+**リポジトリが private のとき**は、Release のファイルをログインなしで取れません。自分のサーバー（OCI など）に置きます。
+
+1. Release から IPA・APK をダウンロードし、手元で次を実行します。
+   `npx tsx scripts/make-release-feed.ts --repo <ユーザー名>/<リポジトリ名> --tag v1.0.2 --ipa MusicSpace-unsigned.ipa --base https://あなたのサーバー/musicspace --out feed`
+2. `feed/altstore.json`、`feed/version.json`、IPA、APK をサーバーの同じ場所に置きます（`--base` のアドレスから取れるように）。
+3. AltStore とアプリには、`--base` のアドレス配下の `altstore.json` と `version.json` を入れます。
+
+注意: 無料の Apple ID で署名した iPhone のアプリは、**7 日ごとの再署名**が必要です（AltStore の自動更新が行います）。アプリの中身だけを、入れ直さずに差し替える方式（OTA）は、まだ入れていません。
