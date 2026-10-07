@@ -11,9 +11,11 @@ export type Rule =
   | { field: 'lastPlayed'; op: 'within' | 'notWithin'; days: number }
   | { field: 'artist'; value: string }
   | { field: 'title'; value: string }
-  | { field: 'source'; value: 'youtube' | 'local' | 'offline' };
+  | { field: 'source'; value: 'youtube' | 'local' | 'offline' }
+  /** songs whose tempo has been set and lies in this range */
+  | { field: 'bpm'; min: number; max: number };
 
-export type SmartSort = 'recent' | 'oldestPlayed' | 'mostPlayed' | 'leastPlayed' | 'title' | 'added' | 'random';
+export type SmartSort = 'recent' | 'oldestPlayed' | 'mostPlayed' | 'leastPlayed' | 'title' | 'added' | 'random' | 'bpm';
 
 export interface SmartRules {
   match: 'all' | 'any';
@@ -29,6 +31,7 @@ export const SMART_SORTS: { value: SmartSort; label: string }[] = [
   { value: 'leastPlayed', label: '再生回数が少ない順' },
   { value: 'title', label: '曲名順' },
   { value: 'added', label: '追加が新しい順' },
+  { value: 'bpm', label: 'BPM が小さい順' },
   { value: 'random', label: 'ランダム' },
 ];
 
@@ -81,6 +84,12 @@ export function sanitizeRules(raw: unknown): SmartRules {
       case 'source':
         if (q.value === 'youtube' || q.value === 'local' || q.value === 'offline') out.rules.push({ field: 'source', value: q.value });
         break;
+      case 'bpm': {
+        const a = int(q.min, 30, 300);
+        const b = int(q.max, 30, 300);
+        if (a !== null && b !== null) out.rules.push({ field: 'bpm', min: Math.min(a, b), max: Math.max(a, b) });
+        break;
+      }
     }
   }
   return out;
@@ -120,6 +129,9 @@ function condition(rule: Rule, now: number, params: SqlValue[]): string {
     case 'title':
       params.push(likeContains(rule.value));
       return "Song.title LIKE ? ESCAPE '\\'";
+    case 'bpm':
+      params.push(rule.min, rule.max);
+      return 'bp.bpm >= ? AND bp.bpm <= ?';
     case 'source':
       if (rule.value === 'local') return "Song.id LIKE 'local:%'";
       if (rule.value === 'youtube') return "Song.id NOT LIKE 'local:%'";
@@ -134,6 +146,7 @@ const ORDER: Record<SmartSort, string> = {
   leastPlayed: 'COALESCE(ev.plays, 0) ASC, Song.title COLLATE NOCASE',
   title: 'Song.title COLLATE NOCASE',
   added: 'Song.rowid DESC',
+  bpm: '(bp.bpm IS NULL), bp.bpm ASC, Song.title COLLATE NOCASE',
   random: 'RANDOM()',
 };
 
@@ -145,6 +158,7 @@ export function buildSmartQuery(rules: SmartRules, nowMs: number): { sql: string
   const sql =
     'SELECT Song.* FROM Song ' +
     'LEFT JOIN (SELECT songId, COUNT(*) AS plays, MAX(timestamp) AS lastAt FROM Event GROUP BY songId) AS ev ON ev.songId = Song.id ' +
+    'LEFT JOIN SongBpm AS bp ON bp.songId = Song.id ' +
     `${where} ORDER BY ${ORDER[rules.sort]} LIMIT ?`;
   return { sql, params };
 }
@@ -160,6 +174,7 @@ export function describeRules(r: SmartRules, tagName: (id: number) => string = (
       case 'artist': return `アーティスト「${q.value}」`;
       case 'title': return `曲名「${q.value}」`;
       case 'source': return { youtube: 'YouTube', local: '端末内', offline: 'オフライン保存' }[q.value];
+      case 'bpm': return `BPM ${q.min}〜${q.max}`;
     }
   });
   return parts.length ? parts.join(r.match === 'any' ? ' または ' : '・') : 'すべての曲';

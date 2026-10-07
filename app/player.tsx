@@ -21,6 +21,7 @@ import { useSettings } from '../src/state/settings';
 import { Cover, SongRow } from '../src/ui/components';
 import { useAddToPlaylist } from '../src/ui/actions';
 import { Aurora } from '../src/ui/Aurora';
+import { BpmPanel } from '../src/ui/BpmPanel';
 import { promptText, showActionSheet } from '../src/ui/dialogs';
 import { useSwipeDown } from '../src/ui/useSwipeDown';
 import { requestOfflineSave } from '../src/ui/offlineActions';
@@ -110,7 +111,7 @@ export default function PlayerScreen() {
   const cueFail = (e: unknown) => Alert.alert('キューを保存できません', e instanceof Error ? e.message : String(e));
   const setCue = async (slot: number) => {
     try {
-      await repo.setHotCue(await openDb(), song, slot, livePosition);
+      await repo.setHotCue(await openDb(), song, slot, await p.getPosition());
       await reloadCues();
     } catch (e) {
       cueFail(e);
@@ -143,11 +144,11 @@ export default function PlayerScreen() {
 
   const trimSorry = () => Alert.alert('設定できません', 'スタートは曲の始めの0.5秒より後、エンドは曲の終わりより前にして、2つの間は1秒以上あけてください。');
   const trimStart = async () => {
-    const kept = await p.markTrimStart(livePosition);
+    const kept = await p.markTrimStart(await p.getPosition());
     if (kept?.startSec === undefined) trimSorry();
   };
   const trimEnd = async () => {
-    const kept = await p.markTrimEnd(livePosition);
+    const kept = await p.markTrimEnd(await p.getPosition());
     if (kept?.endSec === undefined) trimSorry();
   };
 
@@ -231,7 +232,7 @@ export default function PlayerScreen() {
                 )}
               </ScrollView>
             ) : (
-              <Aurora testID="aurora" playing={p.status === 'playing'} rate={p.rate} style={{ flex: 1, marginTop: 16, marginHorizontal: 24 }} />
+              <Aurora testID="aurora" playing={p.status === 'playing'} rate={p.tempo ?? p.rate} style={{ flex: 1, marginTop: 16, marginHorizontal: 24 }} />
             )}
           </View>
         )}
@@ -258,10 +259,10 @@ export default function PlayerScreen() {
             <View style={{ gap: 8 }}>
               <Text style={{ color: colors.text, fontWeight: '800', fontSize: 15 }}>区間ループ</Text>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <Pressable onPress={() => p.markLoopA(livePosition)} style={{ paddingHorizontal: 18, paddingVertical: 8, borderRadius: 16, backgroundColor: p.loopA !== undefined || p.loop ? colors.accent : colors.surface2 }}>
+                <Pressable testID="loop-a" onPress={async () => p.markLoopA(await p.getPosition())} style={{ paddingHorizontal: 18, paddingVertical: 8, borderRadius: 16, backgroundColor: p.loopA !== undefined || p.loop ? colors.accent : colors.surface2 }}>
                   <Text style={{ color: p.loopA !== undefined || p.loop ? colors.onAccent : colors.text, fontWeight: '800' }}>A</Text>
                 </Pressable>
-                <Pressable disabled={p.loopA === undefined} onPress={() => p.markLoopB(livePosition)} style={{ paddingHorizontal: 18, paddingVertical: 8, borderRadius: 16, opacity: p.loopA === undefined ? 0.4 : 1, backgroundColor: p.loop ? colors.accent : colors.surface2 }}>
+                <Pressable testID="loop-b" disabled={p.loopA === undefined} onPress={async () => p.markLoopB(await p.getPosition())} style={{ paddingHorizontal: 18, paddingVertical: 8, borderRadius: 16, opacity: p.loopA === undefined ? 0.4 : 1, backgroundColor: p.loop ? colors.accent : colors.surface2 }}>
                   <Text style={{ color: p.loop ? colors.onAccent : colors.text, fontWeight: '800' }}>B</Text>
                 </Pressable>
                 <Text style={{ flex: 1, color: p.loop || p.loopA !== undefined ? colors.accentText : colors.sub, fontSize: 12 }} numberOfLines={2}>
@@ -274,6 +275,8 @@ export default function PlayerScreen() {
               <Text style={{ color: colors.sub, fontSize: 11 }}>歌詞の画面では、行を長押しすると、その行をループします。</Text>
             </View>
 
+            <BpmPanel song={song} />
+
             <View style={{ gap: 8 }}>
               <Text style={{ color: colors.text, fontWeight: '800', fontSize: 15 }}>ホットキュー</Text>
               <View style={{ flexDirection: 'row', gap: 6 }}>
@@ -282,6 +285,7 @@ export default function PlayerScreen() {
                   return (
                     <Pressable
                       key={slot}
+                      testID={`cue-${slot}`}
                       onPress={() => (cue ? void jumpCue(cue) : void setCue(slot))}
                       onLongPress={() => cue && cueMenu(slot, cue)}
                       style={{ flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center', backgroundColor: cue ? colors.accent : colors.surface2 }}

@@ -105,6 +105,15 @@ function RuleEditor({ rule, tags, onChange, onRemove }: { rule: Rule; tags: repo
         />
       );
       break;
+    case 'bpm':
+      label = 'BPM（テンポ）';
+      body = (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <NumberField value={rule.min} onChange={(min) => onChange({ ...rule, min })} suffix="から" />
+          <NumberField value={rule.max} onChange={(max) => onChange({ ...rule, max })} suffix="まで" />
+        </View>
+      );
+      break;
     case 'source':
       label = '取得元';
       body = <Seg options={[{ label: 'YouTube', value: 'youtube' as const }, { label: '端末内の曲', value: 'local' as const }, { label: 'オフライン保存', value: 'offline' as const }]} value={rule.value} onChange={(value) => onChange({ field: 'source', value })} />;
@@ -128,6 +137,7 @@ const ADDABLE: { label: string; make: (tags: repo.TagRow[]) => Rule | null }[] =
   { label: '最後に聞いた日', make: () => ({ field: 'lastPlayed', op: 'notWithin', days: 30 }) },
   { label: 'アーティスト名', make: () => ({ field: 'artist', value: '' }) },
   { label: '曲名', make: () => ({ field: 'title', value: '' }) },
+  { label: 'BPM（テンポ）', make: () => ({ field: 'bpm', min: 120, max: 130 }) },
   { label: '取得元', make: () => ({ field: 'source', value: 'local' }) },
 ];
 

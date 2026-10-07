@@ -2,6 +2,7 @@ import TrackPlayer from 'react-native-track-player';
 import { create } from 'zustand';
 
 import { getConfig } from '../core/config';
+import { MAX_RATE, MIN_RATE, scaleLoopRegion } from '../core/beat';
 import { FADE_STEP_MS, type Trim, fadeGain, planFadeOut } from '../core/dj';
 import { type LoopRegion, loopJumpTarget, makeLoop } from '../core/loop';
 import { normalizedVolume } from '../core/loudness';
@@ -62,8 +63,15 @@ interface PlayerState {
   checkTransition: (position: number, duration: number) => void;
   markLoopA: (position: number) => void;
   markLoopB: (position: number) => void;
-  /** loop exactly this region (used for one lyric line) and jump to its start */
-  loopRegion: (region: LoopRegion) => Promise<void>;
+  /** loop exactly this region (a lyric line, a beat loop); by default it also jumps to the start – `seek: false` lets the song play on */
+  loopRegion: (region: LoopRegion, opts?: { seek?: boolean }) => Promise<void>;
+  /** the loop twice as long (2) or half as long (0.5), from the same start */
+  scaleLoop: (factor: number) => void;
+  /** a playback speed for THIS song only (tempo matching); null = the usual speed again. A new song always starts at the usual speed. */
+  tempo: number | null;
+  setTempo: (rate: number | null) => Promise<void>;
+  /** the exact position now, in seconds (the position on screen is only refreshed twice a second) */
+  getPosition: () => Promise<number>;
   clearLoop: () => void;
   /** called with every progress event of the player */
   checkLoop: (position: number) => void;
@@ -192,7 +200,7 @@ export const usePlayer = create<PlayerState>((set, get) => {
     await flushPlayTime(get().current);
     stopFadeTimers();
     trimEndSec = null;
-    set({ index, current: song, status: 'loading', error: undefined, needsLoad: false, resumePosition: undefined, loop: null, loopA: undefined, trim: null });
+    set({ index, current: song, status: 'loading', error: undefined, needsLoad: false, resumePosition: undefined, loop: null, loopA: undefined, trim: null, tempo: null });
     wantFineProgress(false);
     get().log(`load ${song.id} (#${index + 1}/${get().queue.length})`);
     try {
@@ -278,6 +286,7 @@ export const usePlayer = create<PlayerState>((set, get) => {
     needsLoad: false,
     loop: null,
     trim: null,
+    tempo: null,
     debug: [],
     log: (line) => {
       const t = new Date();
@@ -378,12 +387,36 @@ export const usePlayer = create<PlayerState>((set, get) => {
       wantFineProgress(!!loop || trimEndSec !== null);
     },
 
-    loopRegion: async (region) => {
+    loopRegion: async (region, opts) => {
       set({ loop: region, loopA: undefined });
       cancelFade(true);
       wantFineProgress(true);
       lastLoopJumpAt = Date.now();
-      await get().seekTo(region.start);
+      if (opts?.seek !== false) await get().seekTo(region.start);
+    },
+
+    scaleLoop: (factor) => {
+      const { loop, current } = get();
+      if (!loop) return;
+      const next = scaleLoopRegion(loop, factor, current?.durationSec);
+      if (next) set({ loop: next });
+    },
+
+    setTempo: async (rate) => {
+      const r = rate === null ? null : Math.max(MIN_RATE, Math.min(MAX_RATE, rate));
+      set({ tempo: r });
+      await ensurePlayer();
+      await TrackPlayer.setRate(r ?? get().rate); // the saved speed setting is not touched
+    },
+
+    getPosition: async () => {
+      const { needsLoad, resumePosition } = get();
+      if (needsLoad) return resumePosition ?? 0;
+      try {
+        return (await TrackPlayer.getProgress()).position;
+      } catch {
+        return 0;
+      }
     },
 
     markTrimStart: async (position) => {
@@ -476,7 +509,7 @@ export const usePlayer = create<PlayerState>((set, get) => {
     },
 
     setRate: async (rate) => {
-      set({ rate });
+      set({ rate, tempo: null });
       useSettings.getState().update({ playbackRate: rate });
       await ensurePlayer();
       await TrackPlayer.setRate(rate);

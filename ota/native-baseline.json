@@ -1,0 +1,4 @@
+{
+  "hash": "c99a8a4a20795716",
+  "note": "The native fingerprint of the project files at the time of the last IPA / APK build. While tests/native-baseline.test.ts passes, a new version can be delivered over the air. After a deliberate native change AND a new build, run: node ota/native-baseline.mjs --write"
+}

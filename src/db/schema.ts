@@ -4,7 +4,7 @@ import type { Db } from './driver';
  * Same tables / columns as the Room schema (composeApp/schemas/database.MusicDatabase/23.json).
  * Keeping the names identical keeps the door open for importing data from the Android app later.
  */
-export const SCHEMA_VERSION = 23;
+export const SCHEMA_VERSION = 24;
 
 const TABLES = [
   'CREATE TABLE IF NOT EXISTS `Album` (`id` TEXT NOT NULL, `title` TEXT, `thumbnailUrl` TEXT, `year` TEXT, `authorsText` TEXT, `shareUrl` TEXT, `timestamp` INTEGER, `bookmarkedAt` INTEGER, PRIMARY KEY(`id`))',
@@ -15,6 +15,7 @@ const TABLES = [
   'CREATE TABLE IF NOT EXISTS `Lyrics` (`songId` TEXT NOT NULL, `fixed` TEXT, `synced` TEXT, PRIMARY KEY(`songId`), FOREIGN KEY(`songId`) REFERENCES `Song`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )',
   'CREATE TABLE IF NOT EXISTS `Playlist` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, `browseId` TEXT)',
   // songs imported from files on the device: only the file NAME is stored (the app container path changes between installs)
+  'CREATE TABLE IF NOT EXISTS `SongBpm` (`songId` TEXT NOT NULL, `bpm` REAL NOT NULL, `anchor` REAL, PRIMARY KEY(`songId`), FOREIGN KEY(`songId`) REFERENCES `Song`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )',
   'CREATE TABLE IF NOT EXISTS `HotCue` (`songId` TEXT NOT NULL, `slot` INTEGER NOT NULL, `position` REAL NOT NULL, `label` TEXT, PRIMARY KEY(`songId`, `slot`), FOREIGN KEY(`songId`) REFERENCES `Song`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )',
   'CREATE TABLE IF NOT EXISTS `SongTrim` (`songId` TEXT NOT NULL, `startSec` REAL, `endSec` REAL, PRIMARY KEY(`songId`), FOREIGN KEY(`songId`) REFERENCES `Song`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )',
   'CREATE TABLE IF NOT EXISTS `Tag` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, `createdAt` INTEGER NOT NULL)',

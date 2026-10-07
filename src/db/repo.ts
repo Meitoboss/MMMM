@@ -1,3 +1,4 @@
+import { type BpmInfo, validBpm } from '../core/beat';
 import { type HotCue, type Trim, isCueSlot, sanitizeTrim } from '../core/dj';
 import { LOCAL_ARTIST } from '../core/localMeta';
 import { buildSmartQuery, likeContains, likePrefix, sanitizeRules, type SmartRules } from '../core/smart';
@@ -584,6 +585,28 @@ export async function searchDownloaded(db: Db, query: string, kind: DownloadedKi
   }
   found.sort((a, b) => b.at - a.at);
   return found.slice(0, limit).map((f) => songFromRow(f.row));
+}
+
+/* ------------------------------------------------------------------ *
+ * Tempo (BPM) of a song – typed in or tapped by the person
+ * ------------------------------------------------------------------ */
+
+export async function bpmOf(db: Db, songId: string): Promise<BpmInfo | null> {
+  const r = await db.first<{ bpm: number; anchor: number | null }>('SELECT bpm, anchor FROM SongBpm WHERE songId = ?', [songId]);
+  return r && validBpm(r.bpm) ? { bpm: r.bpm, ...(r.anchor !== null && Number.isFinite(r.anchor) && r.anchor >= 0 ? { anchor: r.anchor } : {}) } : null;
+}
+
+/** saves (or, with null, removes) the tempo; a value that is not a usable BPM is refused */
+export async function setBpm(db: Db, song: SongItem, info: BpmInfo | null): Promise<BpmInfo | null> {
+  if (info === null) {
+    await db.run('DELETE FROM SongBpm WHERE songId = ?', [song.id]);
+    return null;
+  }
+  if (!validBpm(info.bpm)) throw new Error('BPM は 30〜300 の数字にしてください');
+  const anchor = info.anchor !== undefined && Number.isFinite(info.anchor) && info.anchor >= 0 ? info.anchor : null;
+  await upsertSong(db, song);
+  await db.run('INSERT OR REPLACE INTO SongBpm (songId, bpm, anchor) VALUES (?,?,?)', [song.id, info.bpm, anchor]);
+  return { bpm: info.bpm, ...(anchor !== null ? { anchor } : {}) };
 }
 
 /** the loudness stored for a song, or null – lets saved copies be evened out without the network */

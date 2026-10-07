@@ -17,6 +17,7 @@ import { type NormalizeMode } from '../../src/core/loudness';
 import { QUALITY_LABELS, qualitiesFor } from '../../src/core/streams/quality';
 import { MINI_HEIGHT, colors, useScheme } from '../../src/ui/theme';
 import { Chips, Row, Section } from '../../src/ui/SettingsParts';
+import { BackupSection } from '../../src/ui/BackupSection';
 import { OtaSection } from '../../src/ui/OtaSection';
 import { ThemeEditor } from '../../src/ui/ThemeEditor';
 
@@ -191,6 +192,8 @@ export default function Settings() {
         <Results steps={tokenSteps} />
       </Section>
 
+      <BackupSection />
+
       <OtaSection />
 
       <Section title="新しい版のお知らせ（IPA・APK）">
@@ -251,6 +254,7 @@ export default function Settings() {
         <Text style={{ color: colors.text, fontWeight: '800' }}>Music space</Text>
         <Text style={s.sub}>バージョン {APP_VERSION}</Text>
         <Text style={[s.sub, { textAlign: 'center', marginTop: 6 }]}>
+          fast4x 氏の RiMusic をもとにした派生ソフトです（GPL-3.0）。
         </Text>
       </View>
     </ScrollView>
