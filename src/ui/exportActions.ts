@@ -49,12 +49,17 @@ export async function exportLikedSongs(secretKey: string): Promise<void> {
 
 export async function exportOfflineMp3(secretKey: string, inputKey: string): Promise<void> {
   try {
+    console.log('1. exportOfflineMp3 started');
     if (secretKey !== inputKey) {
       Alert.alert('エクスポート', 'キーが合いません');
       return;
     }
 
-    const offlineIds = useOffline.getState().ids;
+    console.log('2. Getting offline state');
+    const offlineState = useOffline.getState();
+    console.log('3. offlineState:', offlineState);
+    const offlineIds = offlineState.ids;
+    console.log('4. offlineIds:', offlineIds);
     const offlineSongIds = Object.keys(offlineIds);
 
     if (!offlineSongIds.length) {
@@ -115,7 +120,15 @@ export async function exportOfflineMp3(secretKey: string, inputKey: string): Pro
     }, 2000);
   } catch (error) {
     console.error('exportOfflineMp3 error:', error);
-    const message = error instanceof Error ? error.message : String(error);
+    console.error('error stack:', error instanceof Error ? error.stack : 'no stack');
+    let message = 'エクスポートに失敗しました';
+    if (error instanceof Error) {
+      message = error.message;
+    } else if (typeof error === 'string') {
+      message = error;
+    } else {
+      message = String(error);
+    }
     Alert.alert('エラー', message || 'エクスポートに失敗しました');
   }
 }
