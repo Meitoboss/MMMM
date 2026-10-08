@@ -11,8 +11,11 @@ export { genSecretKey as generateSecretKey };
 
 export async function exportLikedSongs(secretKey: string): Promise<void> {
   try {
+    console.log('exportLikedSongs started');
     const db = await openDb();
+    console.log('database opened');
     const liked = await repo.likedSongs(db);
+    console.log('liked songs fetched:', liked.length);
 
     if (!liked.length) {
       Alert.alert('エクスポート', '保存した曲がありません');
@@ -43,7 +46,10 @@ export async function exportLikedSongs(secretKey: string): Promise<void> {
       Alert.alert('エクスポート', `ファイルを作成しました: ${fileName}`);
     }
   } catch (error) {
-    Alert.alert('エラー', error instanceof Error ? error.message : 'エクスポートに失敗しました');
+    console.error('exportLikedSongs error:', error);
+    console.error('error stack:', error instanceof Error ? error.stack : 'no stack');
+    const message = error instanceof Error ? error.message : String(error);
+    Alert.alert('エラー', message || 'エクスポートに失敗しました');
   }
 }
 
