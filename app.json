@@ -64,8 +64,7 @@
       ]
     },
     "updates": {
-      "enabled": true,
-      "url": "https://130-210-45-154.sslip.io/updates"
+      "enabled": false
     }
   }
 }
