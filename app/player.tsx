@@ -215,8 +215,9 @@ export default function PlayerScreen() {
 
       <View style={{ flex: 1, marginTop: 16 }}>
         {view === 'cover' && (
-          <View testID="player-cover" {...swipe.panHandlers} style={{ flex: 1 }}>
-            <View style={{ alignItems: 'center' }}>
+          <View testID="player-cover" {...swipe.panHandlers} style={{ flex: 1, position: 'relative' }}>
+            {!showLog && <Aurora testID="aurora" playing={p.status === 'playing'} rate={p.tempo ?? p.rate} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} />}
+            <View style={{ alignItems: 'center', paddingTop: 20 }}>
               <Cover uri={song.thumbnail} size={cover} />
             </View>
             {showLog ? (
@@ -232,7 +233,7 @@ export default function PlayerScreen() {
                 )}
               </ScrollView>
             ) : (
-              <Aurora testID="aurora" playing={p.status === 'playing'} rate={p.tempo ?? p.rate} style={{ flex: 1, marginTop: 16, marginHorizontal: 24 }} />
+              <View style={{ flex: 1 }} />
             )}
           </View>
         )}

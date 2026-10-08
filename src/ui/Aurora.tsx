@@ -115,7 +115,7 @@ export function Aurora({ playing, rate = 1, style, testID }: { playing: boolean;
       testID={testID}
       pointerEvents="none"
       onLayout={(e) => setBox({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })}
-      style={[{ overflow: 'hidden', borderRadius: 20, backgroundColor: '#050912' }, style]}
+      style={[{ overflow: 'visible' }, style]}
     >
       {visible && (
         <>
