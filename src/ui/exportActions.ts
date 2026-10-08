@@ -103,21 +103,16 @@ export async function exportOfflineMp3(secretKey: string, inputKey: string): Pro
     }
 
     if (await Sharing.isAvailableAsync()) {
-      if (exportedFiles.length === 1) {
-        await Sharing.shareAsync(exportedFiles[0], {
-          mimeType: 'audio/mp4',
-          dialogTitle: 'オフライン曲をエクスポート',
-        });
-      } else {
-        await Sharing.shareAsync(tempDir, {
-          dialogTitle: `${copiedCount} 曲をエクスポート`,
-        });
-      }
+      await Sharing.shareAsync(tempDir, {
+        dialogTitle: `${copiedCount} 曲をエクスポート`,
+      });
     } else {
-      Alert.alert('エクスポート', `${copiedCount} 曲をファイルに出力しました`);
+      Alert.alert('エクスポート', `${copiedCount} 曲をディレクトリに出力しました: ${tempDir}`);
     }
 
-    await FileSystem.deleteAsync(tempDir);
+    setTimeout(() => {
+      FileSystem.deleteAsync(tempDir).catch(() => undefined);
+    }, 2000);
   } catch (error) {
     Alert.alert('エラー', error instanceof Error ? error.message : 'エクスポートに失敗しました');
   }
