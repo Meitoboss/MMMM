@@ -140,6 +140,7 @@ export default function Settings() {
           : `いまの版は ${APP_VERSION} です`;
 
   return (
+    <>
     <ScrollView contentContainerStyle={{ paddingTop: 4, paddingBottom: MINI_HEIGHT + 40 }}>
       <View style={{ flexDirection: 'row', marginHorizontal: 16, marginTop: 8, padding: 4, borderRadius: 14, backgroundColor: colors.surface2 }}>
         {([['general', '一般'], ['theme', 'テーマ']] as const).map(([key, label]) => (
@@ -314,5 +315,6 @@ export default function Settings() {
         </View>
       </View>
     </Modal>
+    </>
   );
 }
