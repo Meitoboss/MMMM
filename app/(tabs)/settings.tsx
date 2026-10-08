@@ -20,6 +20,7 @@ import { Chips, Row, Section } from '../../src/ui/SettingsParts';
 import { BackupSection } from '../../src/ui/BackupSection';
 import { OtaSection } from '../../src/ui/OtaSection';
 import { ThemeEditor } from '../../src/ui/ThemeEditor';
+import { generateSecretKey, exportLikedSongs } from '../../src/ui/exportActions';
 
 const ORDERS: { label: string; value: StreamBackend[] }[] = [
   { label: 'YouTube（トークン）→ Piped → Invidious', value: ['webpot', 'piped', 'invidious'] },
@@ -201,6 +202,23 @@ export default function Settings() {
         <Pressable onPress={() => void upd.check(true)}>
           <Row title="新しい版を確認" sub={updateStatus} last>
             {upd.checking ? <ActivityIndicator color={colors.accentText} /> : <Text style={{ color: colors.accentText, fontWeight: '700' }}>確認</Text>}
+          </Row>
+        </Pressable>
+      </Section>
+
+      <Section title="保存した曲をエクスポート">
+        <Row title="秘密のキー" sub="このキーで、保存した曲をファイルに出力できます。新しいキーを生成すると、前のキーは使えなくなります。" />
+        <View style={{ paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.border }}>
+          <Text selectable style={{ fontFamily: 'monospace', color: colors.text, backgroundColor: colors.surface2, borderRadius: 10, padding: 10, fontSize: 12 }}>{st.secretKey}</Text>
+        </View>
+        <Pressable onPress={() => Alert.alert('新しいキーを生成しますか？', '前のキーで出力したファイルは、新しいキーでは使えなくなります。', [{ text: '生成', style: 'destructive', onPress: () => st.update({ secretKey: generateSecretKey() }) }, { text: 'キャンセル', style: 'cancel' }])}>
+          <Row title="新しいキーを生成">
+            <Text style={{ color: colors.accentText, fontWeight: '700' }}>生成</Text>
+          </Row>
+        </Pressable>
+        <Pressable onPress={() => void exportLikedSongs(st.secretKey)}>
+          <Row title="保存した曲をエクスポート" sub="保存した曲のリストを JSON ファイルで出力します" last>
+            <Text style={{ color: colors.accentText, fontWeight: '700' }}>エクスポート</Text>
           </Row>
         </Pressable>
       </Section>

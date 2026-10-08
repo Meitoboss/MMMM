@@ -318,7 +318,7 @@ export async function bookmarkedArtists(db: Db): Promise<ArtistItem[]> {
  * ------------------------------------------------------------------ */
 
 /** the history keeps this many searches; the oldest ones go */
-export const SEARCH_HISTORY_LIMIT = 20;
+export const SEARCH_HISTORY_LIMIT = 50;
 
 export async function addSearchQuery(db: Db, query: string): Promise<void> {
   const q = query.trim().slice(0, 100);

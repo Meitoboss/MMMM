@@ -47,13 +47,13 @@ describe('search history (20 entries)', () => {
     await migrate(db);
   });
 
-  it('keeps the 20 newest searches', async () => {
-    for (let i = 1; i <= 30; i++) await repo.addSearchQuery(db, `query ${i}`);
+  it('keeps the 50 newest searches', async () => {
+    for (let i = 1; i <= 60; i++) await repo.addSearchQuery(db, `query ${i}`);
     const h = await repo.searchHistory(db);
-    assert.equal(h.length, 20);
-    assert.equal(h[0], 'query 30');
+    assert.equal(h.length, 50);
+    assert.equal(h[0], 'query 60');
     assert.equal(h.at(-1), 'query 11');
-    assert.equal(repo.SEARCH_HISTORY_LIMIT, 20);
+    assert.equal(repo.SEARCH_HISTORY_LIMIT, 50);
   });
 
   it('a repeated search moves to the top, whatever the letter case', async () => {
