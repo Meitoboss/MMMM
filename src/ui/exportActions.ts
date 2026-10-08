@@ -11,11 +11,24 @@ export { genSecretKey as generateSecretKey };
 
 export async function exportLikedSongs(secretKey: string): Promise<void> {
   try {
+    console.log('exportLikedSongs started');
     const db = await openDb();
-    const liked = await repo.likedSongs(db);
+    console.log('database opened');
 
-    if (!liked.length) {
-      Alert.alert('エクスポート', '保存した曲がありません');
+    const offlineIds = useOffline.getState().ids;
+    const offlineSongIds = Object.keys(offlineIds);
+    console.log('offline songs count:', offlineSongIds.length);
+
+    if (!offlineSongIds.length) {
+      Alert.alert('エクスポート', 'オフライン保存した曲がありません');
+      return;
+    }
+
+    const songs = await Promise.all(offlineSongIds.map((id) => repo.getSong(db, id)));
+    const validSongs = songs.filter((s) => s !== null) as any[];
+
+    if (!validSongs.length) {
+      Alert.alert('エクスポート', 'オフライン保存した曲の情報が見つかりません');
       return;
     }
 
@@ -23,8 +36,8 @@ export async function exportLikedSongs(secretKey: string): Promise<void> {
       version: 1,
       exportDate: new Date().toISOString(),
       key: secretKey,
-      count: liked.length,
-      songs: liked.map((song) => ({
+      count: validSongs.length,
+      songs: validSongs.map((song) => ({
         id: song.id,
         title: song.title,
         artists: song.artists.map((a) => a.name),
@@ -43,7 +56,10 @@ export async function exportLikedSongs(secretKey: string): Promise<void> {
       Alert.alert('エクスポート', `ファイルを作成しました: ${fileName}`);
     }
   } catch (error) {
-    Alert.alert('エラー', error instanceof Error ? error.message : 'エクスポートに失敗しました');
+    console.error('exportLikedSongs error:', error);
+    console.error('error stack:', error instanceof Error ? error.stack : 'no stack');
+    const message = error instanceof Error ? error.message : String(error);
+    Alert.alert('エラー', message || 'エクスポートに失敗しました');
   }
 }
 
