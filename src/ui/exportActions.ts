@@ -14,11 +14,21 @@ export async function exportLikedSongs(secretKey: string): Promise<void> {
     console.log('exportLikedSongs started');
     const db = await openDb();
     console.log('database opened');
-    const liked = await repo.likedSongs(db);
-    console.log('liked songs fetched:', liked.length);
 
-    if (!liked.length) {
-      Alert.alert('エクスポート', '保存した曲がありません');
+    const offlineIds = useOffline.getState().ids;
+    const offlineSongIds = Object.keys(offlineIds);
+    console.log('offline songs count:', offlineSongIds.length);
+
+    if (!offlineSongIds.length) {
+      Alert.alert('エクスポート', 'オフライン保存した曲がありません');
+      return;
+    }
+
+    const songs = await Promise.all(offlineSongIds.map((id) => repo.getSong(db, id)));
+    const validSongs = songs.filter((s) => s !== null) as any[];
+
+    if (!validSongs.length) {
+      Alert.alert('エクスポート', 'オフライン保存した曲の情報が見つかりません');
       return;
     }
 
@@ -26,8 +36,8 @@ export async function exportLikedSongs(secretKey: string): Promise<void> {
       version: 1,
       exportDate: new Date().toISOString(),
       key: secretKey,
-      count: liked.length,
-      songs: liked.map((song) => ({
+      count: validSongs.length,
+      songs: validSongs.map((song) => ({
         id: song.id,
         title: song.title,
         artists: song.artists.map((a) => a.name),
