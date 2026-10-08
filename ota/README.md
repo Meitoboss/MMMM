@@ -26,7 +26,7 @@ GitHub Actions ──作って署名──▶ あなたのサーバー（OCI）�
    sh setup.sh
    ```
    最後に「起動しました: {"ok":true}」と出ます。**途中で出る「管理用トークン」を、必ず控えてください**（次の手順 3 で GitHub に入れます）。
-3. Caddy に窓口を足します。`sudo nano /etc/caddy/Caddyfile` を開き、`144-24-127-172.sslip.io` のブロックの中（`respond 404` のような最後の行より上）に、`Caddyfile.snippet` の 3 行を足します。
+3. Caddy に窓口を足します。`sudo nano /etc/caddy/Caddyfile` を開き、`130-210-45-154.sslip.io` のブロックの中（`respond 404` のような最後の行より上）に、`Caddyfile.snippet` の 3 行を足します。
    ```
    	handle /ota/* {
    		reverse_proxy 127.0.0.1:8789
@@ -34,7 +34,7 @@ GitHub Actions ──作って署名──▶ あなたのサーバー（OCI）�
    ```
    そのあと `sudo systemctl reload caddy`。確認:
    ```
-   curl https://144-24-127-172.sslip.io/ota/health
+   curl https://130-210-45-154.sslip.io/ota/health
    ```
    `{"ok":true}` が返れば成功です。（Caddyfile の構成が違って迷うときは、`sudo cat /etc/caddy/Caddyfile` の中身を見せてください。鍵の部分は伏せて構いません。）
 
@@ -77,7 +77,7 @@ Actions → **Roll back an over-the-air update** → channel を選んで Run。
 サーバーで（トークンは `~/musicspace-ota/ota.env` にあります）:
 
 ```
-curl -H "Authorization: Bearer $(grep OTA_ADMIN_TOKEN ~/musicspace-ota/ota.env | cut -d= -f2)" https://144-24-127-172.sslip.io/ota/admin/status
+curl -H "Authorization: Bearer $(grep OTA_ADMIN_TOKEN ~/musicspace-ota/ota.env | cut -d= -f2)" https://130-210-45-154.sslip.io/ota/admin/status
 ```
 
 - `updates`: いま配っている更新（チャンネル、ネイティブの指紋、日時、署名の有無）
@@ -90,6 +90,7 @@ curl -H "Authorization: Bearer $(grep OTA_ADMIN_TOKEN ~/musicspace-ota/ota.env |
 |---|---|
 | Actions の公開で「401」 | Secrets の `OTA_ADMIN_TOKEN` が、サーバーの `ota.env` の値と同じか |
 | 「署名が証明書と合いません」 | `OTA_PRIVATE_KEY` と `ota/certificate.pem` が、同じ組み合わせか（`make-keys.sh` の出力）。サーバーの証明書は `~/musicspace-ota/app/certificate.pem` |
+| 公開で「…につながりません: …」（または `fetch failed`） | 括弧の中が原因です。「接続を断られました」「応答がありません」は、**サーバーか Caddy が止まっています**（SSH で入って `podman ps` と `sudo systemctl status caddy` を見ます。SSH もつながらなければ、OCI のコンソールでインスタンスを再起動します）。まず、PC で `curl.exe -s https://130-210-45-154.sslip.io/ota/health` が `{"ok":true}` を返すか確かめてください。返るのに失敗するなら、Actions の「Re-run failed jobs」です（一時的な通信の失敗は、自動でも3回まで再試行します） |
 | 公開は成功するが、アプリに届かない | `status` の `requests` に、アプリの指紋が出ているか。公開時の指紋（Actions のログの `native=…`）と同じか。違えば、そのアプリの IPA を作り直すか、同じ状態で公開し直します |
 | アプリの「中身の更新」に「取得できませんでした（…）」 | 括弧の中が理由です。多くは、通信できない・証明書が合わない・サーバーの Caddy の窓口がない |
 | `make-keys.sh` が失敗する | サーバーがネットにつながっているか。うまくいかなければ、出力をそのまま見せてください |
