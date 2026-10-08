@@ -114,6 +114,8 @@ export async function exportOfflineMp3(secretKey: string, inputKey: string): Pro
       FileSystem.deleteAsync(tempDir).catch(() => undefined);
     }, 2000);
   } catch (error) {
-    Alert.alert('エラー', error instanceof Error ? error.message : 'エクスポートに失敗しました');
+    console.error('exportOfflineMp3 error:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    Alert.alert('エラー', message || 'エクスポートに失敗しました');
   }
 }
