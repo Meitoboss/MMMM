@@ -1,5 +1,5 @@
 import { Alert } from 'react-native';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import { openDb } from '../db/expo';
 import * as repo from '../db/repo';
