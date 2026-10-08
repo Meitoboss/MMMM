@@ -20,7 +20,7 @@ import { Chips, Row, Section } from '../../src/ui/SettingsParts';
 import { BackupSection } from '../../src/ui/BackupSection';
 import { OtaSection } from '../../src/ui/OtaSection';
 import { ThemeEditor } from '../../src/ui/ThemeEditor';
-import { generateSecretKey, exportLikedSongs } from '../../src/ui/exportActions';
+import { generateSecretKey, exportLikedSongs, exportOfflineMp3 } from '../../src/ui/exportActions';
 
 const ORDERS: { label: string; value: StreamBackend[] }[] = [
   { label: 'YouTube（トークン）→ Piped → Invidious', value: ['webpot', 'piped', 'invidious'] },
@@ -217,7 +217,21 @@ export default function Settings() {
           </Row>
         </Pressable>
         <Pressable onPress={() => void exportLikedSongs(st.secretKey)}>
-          <Row title="保存した曲をエクスポート" sub="保存した曲のリストを JSON ファイルで出力します" last>
+          <Row title="保存した曲（リスト）をエクスポート" sub="保存した曲のリストを JSON ファイルで出力します">
+            <Text style={{ color: colors.accentText, fontWeight: '700' }}>エクスポート</Text>
+          </Row>
+        </Pressable>
+        <Pressable onPress={() => {
+          Alert.prompt(
+            'オフライン曲をエクスポート',
+            '秘密キーを入力してください',
+            (keyInput) => {
+              if (keyInput) void exportOfflineMp3(st.secretKey, keyInput);
+            },
+            'secure',
+          );
+        }}>
+          <Row title="オフライン保存した曲（mp3）をエクスポート" sub="オフライン保存した曲を mp3 ファイルで出力します。秘密キーが必要です" last>
             <Text style={{ color: colors.accentText, fontWeight: '700' }}>エクスポート</Text>
           </Row>
         </Pressable>
