@@ -1,5 +1,5 @@
 {
-  "serverBase": "https://144-24-127-172.sslip.io",
+  "serverBase": "https://130-210-45-154.sslip.io",
   "runtimeVersion": "1",
   "enabledFor": ["trial", "prod"]
 }
