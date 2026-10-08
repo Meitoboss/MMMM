@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
-import { ActivityIndicator, Alert, Platform, Pressable, ScrollView, Switch, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, Modal, Platform, Pressable, ScrollView, Switch, Text, TextInput, View } from 'react-native';
 
 import { clearStreamCache } from '../../src/core';
 import { runSelfTest, runTokenServerTest, StepResult } from '../../src/core/diagnostics';
@@ -109,6 +109,8 @@ export default function Settings() {
   const [steps, setSteps] = useState<StepResult[]>([]);
   const [tokenSteps, setTokenSteps] = useState<StepResult[]>([]);
   const [running, setRunning] = useState(false);
+  const [showKeyPrompt, setShowKeyPrompt] = useState(false);
+  const [keyInput, setKeyInput] = useState('');
   const orderIdx = Math.max(0, ORDERS.findIndex((o) => o.value.join() === st.streamOrder.join()));
 
   /** Runs a diagnostic and shows its steps as they arrive. */
@@ -221,16 +223,7 @@ export default function Settings() {
             <Text style={{ color: colors.accentText, fontWeight: '700' }}>エクスポート</Text>
           </Row>
         </Pressable>
-        <Pressable onPress={() => {
-          Alert.prompt(
-            'オフライン曲をエクスポート',
-            '秘密キーを入力してください',
-            (keyInput) => {
-              if (keyInput) void exportOfflineMp3(st.secretKey, keyInput);
-            },
-            'secure',
-          );
-        }}>
+        <Pressable onPress={() => { setShowKeyPrompt(true); setKeyInput(''); }}>
           <Row title="オフライン保存した曲（mp3）をエクスポート" sub="オフライン保存した曲を mp3 ファイルで出力します。秘密キーが必要です" last>
             <Text style={{ color: colors.accentText, fontWeight: '700' }}>エクスポート</Text>
           </Row>
@@ -289,5 +282,37 @@ export default function Settings() {
         </Text>
       </View>
     </ScrollView>
+
+    <Modal visible={showKeyPrompt} transparent animationType="fade" onRequestClose={() => setShowKeyPrompt(false)}>
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.5)' }}>
+        <View style={{ backgroundColor: colors.surface, borderRadius: 16, padding: 20, width: '80%', maxWidth: 300, gap: 12 }}>
+          <Text style={{ fontSize: 16, fontWeight: '700', color: colors.text }}>秘密キーを入力</Text>
+          <TextInput
+            placeholder="秘密キー"
+            placeholderTextColor={colors.sub}
+            value={keyInput}
+            onChangeText={setKeyInput}
+            secureTextEntry
+            autoCapitalize="none"
+            autoCorrect={false}
+            style={{ backgroundColor: colors.surface2, borderRadius: 8, padding: 12, color: colors.text, fontSize: 14 }}
+          />
+          <View style={{ flexDirection: 'row', gap: 12, justifyContent: 'flex-end', marginTop: 8 }}>
+            <Pressable onPress={() => setShowKeyPrompt(false)}>
+              <Text style={{ color: colors.sub, fontWeight: '600', padding: 8 }}>キャンセル</Text>
+            </Pressable>
+            <Pressable onPress={() => {
+              if (keyInput) {
+                void exportOfflineMp3(st.secretKey, keyInput);
+                setShowKeyPrompt(false);
+                setKeyInput('');
+              }
+            }}>
+              <Text style={{ color: colors.accentText, fontWeight: '700', padding: 8 }}>エクスポート</Text>
+            </Pressable>
+          </View>
+        </View>
+      </View>
+    </Modal>
   );
 }
