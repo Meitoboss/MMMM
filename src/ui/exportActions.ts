@@ -92,10 +92,16 @@ export async function exportOfflineMp3(secretKey: string, inputKey: string): Pro
       return;
     }
 
+    console.log('5. Creating temp directory');
+    console.log('6. cacheDirectory:', FileSystem.cacheDirectory);
     const tempDir = `${FileSystem.cacheDirectory}musicspace-export-${Date.now()}/`;
+    console.log('7. tempDir:', tempDir);
     await FileSystem.makeDirectoryAsync(tempDir, { intermediates: true });
+    console.log('8. tempDir created');
 
+    console.log('9. Getting offline directory');
     const offline = offlineDir();
+    console.log('10. offline directory:', offline);
     let copiedCount = 0;
     const exportedFiles: string[] = [];
 
