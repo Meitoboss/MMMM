@@ -41,6 +41,10 @@ export default function PlayerScreen() {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const p = usePlayer();
+  // Debug: verify DJ methods exist
+  if (typeof p.markLoopA !== 'function' || typeof p.markLoopB !== 'function') {
+    console.error('DJ methods not found on player state!', { markLoopA: typeof p.markLoopA, markLoopB: typeof p.markLoopB });
+  }
   const swipe = useSwipeDown(() => router.back()); // swipe down on the top, the cover or the title to close
   const showLog = showDebug || p.status === 'error'; // the playback log takes the aurora's place
   const { position, duration } = useProgress(500);
@@ -108,19 +112,31 @@ export default function PlayerScreen() {
   const reloadCues = async () => {
     if (song) setCues(await repo.hotCues(await openDb(), song.id));
   };
-  const cueFail = (e: unknown) => Alert.alert('キューを保存できません', e instanceof Error ? e.message : String(e));
+  const cueFail = (e: unknown) => {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error('DJ action failed:', msg);
+    Alert.alert('キューを保存できません', msg);
+  };
   const setCue = async (slot: number) => {
     try {
+      console.log('Setting cue at slot', slot);
       await repo.setHotCue(await openDb(), song, slot, await p.getPosition());
       await reloadCues();
+      console.log('Cue set successfully');
     } catch (e) {
       cueFail(e);
     }
   };
   /** jump to a cue and play from there (a paused or restored song starts) */
   const jumpCue = async (c: HotCue) => {
-    await p.seekTo(c.position);
-    if (usePlayer.getState().status === 'paused') await usePlayer.getState().togglePlay();
+    try {
+      console.log('Jumping to cue at position', c.position);
+      await p.seekTo(c.position);
+      if (usePlayer.getState().status === 'paused') await usePlayer.getState().togglePlay();
+      console.log('Jump complete');
+    } catch (e) {
+      console.error('Jump cue failed:', e);
+    }
   };
   const cueMenu = (slot: number, cue: HotCue) =>
     showActionSheet(
@@ -144,12 +160,28 @@ export default function PlayerScreen() {
 
   const trimSorry = () => Alert.alert('設定できません', 'スタートは曲の始めの0.5秒より後、エンドは曲の終わりより前にして、2つの間は1秒以上あけてください。');
   const trimStart = async () => {
-    const kept = await p.markTrimStart(await p.getPosition());
-    if (kept?.startSec === undefined) trimSorry();
+    try {
+      console.log('Setting trim start');
+      const pos = await p.getPosition();
+      const kept = await p.markTrimStart(pos);
+      console.log('Trim start result:', kept);
+      if (kept?.startSec === undefined) trimSorry();
+    } catch (e) {
+      console.error('Trim start failed:', e);
+      Alert.alert('エラー', e instanceof Error ? e.message : String(e));
+    }
   };
   const trimEnd = async () => {
-    const kept = await p.markTrimEnd(await p.getPosition());
-    if (kept?.endSec === undefined) trimSorry();
+    try {
+      console.log('Setting trim end');
+      const pos = await p.getPosition();
+      const kept = await p.markTrimEnd(pos);
+      console.log('Trim end result:', kept);
+      if (kept?.endSec === undefined) trimSorry();
+    } catch (e) {
+      console.error('Trim end failed:', e);
+      Alert.alert('エラー', e instanceof Error ? e.message : String(e));
+    }
   };
 
   const menu = () => {
@@ -260,10 +292,32 @@ export default function PlayerScreen() {
             <View style={{ gap: 8 }}>
               <Text style={{ color: colors.text, fontWeight: '800', fontSize: 15 }}>区間ループ</Text>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <Pressable testID="loop-a" onPress={async () => p.markLoopA(await p.getPosition())} style={{ paddingHorizontal: 18, paddingVertical: 8, borderRadius: 16, backgroundColor: p.loopA !== undefined || p.loop ? colors.accent : colors.surface2 }}>
+                <Pressable testID="loop-a" onPress={async () => {
+                  try {
+                    console.log('Loop A pressed');
+                    const pos = await p.getPosition();
+                    console.log('Got position:', pos);
+                    p.markLoopA(pos);
+                    console.log('Loop A marked');
+                  } catch (e) {
+                    console.error('Loop A failed:', e);
+                    Alert.alert('エラー', e instanceof Error ? e.message : String(e));
+                  }
+                }} style={{ paddingHorizontal: 18, paddingVertical: 8, borderRadius: 16, backgroundColor: p.loopA !== undefined || p.loop ? colors.accent : colors.surface2 }}>
                   <Text style={{ color: p.loopA !== undefined || p.loop ? colors.onAccent : colors.text, fontWeight: '800' }}>A</Text>
                 </Pressable>
-                <Pressable testID="loop-b" disabled={p.loopA === undefined} onPress={async () => p.markLoopB(await p.getPosition())} style={{ paddingHorizontal: 18, paddingVertical: 8, borderRadius: 16, opacity: p.loopA === undefined ? 0.4 : 1, backgroundColor: p.loop ? colors.accent : colors.surface2 }}>
+                <Pressable testID="loop-b" disabled={p.loopA === undefined} onPress={async () => {
+                  try {
+                    console.log('Loop B pressed');
+                    const pos = await p.getPosition();
+                    console.log('Got position:', pos);
+                    p.markLoopB(pos);
+                    console.log('Loop B marked');
+                  } catch (e) {
+                    console.error('Loop B failed:', e);
+                    Alert.alert('エラー', e instanceof Error ? e.message : String(e));
+                  }
+                }} style={{ paddingHorizontal: 18, paddingVertical: 8, borderRadius: 16, opacity: p.loopA === undefined ? 0.4 : 1, backgroundColor: p.loop ? colors.accent : colors.surface2 }}>
                   <Text style={{ color: p.loop ? colors.onAccent : colors.text, fontWeight: '800' }}>B</Text>
                 </Pressable>
                 <Text style={{ flex: 1, color: p.loop || p.loopA !== undefined ? colors.accentText : colors.sub, fontSize: 12 }} numberOfLines={2}>
@@ -287,7 +341,19 @@ export default function PlayerScreen() {
                     <Pressable
                       key={slot}
                       testID={`cue-${slot}`}
-                      onPress={() => (cue ? void jumpCue(cue) : void setCue(slot))}
+                      onPress={() => {
+                        try {
+                          if (cue) {
+                            console.log('Jumping to cue', slot);
+                            void jumpCue(cue);
+                          } else {
+                            console.log('Setting cue', slot);
+                            void setCue(slot);
+                          }
+                        } catch (e) {
+                          console.error('Cue button failed:', e);
+                        }
+                      }}
                       onLongPress={() => cue && cueMenu(slot, cue)}
                       style={{ flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center', backgroundColor: cue ? colors.accent : colors.surface2 }}
                     >
@@ -307,7 +373,14 @@ export default function PlayerScreen() {
               </Text>
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
                 {([['スタートを、いまの位置に', trimStart], ['エンドを、いまの位置に', trimEnd]] as const).map(([label, fn]) => (
-                  <Pressable key={label} onPress={() => void fn()} style={{ paddingHorizontal: 14, paddingVertical: 8, borderRadius: 16, backgroundColor: colors.surface2 }}>
+                  <Pressable key={label} onPress={() => {
+                    try {
+                      console.log('Trim button pressed:', label);
+                      void fn();
+                    } catch (e) {
+                      console.error('Trim button failed:', e);
+                    }
+                  }} style={{ paddingHorizontal: 14, paddingVertical: 8, borderRadius: 16, backgroundColor: colors.surface2 }}>
                     <Text style={{ color: colors.text, fontSize: 13 }}>{label}</Text>
                   </Pressable>
                 ))}
