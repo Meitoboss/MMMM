@@ -57,7 +57,7 @@ export default function RootLayout() {
           <Stack.Screen name="player" options={{ presentation: 'modal', headerShown: false, gestureEnabled: false }} />
           <Stack.Screen name="add-to-playlist" options={{ presentation: 'modal', title: 'プレイリストに追加' }} />
           <Stack.Screen name="import-playlist" options={{ title: 'プレイリストを取り込む' }} />
-          <Stack.Screen name="trending" options={{ title: '流行' }} />
+          <Stack.Screen name="trending" options={{ title: '流行', headerBackTitle: '戻る' }} />
           <Stack.Screen name="song-tags" options={{ presentation: 'modal', title: 'タグ' }} />
           <Stack.Screen name="smart/[id]" options={{ title: 'スマートプレイリスト' }} />
           <Stack.Screen name="album/[id]" options={{ title: '' }} />

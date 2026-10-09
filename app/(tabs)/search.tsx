@@ -300,7 +300,9 @@ export default function Search() {
   return (
     <View style={{ flex: 1 }}>
       <View style={st.box}>
-        <Ionicons name="search" size={18} color={colors.sub} />
+        <Pressable hitSlop={10} onPress={() => text && setText('')}>
+          <Ionicons name="search" size={18} color={colors.sub} />
+        </Pressable>
         <TextInput
           value={text}
           onChangeText={setText}
