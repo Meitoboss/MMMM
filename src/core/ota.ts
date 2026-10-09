@@ -37,7 +37,7 @@ export function otaMessage(s: OtaSnapshot): string {
     case 'checking':
       return '更新を確認しています…';
     case 'pending':
-      return '新しい中身を取得しました。再起動すると反映されます';
+      return '新しい中身を取得しました。反映すると、アプリを閉じずに切り替わります';
     case 'error':
       return `更新を取得できませんでした（${s.error}）`;
     case 'idle':

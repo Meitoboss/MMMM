@@ -12,16 +12,14 @@ import { restoreResume, startResumeSaving } from '../src/state/resume';
 import { ensurePlayer } from '../src/player/setup';
 import { applySettings, useSettings } from '../src/state/settings';
 import { useUpdate } from '../src/state/update';
-import { useOta } from '../src/state/ota';
 import { DialogHost } from '../src/ui/dialogs';
 import { EngineHost } from '../src/ui/EngineHost';
 import { MiniPlayer } from '../src/ui/MiniPlayer';
-import { useOtaUpdateDialog } from '../src/ui/OtaUpdateDialog';
+import { UpdatePromptHost } from '../src/ui/UpdatePromptHost';
 import { colors, useScheme } from '../src/ui/theme';
 
 export default function RootLayout() {
   const scheme = useScheme();
-  useOtaUpdateDialog(); // show OTA update dialog when available
   useEffect(() => {
     applySettings(useSettings.getState());
     restoreResume(); // last session's queue, paused (nothing starts by itself)
@@ -34,10 +32,7 @@ export default function RootLayout() {
     void openDb();
     void useOffline.getState().load();
     void ensureFolders(); // creates Documents/Music, which then shows up in the Files app
-    const updateCheck = setTimeout(() => {
-      void useUpdate.getState().check(); // check for new app versions (requires URL in settings)
-      void useOta.getState().checkForOtaUpdate(); // check for OTA updates (automatic)
-    }, 4000);
+    const updateCheck = setTimeout(() => void useUpdate.getState().check(), 4000); // the "new version" notice; nothing happens without an address in Settings
     void ensurePlayer();
     // Android 13+: the media notification (lock-screen controls) needs this permission
     if (Platform.OS === 'android' && Number(Platform.Version) >= 33) {
@@ -63,8 +58,7 @@ export default function RootLayout() {
           <Stack.Screen name="player" options={{ presentation: 'modal', headerShown: false, gestureEnabled: false }} />
           <Stack.Screen name="add-to-playlist" options={{ presentation: 'modal', title: 'プレイリストに追加' }} />
           <Stack.Screen name="import-playlist" options={{ title: 'プレイリストを取り込む' }} />
-          <Stack.Screen name="recent-songs" options={{ title: '最近聞いた曲', headerBackTitle: '戻る' }} />
-          <Stack.Screen name="trending" options={{ title: '流行', headerBackTitle: '戻る' }} />
+          <Stack.Screen name="trending" options={{ title: '流行' }} />
           <Stack.Screen name="song-tags" options={{ presentation: 'modal', title: 'タグ' }} />
           <Stack.Screen name="smart/[id]" options={{ title: 'スマートプレイリスト' }} />
           <Stack.Screen name="album/[id]" options={{ title: '' }} />
@@ -75,6 +69,7 @@ export default function RootLayout() {
         <MiniPlayer />
         <EngineHost />
         <DialogHost />
+        <UpdatePromptHost />
       </View>
     </SafeAreaProvider>
   );

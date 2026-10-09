@@ -38,6 +38,15 @@ export const mimeForExt = (ext) => MIME[String(ext ?? '').replace(/^\./, '').toL
  * @param {object} [o.expoClient]     the app's public config (`expo config --json --type public`)
  * @returns {{ manifest: object, files: Map<string, {buffer: Buffer, contentType: string}> }}
  */
+/** the note a person writes for an update: no control characters, no long blank runs, at most 400 letters (same rules as core/updater.ts) */
+export function cleanReleaseNote(v) {
+  if (typeof v !== 'string') return null;
+  const t = v.replace(/\r\n?/g, '\n').replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '').replace(/\n{3,}/g, '\n\n').trim();
+  if (!t) return null;
+  const letters = Array.from(t);
+  return letters.length > 400 ? `${letters.slice(0, 399).join('')}…` : t;
+}
+
 export function buildPlatformManifest(o) {
   const files = new Map();
   const asset = (relPath, ext, isLaunch) => {
@@ -61,7 +70,7 @@ export function buildPlatformManifest(o) {
     assets: o.meta.assets.map((a) => asset(a.path, a.ext, false)),
     launchAsset: asset(o.meta.bundle, null, true),
     metadata: {},
-    extra: { expoClient: o.expoClient ?? {} },
+    extra: { expoClient: o.expoClient ?? {}, ...(cleanReleaseNote(o.note) ? { releaseNote: cleanReleaseNote(o.note) } : {}) },
   };
   return { manifest, files };
 }

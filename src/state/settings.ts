@@ -5,16 +5,8 @@ import { create } from 'zustand';
 
 import { type AudioQuality, DEFAULT_INVIDIOUS_INSTANCES, DEFAULT_PIPED_INSTANCES, IOS, WEB_REMIX, configure } from '../core/config';
 import { configureRemotePot } from '../core/pot/remote';
+import { type ApplyMode, DEFAULT_APPLY_MODE, isApplyMode } from '../core/updater';
 import type { ResolverOptions, StreamBackend } from '../core/streams/resolver';
-
-export function generateSecretKey(): string {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-  let key = '';
-  for (let i = 0; i < 32; i++) {
-    key += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return key;
-}
 
 export interface Settings {
   hl: string;
@@ -51,8 +43,8 @@ export interface Settings {
   /** fetch lyrics automatically on the player screen */
   autoLyrics: boolean;
   playbackRate: number;
-  /** secret key for exporting saved songs */
-  secretKey: string;
+  /** what to do with a new version of the app's contents that has been downloaded: ask / switch by itself / leave it to me */
+  otaApplyMode: ApplyMode;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -78,7 +70,7 @@ export const DEFAULT_SETTINGS: Settings = {
   autoRadio: true,
   autoLyrics: true,
   playbackRate: 1,
-  secretKey: '',
+  otaApplyMode: DEFAULT_APPLY_MODE,
 };
 
 const KEY = 'settings.v1';
@@ -86,17 +78,14 @@ const KEY = 'settings.v1';
 function load(): Settings {
   try {
     const raw = Storage.getItemSync(KEY);
-    if (!raw) {
-      const defaults = { ...DEFAULT_SETTINGS, secretKey: generateSecretKey() };
-      return defaults;
-    }
+    if (!raw) return DEFAULT_SETTINGS;
     const saved = { ...DEFAULT_SETTINGS, ...JSON.parse(raw) } as Settings;
     // older builds used the (now blocked) InnerTube iOS client first
     if (saved.streamOrder.includes('innertube')) saved.streamOrder = DEFAULT_SETTINGS.streamOrder;
-    if (!saved.secretKey) saved.secretKey = generateSecretKey();
+    if (!isApplyMode(saved.otaApplyMode)) saved.otaApplyMode = DEFAULT_APPLY_MODE;
     return saved;
   } catch {
-    return { ...DEFAULT_SETTINGS, secretKey: generateSecretKey() };
+    return DEFAULT_SETTINGS;
   }
 }
 

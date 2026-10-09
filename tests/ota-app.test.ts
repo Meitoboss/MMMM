@@ -27,7 +27,7 @@ describe('what the update screen says', () => {
   it('the messages tell what to do', () => {
     assert.match(otaMessage({ ...base, enabled: false }), /使いません/);
     assert.equal(otaMessage(base), '最新です');
-    assert.match(otaMessage({ ...base, isUpdatePending: true }), /再起動すると反映/);
+    assert.match(otaMessage({ ...base, isUpdatePending: true }), /反映すると、アプリを閉じずに切り替わります/);
     assert.match(otaMessage({ ...base, error: 'HTTP 404' }), /取得できませんでした（HTTP 404）/);
     assert.match(otaMessage({ ...base, emergencyReason: 'ここで失敗' }), /アプリに入っている版で動いています（ここで失敗）/);
   });
