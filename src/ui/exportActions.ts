@@ -118,7 +118,8 @@ export async function exportOfflineMp3(secretKey: string, inputKey: string): Pro
       try {
         let fileName: string | null = null;
         try {
-          fileName = await repo.getOfflineFileName(db, song.id);
+          const offlineRow = await repo.offlineFile(db, song.id);
+          fileName = offlineRow?.fileName ?? null;
         } catch (dbError) {
           fileResults.push(`ERROR_DB: ${song.title} - ${dbError instanceof Error ? dbError.message : String(dbError)}`);
           failedCount++;
