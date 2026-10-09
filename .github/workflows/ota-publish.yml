@@ -14,6 +14,10 @@ on:
         type: choice
         options: [trial, main]
         default: trial
+      branch:
+        description: 'Branch to build from'
+        type: string
+        default: main
 
 jobs:
   publish:
@@ -21,6 +25,8 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.branch }}
       - uses: actions/setup-node@v4
         with: { node-version: 22 }
       - run: npm install
