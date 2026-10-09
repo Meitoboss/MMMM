@@ -25,6 +25,8 @@ interface PromptState {
   title: string;
   message?: string;
   defaultValue: string;
+  /** the text is hidden as it is typed (a secret key) */
+  secure?: boolean;
   onSubmit: (value: string) => void;
 }
 
@@ -44,6 +46,15 @@ export function promptText(title: string, message: string | undefined, defaultVa
     return;
   }
   useDialogs.setState({ prompt: { title, message, defaultValue, onSubmit } });
+}
+
+/** like promptText, for a secret: the letters are hidden, and nothing is suggested or remembered */
+export function promptSecret(title: string, message: string | undefined, onSubmit: (value: string) => void): void {
+  if (Platform.OS === 'ios') {
+    Alert.prompt(title, message, (text) => onSubmit(text ?? ''), 'secure-text');
+    return;
+  }
+  useDialogs.setState({ prompt: { title, message, defaultValue: '', secure: true, onSubmit } });
 }
 
 function Sheet({ sheet }: { sheet: SheetState }) {
@@ -102,7 +113,10 @@ function PromptDialog({ prompt }: { prompt: PromptState }) {
             value={text}
             onChangeText={setText}
             autoFocus
-            selectTextOnFocus
+            selectTextOnFocus={!prompt.secure}
+            secureTextEntry={prompt.secure}
+            autoCapitalize={prompt.secure ? 'none' : undefined}
+            autoCorrect={prompt.secure ? false : undefined}
             style={{ color: colors.text, backgroundColor: colors.surface2, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, fontSize: 16 }}
           />
           <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 8 }}>

@@ -1,6 +1,6 @@
 {
   "name": "music-space",
-  "version": "1.1.1",
+  "version": "1.0.2",
   "private": true,
   "license": "GPL-3.0-or-later",
   "main": "index.ts",
@@ -11,8 +11,7 @@
     "typecheck:core": "tsc -p tsconfig.core.json",
     "test": "tsx --test tests/*.test.ts",
     "prebuild": "expo prebuild --platform ios --clean",
-    "fetch-solver": "node scripts/fetch-solver.mjs",
-    "bump-version": "node scripts/bump-version.mjs"
+    "fetch-solver": "node scripts/fetch-solver.mjs"
   },
   "dependencies": {
     "@expo/metro-runtime": "~6.1.0",
@@ -28,7 +27,6 @@
     "expo-router": "~6.0.0",
     "expo-sqlite": "~16.0.0",
     "expo-status-bar": "~3.0.0",
-    "expo-sharing": "~14.0.0",
     "expo-updates": "~29.0.0",
     "react": "19.1.0",
     "react-native": "0.81.4",

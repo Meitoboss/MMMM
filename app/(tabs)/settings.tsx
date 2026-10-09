@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
-import { ActivityIndicator, Alert, Modal, Platform, Pressable, ScrollView, Switch, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, Platform, Pressable, ScrollView, Switch, Text, TextInput, View } from 'react-native';
 
 import { clearStreamCache } from '../../src/core';
 import { runSelfTest, runTokenServerTest, StepResult } from '../../src/core/diagnostics';
@@ -18,9 +18,9 @@ import { QUALITY_LABELS, qualitiesFor } from '../../src/core/streams/quality';
 import { MINI_HEIGHT, colors, useScheme } from '../../src/ui/theme';
 import { Chips, Row, Section } from '../../src/ui/SettingsParts';
 import { BackupSection } from '../../src/ui/BackupSection';
+import { SongArchiveSection } from '../../src/ui/SongArchiveSection';
 import { OtaSection } from '../../src/ui/OtaSection';
 import { ThemeEditor } from '../../src/ui/ThemeEditor';
-import { generateSecretKey, exportLikedSongs, exportOfflineMp3 } from '../../src/ui/exportActions';
 
 const ORDERS: { label: string; value: StreamBackend[] }[] = [
   { label: 'YouTube（トークン）→ Piped → Invidious', value: ['webpot', 'piped', 'invidious'] },
@@ -109,8 +109,6 @@ export default function Settings() {
   const [steps, setSteps] = useState<StepResult[]>([]);
   const [tokenSteps, setTokenSteps] = useState<StepResult[]>([]);
   const [running, setRunning] = useState(false);
-  const [showKeyPrompt, setShowKeyPrompt] = useState(false);
-  const [keyInput, setKeyInput] = useState('');
   const orderIdx = Math.max(0, ORDERS.findIndex((o) => o.value.join() === st.streamOrder.join()));
 
   /** Runs a diagnostic and shows its steps as they arrive. */
@@ -140,7 +138,6 @@ export default function Settings() {
           : `いまの版は ${APP_VERSION} です`;
 
   return (
-    <>
     <ScrollView contentContainerStyle={{ paddingTop: 4, paddingBottom: MINI_HEIGHT + 40 }}>
       <View style={{ flexDirection: 'row', marginHorizontal: 16, marginTop: 8, padding: 4, borderRadius: 14, backgroundColor: colors.surface2 }}>
         {([['general', '一般'], ['theme', 'テーマ']] as const).map(([key, label]) => (
@@ -198,6 +195,8 @@ export default function Settings() {
 
       <BackupSection />
 
+      <SongArchiveSection />
+
       <OtaSection />
 
       <Section title="新しい版のお知らせ（IPA・APK）">
@@ -205,28 +204,6 @@ export default function Settings() {
         <Pressable onPress={() => void upd.check(true)}>
           <Row title="新しい版を確認" sub={updateStatus} last>
             {upd.checking ? <ActivityIndicator color={colors.accentText} /> : <Text style={{ color: colors.accentText, fontWeight: '700' }}>確認</Text>}
-          </Row>
-        </Pressable>
-      </Section>
-
-      <Section title="保存した曲をエクスポート">
-        <Row title="秘密のキー" sub="このキーで、保存した曲をファイルに出力できます。新しいキーを生成すると、前のキーは使えなくなります。" />
-        <View style={{ paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.border }}>
-          <Text selectable style={{ fontFamily: 'monospace', color: colors.text, backgroundColor: colors.surface2, borderRadius: 10, padding: 10, fontSize: 12 }}>{st.secretKey}</Text>
-        </View>
-        <Pressable onPress={() => Alert.alert('新しいキーを生成しますか？', '前のキーで出力したファイルは、新しいキーでは使えなくなります。', [{ text: '生成', style: 'destructive', onPress: () => st.update({ secretKey: generateSecretKey() }) }, { text: 'キャンセル', style: 'cancel' }])}>
-          <Row title="新しいキーを生成">
-            <Text style={{ color: colors.accentText, fontWeight: '700' }}>生成</Text>
-          </Row>
-        </Pressable>
-        <Pressable onPress={() => void exportLikedSongs(st.secretKey)}>
-          <Row title="保存した曲（リスト）をエクスポート" sub="保存した曲のリストを JSON ファイルで出力します">
-            <Text style={{ color: colors.accentText, fontWeight: '700' }}>エクスポート</Text>
-          </Row>
-        </Pressable>
-        <Pressable onPress={() => setShowKeyPrompt(true)}>
-          <Row title="オフライン保存した曲（mp3）をエクスポート" sub="オフライン保存した曲を mp3 ファイルで出力します。秘密キーが必要です" last>
-            <Text style={{ color: colors.accentText, fontWeight: '700' }}>エクスポート</Text>
           </Row>
         </Pressable>
       </Section>
@@ -280,41 +257,9 @@ export default function Settings() {
         <Text style={{ color: colors.text, fontWeight: '800' }}>Music space</Text>
         <Text style={s.sub}>バージョン {APP_VERSION}</Text>
         <Text style={[s.sub, { textAlign: 'center', marginTop: 6 }]}>
+          fast4x 氏の RiMusic をもとにした派生ソフトです（GPL-3.0）。
         </Text>
       </View>
     </ScrollView>
-
-    <Modal visible={showKeyPrompt} transparent animationType="fade" onRequestClose={() => setShowKeyPrompt(false)}>
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.5)' }}>
-        <View style={{ backgroundColor: colors.surface, borderRadius: 16, padding: 20, width: '80%', maxWidth: 300, gap: 12 }}>
-          <Text style={{ fontSize: 16, fontWeight: '700', color: colors.text }}>秘密キーを入力</Text>
-          <TextInput
-            placeholder="秘密キー"
-            placeholderTextColor={colors.sub}
-            value={keyInput}
-            onChangeText={setKeyInput}
-            secureTextEntry
-            autoCapitalize="none"
-            autoCorrect={false}
-            style={{ backgroundColor: colors.surface2, borderRadius: 8, padding: 12, color: colors.text, fontSize: 14 }}
-          />
-          <View style={{ flexDirection: 'row', gap: 12, justifyContent: 'flex-end', marginTop: 8 }}>
-            <Pressable onPress={() => setShowKeyPrompt(false)}>
-              <Text style={{ color: colors.sub, fontWeight: '600', padding: 8 }}>キャンセル</Text>
-            </Pressable>
-            <Pressable onPress={() => {
-              if (keyInput) {
-                void exportOfflineMp3(st.secretKey, keyInput);
-                setShowKeyPrompt(false);
-                setKeyInput('');
-              }
-            }}>
-              <Text style={{ color: colors.accentText, fontWeight: '700', padding: 8 }}>エクスポート</Text>
-            </Pressable>
-          </View>
-        </View>
-      </View>
-    </Modal>
-    </>
   );
 }

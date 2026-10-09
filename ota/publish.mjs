@@ -13,7 +13,7 @@ import { computeNativeHash } from './native-hash.mjs';
 const sign = (body, key, keyId) => (key ? signatureHeader(signRsaSha256(body, key), keyId) : null);
 
 /** everything one update needs; `files` are the assets to upload (by hash) */
-export function buildUpdate({ distDir, channel, runtimeVersion, nativeHash, baseUrl, privateKeyPem, expoClient, note, now = new Date(), id = randomUUID(), keyId = 'main', platforms = ['ios', 'android'] }) {
+export function buildUpdate({ distDir, channel, runtimeVersion, nativeHash, baseUrl, privateKeyPem, expoClient, now = new Date(), id = randomUUID(), keyId = 'main', platforms = ['ios', 'android'] }) {
   const metadata = JSON.parse(readFileSync(path.join(distDir, 'metadata.json'), 'utf8'));
   const fm = metadata.fileMetadata;
   if (!fm || typeof fm !== 'object') throw new Error('metadata.json に fileMetadata がありません（expo export の出力ではないようです）');
@@ -28,7 +28,7 @@ export function buildUpdate({ distDir, channel, runtimeVersion, nativeHash, base
   const out = {};
   for (const platform of platforms) {
     if (!fm[platform]) throw new Error(`${platform} の書き出しがありません（--platform all で expo export しましたか？）`);
-    const built = buildPlatformManifest({ id, createdAt, runtimeVersion, meta: fm[platform], readFile, baseUrl, expoClient, note });
+    const built = buildPlatformManifest({ id, createdAt, runtimeVersion, meta: fm[platform], readFile, baseUrl, expoClient });
     for (const [hash, f] of built.files) files.set(hash, f);
     const body = JSON.stringify(built.manifest);
     out[platform] = { body, signature: sign(body, privateKeyPem, keyId) };
@@ -157,7 +157,6 @@ async function main() {
     built = buildUpdate({
       distDir: arg('dist', 'dist'), channel, runtimeVersion, nativeHash, baseUrl: server, privateKeyPem,
       expoClient: expoConfigFile && existsSync(expoConfigFile) ? JSON.parse(readFileSync(expoConfigFile, 'utf8')) : {},
-      note: process.env.OTA_NOTE ?? arg('note'), // what changed: the app shows it in the "new version" pop-up (from the environment, so that no text is ever run as a command)
     });
   } else if (cmd === 'rollback') {
     built = buildRollback({ channel, runtimeVersion, nativeHash, privateKeyPem });

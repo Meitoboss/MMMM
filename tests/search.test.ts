@@ -40,7 +40,7 @@ function nodeDb(): Db {
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const song = (id: string, title: string, artist: string): SongItem => ({ kind: 'song', id, title, artists: [{ name: artist }], explicit: false });
 
-describe('search history (20 entries)', () => {
+describe('search history (50 entries)', () => {
   let db: Db;
   beforeEach(async () => {
     db = nodeDb();

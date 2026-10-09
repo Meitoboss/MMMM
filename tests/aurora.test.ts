@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { describe, it } from 'node:test';
 
 import { APP_VERSION } from '../src/appVersion';
-import { AURORA_STRENGTH, BEAT_PATTERN, DRIFT, LAYERS, PLAY_SPEEDUP, auroraMotion, layerOpacity } from '../src/core/auroraMotion';
+import { AURORA_STRENGTH, BEAT_PATTERN, DRIFT, FADE_HORIZONTAL, FADE_VERTICAL, LAYERS, LIGHT_STRENGTH, PLAY_SPEEDUP, auroraMotion, layerOpacity } from '../src/core/auroraMotion';
 import { startsSwipeDown, swipeOutcome } from '../src/core/swipe';
 
 describe('aurora motion', () => {
@@ -51,6 +51,23 @@ describe('aurora motion', () => {
     assert.equal(AURORA_STRENGTH, 1);
   });
 
+  it('on a light background the colours are taken down; the beat still brightens them', () => {
+    for (const l of LAYERS) {
+      assert.ok(layerOpacity(l, 0, LIGHT_STRENGTH) < layerOpacity(l, 0, 1));
+      assert.ok(layerOpacity(l, 1, LIGHT_STRENGTH) > layerOpacity(l, 0, LIGHT_STRENGTH));
+      assert.ok(layerOpacity(l, 1, 5) <= 1, 'never above 100 %');
+    }
+    assert.ok(LIGHT_STRENGTH > 0.3 && LIGHT_STRENGTH < 1);
+  });
+
+  it('behind the cover: one ribbon lies above, one below, so that both peek out around it; edges dissolve over a part of the box', () => {
+    const by = Object.fromEntries(LAYERS.map((l) => [l.key, l.offsetY]));
+    assert.ok(by.green < -0.1, 'green peeks out above');
+    assert.ok(by.purple > 0.15, 'purple peeks out below');
+    for (const l of LAYERS) assert.ok(Math.abs(l.offsetY) < 0.5, l.key);
+    assert.ok(FADE_VERTICAL > 0.1 && FADE_VERTICAL < 0.45 && FADE_HORIZONTAL > 0.05 && FADE_HORIZONTAL < 0.3);
+  });
+
   it('the three layers, bottom to top, as in the original design', () => {
     assert.deepEqual(LAYERS.map((l) => l.key), ['red', 'purple', 'green']);
     assert.deepEqual(LAYERS.map((l) => l.reverse), [false, true, false]);
@@ -91,12 +108,12 @@ describe('swiping the player down', () => {
 });
 
 describe('version', () => {
-  it('is 1.0.1 and the same in app.json, package.json and the Settings screen', () => {
-    assert.equal(APP_VERSION, '1.0.1');
+  it('is 1.0.2 and the same in app.json, package.json and the Settings screen', () => {
+    assert.equal(APP_VERSION, '1.0.2');
     const app = JSON.parse(readFileSync('app.json', 'utf8'));
     assert.equal(app.expo.version, APP_VERSION);
     assert.equal(JSON.parse(readFileSync('package.json', 'utf8')).version, APP_VERSION);
-    assert.ok(app.expo.android.versionCode >= 2, 'a higher build number than the first release, so Android installs it as an update');
+    assert.ok(app.expo.android.versionCode >= 3, 'a higher build number than the earlier releases, so Android installs it as an update');
     assert.equal(String(app.expo.ios.buildNumber), String(app.expo.android.versionCode));
     assert.ok(readFileSync('app/(tabs)/settings.tsx', 'utf8').includes('APP_VERSION'), 'the Settings screen shows it');
   });

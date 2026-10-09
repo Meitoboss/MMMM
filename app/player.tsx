@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import Slider from '@react-native-community/slider';
 import { useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { Alert, Animated, FlatList, Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
+import { Alert, Animated, FlatList, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useProgress } from 'react-native-track-player';
 
@@ -41,14 +41,14 @@ export default function PlayerScreen() {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const p = usePlayer();
-  // Debug: verify DJ methods exist
-  if (typeof p.markLoopA !== 'function' || typeof p.markLoopB !== 'function') {
-    console.error('DJ methods not found on player state!', { markLoopA: typeof p.markLoopA, markLoopB: typeof p.markLoopB });
-  }
-  const swipe = useSwipeDown(() => router.back()); // swipe down on the top, the cover or the title to close
+  // Swipe down from anywhere to close. A list that has been scrolled down scrolls back first – except for a touch that begins in the top bar.
+  const listTop = useRef(0);
+  const onList = (e: { nativeEvent: { contentOffset: { y: number } } }) => { listTop.current = e.nativeEvent.contentOffset.y; };
+  const swipe = useSwipeDown(() => router.back(), (touchY) => listTop.current <= 2 || touchY < insets.top + 64);
   const showLog = showDebug || p.status === 'error'; // the playback log takes the aurora's place
   const { position, duration } = useProgress(500);
   const [view, setView] = useState<View_>('cover');
+  useEffect(() => { listTop.current = 0; }, [view]); // a tab starts at its top
   const [seeking, setSeeking] = useState<number | null>(null);
   const [lyrics, setLyrics] = useState<Lyrics | null | 'loading'>(null);
   const autoLyrics = useSettings((s) => s.autoLyrics);
@@ -107,36 +107,24 @@ export default function PlayerScreen() {
   }
 
   const shown = seeking ?? livePosition;
-  const cover = Math.min(width - 96, 300); // a little smaller than before: the aurora lives under it
+  const cover = Math.min(width - 90, 300); // the aurora glows around and behind it
 
   const reloadCues = async () => {
     if (song) setCues(await repo.hotCues(await openDb(), song.id));
   };
-  const cueFail = (e: unknown) => {
-    const msg = e instanceof Error ? e.message : String(e);
-    console.error('DJ action failed:', msg);
-    Alert.alert('キューを保存できません', msg);
-  };
+  const cueFail = (e: unknown) => Alert.alert('キューを保存できません', e instanceof Error ? e.message : String(e));
   const setCue = async (slot: number) => {
     try {
-      console.log('Setting cue at slot', slot);
       await repo.setHotCue(await openDb(), song, slot, await p.getPosition());
       await reloadCues();
-      console.log('Cue set successfully');
     } catch (e) {
       cueFail(e);
     }
   };
   /** jump to a cue and play from there (a paused or restored song starts) */
   const jumpCue = async (c: HotCue) => {
-    try {
-      console.log('Jumping to cue at position', c.position);
-      await p.seekTo(c.position);
-      if (usePlayer.getState().status === 'paused') await usePlayer.getState().togglePlay();
-      console.log('Jump complete');
-    } catch (e) {
-      console.error('Jump cue failed:', e);
-    }
+    await p.seekTo(c.position);
+    if (usePlayer.getState().status === 'paused') await usePlayer.getState().togglePlay();
   };
   const cueMenu = (slot: number, cue: HotCue) =>
     showActionSheet(
@@ -160,28 +148,12 @@ export default function PlayerScreen() {
 
   const trimSorry = () => Alert.alert('設定できません', 'スタートは曲の始めの0.5秒より後、エンドは曲の終わりより前にして、2つの間は1秒以上あけてください。');
   const trimStart = async () => {
-    try {
-      console.log('Setting trim start');
-      const pos = await p.getPosition();
-      const kept = await p.markTrimStart(pos);
-      console.log('Trim start result:', kept);
-      if (kept?.startSec === undefined) trimSorry();
-    } catch (e) {
-      console.error('Trim start failed:', e);
-      Alert.alert('エラー', e instanceof Error ? e.message : String(e));
-    }
+    const kept = await p.markTrimStart(await p.getPosition());
+    if (kept?.startSec === undefined) trimSorry();
   };
   const trimEnd = async () => {
-    try {
-      console.log('Setting trim end');
-      const pos = await p.getPosition();
-      const kept = await p.markTrimEnd(pos);
-      console.log('Trim end result:', kept);
-      if (kept?.endSec === undefined) trimSorry();
-    } catch (e) {
-      console.error('Trim end failed:', e);
-      Alert.alert('エラー', e instanceof Error ? e.message : String(e));
-    }
+    const kept = await p.markTrimEnd(await p.getPosition());
+    if (kept?.endSec === undefined) trimSorry();
   };
 
   const menu = () => {
@@ -232,8 +204,8 @@ export default function PlayerScreen() {
   };
 
   return (
-    <Animated.View testID="player-root" style={{ flex: 1, backgroundColor: colors.bg, paddingTop: 12, paddingBottom: insets.bottom + 12, transform: [{ translateY: swipe.translateY }] }}>
-      <View testID="player-header" {...swipe.panHandlers} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20 }}>
+    <Animated.View testID="player-root" {...swipe.panHandlers} style={{ flex: 1, backgroundColor: colors.bg, paddingTop: 12, paddingBottom: insets.bottom + 12, transform: [{ translateY: swipe.translateY }] }}>
+      <View testID="player-header" style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20 }}>
         <Pressable hitSlop={12} onPress={() => router.back()}><Ionicons name="chevron-down" size={28} color={colors.text} /></Pressable>
         <View style={{ flexDirection: 'row', gap: 16 }}>
           {(['cover', 'lyrics', 'queue', 'dj'] as const).map((v) => (
@@ -247,13 +219,16 @@ export default function PlayerScreen() {
 
       <View style={{ flex: 1, marginTop: 16 }}>
         {view === 'cover' && (
-          <View testID="player-cover" {...swipe.panHandlers} style={{ flex: 1, position: 'relative' }}>
-            {!showLog && <Aurora testID="aurora" playing={p.status === 'playing'} rate={p.tempo ?? p.rate} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} />}
-            <View style={{ alignItems: 'center', paddingTop: 20, paddingBottom: 12 }}>
-              <Cover uri={song.thumbnail} size={cover} />
+          <View testID="player-cover" style={{ flex: 1 }}>
+            {/* the aurora is the background of this whole area, BEHIND the cover – no frame; its edges dissolve into the screen */}
+            {!showLog && <Aurora testID="aurora" playing={p.status === 'playing'} rate={p.tempo ?? p.rate} style={StyleSheet.absoluteFill} />}
+            <View style={showLog ? { alignItems: 'center' } : { flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+              <View style={{ borderRadius: 14, shadowColor: '#000', shadowOpacity: 0.5, shadowRadius: 22, shadowOffset: { width: 0, height: 12 }, elevation: 14 }}>
+                <Cover uri={song.thumbnail} size={cover} />
+              </View>
             </View>
-            {showLog ? (
-              <ScrollView style={{ flex: 1, marginTop: 8 }} contentContainerStyle={{ paddingHorizontal: 20 }}>
+            {showLog && (
+              <ScrollView testID="player-log" onScroll={onList} scrollEventThrottle={16} bounces={false} overScrollMode="never" style={{ flex: 1, marginTop: 8 }} contentContainerStyle={{ paddingHorizontal: 20 }}>
                 <Text selectable style={{ color: colors.sub, fontSize: 10 }}>
                   {p.debug.join('\n')}
                 </Text>
@@ -264,15 +239,13 @@ export default function PlayerScreen() {
                   </View>
                 )}
               </ScrollView>
-            ) : (
-              <View style={{ flex: 1 }} />
             )}
           </View>
         )}
         {view === 'lyrics' && (
           lyrics === 'loading' ? <Text style={{ color: colors.sub, textAlign: 'center', marginTop: 40 }}>歌詞を検索中…</Text>
           : !lines.length ? <Text style={{ color: colors.sub, textAlign: 'center', marginTop: 40 }}>歌詞が見つかりませんでした</Text>
-          : <FlatList ref={listRef} data={lines} keyExtractor={(_, i) => String(i)} onScrollToIndexFailed={() => undefined}
+          : <FlatList testID="player-lyrics" ref={listRef} onScroll={onList} scrollEventThrottle={16} bounces={false} overScrollMode="never" data={lines} keyExtractor={(_, i) => String(i)} onScrollToIndexFailed={() => undefined}
               contentContainerStyle={{ paddingHorizontal: 24, paddingVertical: 40 }}
               renderItem={({ item, index }) => (
                 <Pressable disabled={!(lyrics as Lyrics).synced} onPress={() => void p.seekTo(item.time / 1000)} onLongPress={() => { const r = lineRegion(lines.map((l) => l.time), index, song.durationSec ?? (duration || undefined)); if (r) void p.loopRegion(r); }}>
@@ -281,7 +254,7 @@ export default function PlayerScreen() {
               )} />
         )}
         {view === 'dj' && (
-          <ScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 24, gap: 20 }}>
+          <ScrollView testID="player-dj" onScroll={onList} scrollEventThrottle={16} bounces={false} overScrollMode="never" contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 24, gap: 20 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               <Text style={{ color: colors.text, fontSize: 20, fontWeight: '800' }}>DJ</Text>
               <View style={{ paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8, backgroundColor: colors.accent }}>
@@ -292,32 +265,10 @@ export default function PlayerScreen() {
             <View style={{ gap: 8 }}>
               <Text style={{ color: colors.text, fontWeight: '800', fontSize: 15 }}>区間ループ</Text>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <Pressable testID="loop-a" onPress={async () => {
-                  try {
-                    console.log('Loop A pressed');
-                    const pos = await p.getPosition();
-                    console.log('Got position:', pos);
-                    p.markLoopA(pos);
-                    console.log('Loop A marked');
-                  } catch (e) {
-                    console.error('Loop A failed:', e);
-                    Alert.alert('エラー', e instanceof Error ? e.message : String(e));
-                  }
-                }} style={{ paddingHorizontal: 18, paddingVertical: 8, borderRadius: 16, backgroundColor: p.loopA !== undefined || p.loop ? colors.accent : colors.surface2 }}>
+                <Pressable testID="loop-a" onPress={async () => p.markLoopA(await p.getPosition())} style={{ paddingHorizontal: 18, paddingVertical: 8, borderRadius: 16, backgroundColor: p.loopA !== undefined || p.loop ? colors.accent : colors.surface2 }}>
                   <Text style={{ color: p.loopA !== undefined || p.loop ? colors.onAccent : colors.text, fontWeight: '800' }}>A</Text>
                 </Pressable>
-                <Pressable testID="loop-b" disabled={p.loopA === undefined} onPress={async () => {
-                  try {
-                    console.log('Loop B pressed');
-                    const pos = await p.getPosition();
-                    console.log('Got position:', pos);
-                    p.markLoopB(pos);
-                    console.log('Loop B marked');
-                  } catch (e) {
-                    console.error('Loop B failed:', e);
-                    Alert.alert('エラー', e instanceof Error ? e.message : String(e));
-                  }
-                }} style={{ paddingHorizontal: 18, paddingVertical: 8, borderRadius: 16, opacity: p.loopA === undefined ? 0.4 : 1, backgroundColor: p.loop ? colors.accent : colors.surface2 }}>
+                <Pressable testID="loop-b" disabled={p.loopA === undefined} onPress={async () => p.markLoopB(await p.getPosition())} style={{ paddingHorizontal: 18, paddingVertical: 8, borderRadius: 16, opacity: p.loopA === undefined ? 0.4 : 1, backgroundColor: p.loop ? colors.accent : colors.surface2 }}>
                   <Text style={{ color: p.loop ? colors.onAccent : colors.text, fontWeight: '800' }}>B</Text>
                 </Pressable>
                 <Text style={{ flex: 1, color: p.loop || p.loopA !== undefined ? colors.accentText : colors.sub, fontSize: 12 }} numberOfLines={2}>
@@ -341,19 +292,7 @@ export default function PlayerScreen() {
                     <Pressable
                       key={slot}
                       testID={`cue-${slot}`}
-                      onPress={() => {
-                        try {
-                          if (cue) {
-                            console.log('Jumping to cue', slot);
-                            void jumpCue(cue);
-                          } else {
-                            console.log('Setting cue', slot);
-                            void setCue(slot);
-                          }
-                        } catch (e) {
-                          console.error('Cue button failed:', e);
-                        }
-                      }}
+                      onPress={() => (cue ? void jumpCue(cue) : void setCue(slot))}
                       onLongPress={() => cue && cueMenu(slot, cue)}
                       style={{ flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center', backgroundColor: cue ? colors.accent : colors.surface2 }}
                     >
@@ -373,14 +312,7 @@ export default function PlayerScreen() {
               </Text>
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
                 {([['スタートを、いまの位置に', trimStart], ['エンドを、いまの位置に', trimEnd]] as const).map(([label, fn]) => (
-                  <Pressable key={label} onPress={() => {
-                    try {
-                      console.log('Trim button pressed:', label);
-                      void fn();
-                    } catch (e) {
-                      console.error('Trim button failed:', e);
-                    }
-                  }} style={{ paddingHorizontal: 14, paddingVertical: 8, borderRadius: 16, backgroundColor: colors.surface2 }}>
+                  <Pressable key={label} onPress={() => void fn()} style={{ paddingHorizontal: 14, paddingVertical: 8, borderRadius: 16, backgroundColor: colors.surface2 }}>
                     <Text style={{ color: colors.text, fontSize: 13 }}>{label}</Text>
                   </Pressable>
                 ))}
@@ -401,7 +333,7 @@ export default function PlayerScreen() {
           </ScrollView>
         )}
         {view === 'queue' && (
-          <FlatList data={p.queue} keyExtractor={(x, i) => `${x.id}-${i}`}
+          <FlatList testID="player-queue" onScroll={onList} scrollEventThrottle={16} bounces={false} overScrollMode="never" data={p.queue} keyExtractor={(x, i) => `${x.id}-${i}`}
             initialScrollIndex={Math.max(0, Math.min(p.index, p.queue.length - 1))} getItemLayout={(_, i) => ({ length: 64, offset: 64 * i, index: i })}
             renderItem={({ item, index }) => (
               <View style={{ backgroundColor: index === p.index ? colors.surface : undefined }}>
@@ -413,7 +345,7 @@ export default function PlayerScreen() {
       </View>
 
       <View style={{ paddingHorizontal: 24 }}>
-        <View testID="player-title" {...swipe.panHandlers} style={{ flexDirection: 'row', alignItems: 'center' }}>
+        <View testID="player-title" style={{ flexDirection: 'row', alignItems: 'center' }}>
           <View style={{ flex: 1 }}>
             <Text style={{ color: colors.text, fontSize: 20, fontWeight: '700' }} numberOfLines={1}>{song.title}</Text>
             <Text style={{ color: colors.sub, fontSize: 15 }} numberOfLines={1}>{song.artists.map((a) => a.name).join(', ')}</Text>
@@ -449,15 +381,15 @@ export default function PlayerScreen() {
           </Pressable>
         )}
 
-        <View testID="player-controls" style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 20 }}>
-          <Pressable onPress={p.toggleShuffle}><Ionicons name="shuffle" size={32} color={p.shuffle ? colors.accentText : colors.sub} /></Pressable>
-          <Pressable onPress={() => void p.previous()}><Ionicons name="play-skip-back" size={42} color={colors.text} /></Pressable>
-          <Pressable onPress={() => void p.togglePlay()} style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' }}>
-            <Ionicons name={p.status === 'loading' ? 'hourglass' : p.status === 'playing' ? 'pause' : 'play'} size={40} color={colors.onAccent} />
+        <View testID="player-controls" style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12 }}>
+          <Pressable onPress={p.toggleShuffle}><Ionicons name="shuffle" size={26} color={p.shuffle ? colors.accentText : colors.sub} /></Pressable>
+          <Pressable onPress={() => void p.previous()}><Ionicons name="play-skip-back" size={34} color={colors.text} /></Pressable>
+          <Pressable onPress={() => void p.togglePlay()} style={{ width: 68, height: 68, borderRadius: 34, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' }}>
+            <Ionicons name={p.status === 'loading' ? 'hourglass' : p.status === 'playing' ? 'pause' : 'play'} size={34} color={colors.onAccent} />
           </Pressable>
-          <Pressable onPress={() => void p.next()}><Ionicons name="play-skip-forward" size={42} color={colors.text} /></Pressable>
+          <Pressable onPress={() => void p.next()}><Ionicons name="play-skip-forward" size={34} color={colors.text} /></Pressable>
           <Pressable onPress={() => p.setRepeat(p.repeat === 'off' ? 'all' : p.repeat === 'all' ? 'one' : 'off')}>
-            <Ionicons name={p.repeat === 'one' ? 'repeat' : 'repeat'} size={32} color={p.repeat === 'off' ? colors.sub : colors.accentText} />
+            <Ionicons name={p.repeat === 'one' ? 'repeat' : 'repeat'} size={26} color={p.repeat === 'off' ? colors.sub : colors.accentText} />
             {p.repeat === 'one' && <Text style={{ position: 'absolute', right: -2, top: -4, color: colors.accentText, fontSize: 11, fontWeight: '800' }}>1</Text>}
           </Pressable>
         </View>
