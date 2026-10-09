@@ -1,6 +1,6 @@
 /** Swiping a screen down to close it: when a drag counts as one, and how it ends. */
-export const START_DISTANCE = 12;
-const CLOSE_DISTANCE = 80;
+export const START_DISTANCE = 8;
+const CLOSE_DISTANCE = 60;
 const FLICK_SPEED = 0.5;
 
 /** a drag that goes down and is mostly vertical (so a sideways slide on a slider never closes the screen) */

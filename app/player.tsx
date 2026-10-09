@@ -249,20 +249,9 @@ export default function PlayerScreen() {
         {view === 'cover' && (
           <View testID="player-cover" {...swipe.panHandlers} style={{ flex: 1, position: 'relative' }}>
             {!showLog && <Aurora testID="aurora" playing={p.status === 'playing'} rate={p.tempo ?? p.rate} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} />}
-            <View style={{ alignItems: 'center', paddingTop: 20 }}>
+            <View style={{ alignItems: 'center', paddingTop: 20, paddingBottom: 12 }}>
               <Cover uri={song.thumbnail} size={cover} />
             </View>
-            {lines.length > 0 && active >= 0 && (
-              <Pressable onPress={() => setView('lyrics')} style={{ flex: 1, paddingHorizontal: 24, justifyContent: 'center', alignItems: 'center', gap: 12 }}>
-                {active > 0 && (
-                  <Text style={{ color: colors.dim, fontSize: 16 }} numberOfLines={1}>{lines[active - 1]?.text || '♪'}</Text>
-                )}
-                <Text style={{ color: colors.text, fontSize: 22, fontWeight: '800', textAlign: 'center' }} numberOfLines={2}>{lines[active]?.text || '♪'}</Text>
-                {active < lines.length - 1 && (
-                  <Text style={{ color: colors.dim, fontSize: 16 }} numberOfLines={1}>{lines[active + 1]?.text || '♪'}</Text>
-                )}
-              </Pressable>
-            )}
             {showLog ? (
               <ScrollView style={{ flex: 1, marginTop: 8 }} contentContainerStyle={{ paddingHorizontal: 20 }}>
                 <Text selectable style={{ color: colors.sub, fontSize: 10 }}>
@@ -460,15 +449,15 @@ export default function PlayerScreen() {
           </Pressable>
         )}
 
-        <View testID="player-controls" style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12 }}>
-          <Pressable onPress={p.toggleShuffle}><Ionicons name="shuffle" size={26} color={p.shuffle ? colors.accentText : colors.sub} /></Pressable>
-          <Pressable onPress={() => void p.previous()}><Ionicons name="play-skip-back" size={34} color={colors.text} /></Pressable>
-          <Pressable onPress={() => void p.togglePlay()} style={{ width: 68, height: 68, borderRadius: 34, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' }}>
-            <Ionicons name={p.status === 'loading' ? 'hourglass' : p.status === 'playing' ? 'pause' : 'play'} size={34} color={colors.onAccent} />
+        <View testID="player-controls" style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 20 }}>
+          <Pressable onPress={p.toggleShuffle}><Ionicons name="shuffle" size={32} color={p.shuffle ? colors.accentText : colors.sub} /></Pressable>
+          <Pressable onPress={() => void p.previous()}><Ionicons name="play-skip-back" size={42} color={colors.text} /></Pressable>
+          <Pressable onPress={() => void p.togglePlay()} style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' }}>
+            <Ionicons name={p.status === 'loading' ? 'hourglass' : p.status === 'playing' ? 'pause' : 'play'} size={40} color={colors.onAccent} />
           </Pressable>
-          <Pressable onPress={() => void p.next()}><Ionicons name="play-skip-forward" size={34} color={colors.text} /></Pressable>
+          <Pressable onPress={() => void p.next()}><Ionicons name="play-skip-forward" size={42} color={colors.text} /></Pressable>
           <Pressable onPress={() => p.setRepeat(p.repeat === 'off' ? 'all' : p.repeat === 'all' ? 'one' : 'off')}>
-            <Ionicons name={p.repeat === 'one' ? 'repeat' : 'repeat'} size={26} color={p.repeat === 'off' ? colors.sub : colors.accentText} />
+            <Ionicons name={p.repeat === 'one' ? 'repeat' : 'repeat'} size={32} color={p.repeat === 'off' ? colors.sub : colors.accentText} />
             {p.repeat === 'one' && <Text style={{ position: 'absolute', right: -2, top: -4, color: colors.accentText, fontSize: 11, fontWeight: '800' }}>1</Text>}
           </Pressable>
         </View>
