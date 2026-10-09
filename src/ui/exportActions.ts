@@ -105,6 +105,11 @@ export async function exportOfflineMp3(secretKey: string, inputKey: string): Pro
     console.log('Step 10: Getting offline directory');
     const offline = offlineDir();
     console.log('Step 11: offline directory =', offline);
+
+    // Check if offline directory exists
+    const offlineDirInfo = await FileSystem.getInfoAsync(offline);
+    console.log('Step 11b: offline directory exists?', offlineDirInfo.exists, '(isDirectory:', offlineDirInfo.isDirectory, ')');
+
     let copiedCount = 0;
     let failedCount = 0;
 
@@ -118,10 +123,11 @@ export async function exportOfflineMp3(secretKey: string, inputKey: string): Pro
         }
 
         const srcFile = `${offline}${fileName}`;
-        console.log(`Copying: ${srcFile}`);
+        console.log(`Checking file: ${srcFile}`);
 
         // Check if source file exists
         const fileInfo = await FileSystem.getInfoAsync(srcFile);
+        console.log(`  → exists: ${fileInfo.exists}, size: ${fileInfo.size}, isDirectory: ${fileInfo.isDirectory}`);
         if (!fileInfo.exists) {
           console.warn(`Source file not found: ${srcFile}`);
           failedCount++;
