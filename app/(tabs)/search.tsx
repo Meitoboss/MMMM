@@ -300,7 +300,16 @@ export default function Search() {
   return (
     <View style={{ flex: 1 }}>
       <View style={st.box}>
-        <Pressable hitSlop={10} onPress={() => text && setText('')}>
+        <Pressable hitSlop={10} onPress={() => {
+          console.log('Search icon pressed, text:', text);
+          if (text) {
+            setText('');
+            setItems([]);
+            setToken(undefined);
+            setShown('');
+            setOffItems([]);
+          }
+        }}>
           <Ionicons name="search" size={18} color={colors.sub} />
         </Pressable>
         <TextInput

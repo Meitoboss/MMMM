@@ -253,17 +253,15 @@ export default function PlayerScreen() {
               <Cover uri={song.thumbnail} size={cover} />
             </View>
             {lines.length > 0 && active >= 0 && (
-              <View style={{ paddingHorizontal: 24, paddingVertical: 20, alignItems: 'center', gap: 8 }}>
+              <Pressable onPress={() => setView('lyrics')} style={{ flex: 1, paddingHorizontal: 24, justifyContent: 'center', alignItems: 'center', gap: 12 }}>
                 {active > 0 && (
-                  <Text style={{ color: colors.dim, fontSize: 14 }} numberOfLines={1}>{lines[active - 1]?.text || '♪'}</Text>
+                  <Text style={{ color: colors.dim, fontSize: 16 }} numberOfLines={1}>{lines[active - 1]?.text || '♪'}</Text>
                 )}
-                <Pressable onPress={() => setView('lyrics')}>
-                  <Text style={{ color: colors.text, fontSize: 16, fontWeight: '700', textAlign: 'center' }} numberOfLines={1}>{lines[active]?.text || '♪'}</Text>
-                </Pressable>
+                <Text style={{ color: colors.text, fontSize: 22, fontWeight: '800', textAlign: 'center' }} numberOfLines={2}>{lines[active]?.text || '♪'}</Text>
                 {active < lines.length - 1 && (
-                  <Text style={{ color: colors.dim, fontSize: 14 }} numberOfLines={1}>{lines[active + 1]?.text || '♪'}</Text>
+                  <Text style={{ color: colors.dim, fontSize: 16 }} numberOfLines={1}>{lines[active + 1]?.text || '♪'}</Text>
                 )}
-              </View>
+              </Pressable>
             )}
             {showLog ? (
               <ScrollView style={{ flex: 1, marginTop: 8 }} contentContainerStyle={{ paddingHorizontal: 20 }}>
