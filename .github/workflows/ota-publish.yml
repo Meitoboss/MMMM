@@ -14,10 +14,11 @@ on:
         type: choice
         options: [trial, main]
         default: trial
-      branch:
-        description: 'Branch to build from'
+      note:
+        description: '更新の説明（アプリのポップアップに出ます。空でも構いません）'
         type: string
-        default: main
+        required: false
+        default: ''
 
 jobs:
   publish:
@@ -25,10 +26,17 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.branch }}
       - uses: actions/setup-node@v4
         with: { node-version: 22 }
+      # Fails early and in words when the update server cannot be reached (instead of after a long build)
+      - name: Check that the update server answers
+        run: |
+          URL="$(node -p "require('./ota/config.json').serverBase")/ota/health"
+          echo "checking $URL"
+          if ! curl -fsS --retry 5 --retry-delay 6 --retry-all-errors --max-time 15 "$URL"; then
+            echo "::error::更新サーバーに届きません。サーバー（OCI）と Caddy が動いているかを確認してください（ota/README.md の「うまくいかないとき」）"
+            exit 1
+          fi
       - run: npm install
       - name: Check that every imported file exists
         run: npx tsx --test tests/lint.test.ts
@@ -50,4 +58,5 @@ jobs:
         env:
           OTA_ADMIN_TOKEN: ${{ secrets.OTA_ADMIN_TOKEN }}
           OTA_PRIVATE_KEY: ${{ secrets.OTA_PRIVATE_KEY }}
+          OTA_NOTE: ${{ inputs.note }}
         run: node ota/publish.mjs update --dist dist --channel ${{ inputs.channel }} --expo-config expo-config.json
