@@ -14,11 +14,6 @@ on:
         type: choice
         options: [trial, main]
         default: trial
-      note:
-        description: '更新の説明（アプリのポップアップに出ます。空でも構いません）'
-        type: string
-        required: false
-        default: ''
 
 jobs:
   publish:
@@ -58,5 +53,4 @@ jobs:
         env:
           OTA_ADMIN_TOKEN: ${{ secrets.OTA_ADMIN_TOKEN }}
           OTA_PRIVATE_KEY: ${{ secrets.OTA_PRIVATE_KEY }}
-          OTA_NOTE: ${{ inputs.note }}
         run: node ota/publish.mjs update --dist dist --channel ${{ inputs.channel }} --expo-config expo-config.json
