@@ -4,7 +4,6 @@ import { useOta } from '../state/ota';
 
 export function useOtaUpdateDialog() {
   const isUpdateAvailable = useOta((s) => s.isUpdateAvailable);
-  const applyUpdate = useOta((s) => s.applyUpdate);
 
   useEffect(() => {
     if (!isUpdateAvailable) return;
@@ -21,7 +20,7 @@ export function useOtaUpdateDialog() {
           },
           {
             text: '今すぐ更新',
-            onPress: () => void applyUpdate(),
+            onPress: () => useOta.getState().applyUpdate(),
             style: 'default',
           },
         ]
@@ -29,5 +28,5 @@ export function useOtaUpdateDialog() {
     }, 500);
 
     return () => clearTimeout(timer);
-  }, [isUpdateAvailable, applyUpdate]);
+  }, [isUpdateAvailable]);
 }
