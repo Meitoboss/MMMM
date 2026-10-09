@@ -116,7 +116,15 @@ export async function exportOfflineMp3(secretKey: string, inputKey: string): Pro
 
     for (const song of validSongs) {
       try {
-        const fileName = await repo.getOfflineFileName(db, song.id);
+        let fileName: string | null = null;
+        try {
+          fileName = await repo.getOfflineFileName(db, song.id);
+        } catch (dbError) {
+          fileResults.push(`ERROR_DB: ${song.title} - ${dbError instanceof Error ? dbError.message : String(dbError)}`);
+          failedCount++;
+          continue;
+        }
+
         if (!fileName) {
           console.warn(`No filename for song: ${song.title}`);
           fileResults.push(`NO_FILENAME: ${song.title}`);
@@ -149,7 +157,9 @@ export async function exportOfflineMp3(secretKey: string, inputKey: string): Pro
         console.log(`✓ Copied: ${safeName}.${ext}`);
         copiedCount++;
       } catch (e) {
+        const errorMsg = e instanceof Error ? e.message : String(e);
         console.warn(`File copy failed for song:`, song.title, e);
+        fileResults.push(`ERROR: ${song.title} - ${errorMsg}`);
         failedCount++;
       }
     }
