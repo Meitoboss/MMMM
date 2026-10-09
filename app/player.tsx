@@ -252,6 +252,19 @@ export default function PlayerScreen() {
             <View style={{ alignItems: 'center', paddingTop: 20 }}>
               <Cover uri={song.thumbnail} size={cover} />
             </View>
+            {lines.length > 0 && active >= 0 && (
+              <View style={{ paddingHorizontal: 24, paddingVertical: 20, alignItems: 'center', gap: 8 }}>
+                {active > 0 && (
+                  <Text style={{ color: colors.dim, fontSize: 14 }} numberOfLines={1}>{lines[active - 1]?.text || '♪'}</Text>
+                )}
+                <Pressable onPress={() => setView('lyrics')}>
+                  <Text style={{ color: colors.text, fontSize: 16, fontWeight: '700', textAlign: 'center' }} numberOfLines={1}>{lines[active]?.text || '♪'}</Text>
+                </Pressable>
+                {active < lines.length - 1 && (
+                  <Text style={{ color: colors.dim, fontSize: 14 }} numberOfLines={1}>{lines[active + 1]?.text || '♪'}</Text>
+                )}
+              </View>
+            )}
             {showLog ? (
               <ScrollView style={{ flex: 1, marginTop: 8 }} contentContainerStyle={{ paddingHorizontal: 20 }}>
                 <Text selectable style={{ color: colors.sub, fontSize: 10 }}>

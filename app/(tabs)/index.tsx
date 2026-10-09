@@ -90,7 +90,7 @@ export default function Home() {
       {sections.slice(0, at).map((x, i) => <SectionCarousel key={`${x.title}-${i}`} section={x} />)}
       {/* directly below "Today's hits" / "Trending" */}
       {recent.length ? (
-        <SectionCarousel section={recentSection} onMore={() => router.push('library')} />
+        <SectionCarousel section={recentSection} onMore={() => router.push('recent-songs')} />
       ) : (
         <View style={{ marginBottom: 20 }}>
           <Text style={[s.h2]}>最近聞いた曲</Text>
