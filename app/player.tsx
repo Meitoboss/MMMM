@@ -41,6 +41,10 @@ export default function PlayerScreen() {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const p = usePlayer();
+  // Debug: verify DJ methods exist
+  if (typeof p.markLoopA !== 'function' || typeof p.markLoopB !== 'function') {
+    console.error('DJ methods not found on player state!', { markLoopA: typeof p.markLoopA, markLoopB: typeof p.markLoopB });
+  }
   const swipe = useSwipeDown(() => router.back()); // swipe down on the top, the cover or the title to close
   const showLog = showDebug || p.status === 'error'; // the playback log takes the aurora's place
   const { position, duration } = useProgress(500);
