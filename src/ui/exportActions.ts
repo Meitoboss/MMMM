@@ -112,12 +112,14 @@ export async function exportOfflineMp3(secretKey: string, inputKey: string): Pro
 
     let copiedCount = 0;
     let failedCount = 0;
+    const fileResults: string[] = [];
 
     for (const song of validSongs) {
       try {
         const fileName = await repo.getOfflineFileName(db, song.id);
         if (!fileName) {
           console.warn(`No filename for song: ${song.title}`);
+          fileResults.push(`NO_FILENAME: ${song.title}`);
           failedCount++;
           continue;
         }
@@ -127,7 +129,12 @@ export async function exportOfflineMp3(secretKey: string, inputKey: string): Pro
 
         // Check if source file exists
         const fileInfo = await FileSystem.getInfoAsync(srcFile);
-        console.log(`  → exists: ${fileInfo.exists}, size: ${fileInfo.size}, isDirectory: ${fileInfo.isDirectory}`);
+        console.log(`  exists: ${fileInfo.exists}, size: ${fileInfo.size}, isDirectory: ${fileInfo.isDirectory}`);
+        if (fileInfo.exists) {
+          fileResults.push(`OK: ${fileName} (${fileInfo.size} bytes)`);
+        } else {
+          fileResults.push(`NOT_FOUND: ${fileName}`);
+        }
         if (!fileInfo.exists) {
           console.warn(`Source file not found: ${srcFile}`);
           failedCount++;
@@ -151,7 +158,18 @@ export async function exportOfflineMp3(secretKey: string, inputKey: string): Pro
 
     if (copiedCount === 0) {
       await FileSystem.deleteAsync(tempDir).catch(() => undefined);
-      Alert.alert('エクスポート失敗', 'ファイルのコピーに失敗しました。\n\nデバッグ情報:\n- 曲の数: ' + validSongs.length + '\n- コピー成功: ' + copiedCount);
+      const debugMsg = `ファイルのコピーに失敗しました。
+
+📁 オフラインディレクトリ: ${offline}
+   存在: ${offlineDirInfo.exists}, フォルダ: ${offlineDirInfo.isDirectory}
+
+曲のファイル確認:
+${fileResults.map((r, i) => `${i + 1}. ${r}`).join('\n')}
+
+- 曲の合計数: ${validSongs.length}
+- コピー成功: ${copiedCount}
+- コピー失敗: ${failedCount}`;
+      Alert.alert('エクスポート失敗', debugMsg);
       return;
     }
 
