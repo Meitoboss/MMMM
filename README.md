@@ -1,6 +1,6 @@
 # Music space (TypeScript / React Native)
 
-**Music space** – a TypeScript re-implementation, based on [RiMusic](https://github.com/fast4x/RiMusic) (Kotlin Multiplatform, Android/Desktop)
+**Music space** – a TypeScript re-implementation (Kotlin Multiplatform, Android/Desktop)
 for **iOS**, built with Expo + React Native. Licensed **GPL-3.0-or-later**, like the original.
 
 ## Layout
