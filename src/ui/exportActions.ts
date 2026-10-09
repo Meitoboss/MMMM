@@ -65,76 +65,99 @@ export async function exportLikedSongs(secretKey: string): Promise<void> {
 
 export async function exportOfflineMp3(secretKey: string, inputKey: string): Promise<void> {
   try {
-    console.log('1. exportOfflineMp3 started');
+    console.log('Step 1: exportOfflineMp3 started');
     if (secretKey !== inputKey) {
       Alert.alert('エクスポート', 'キーが合いません');
       return;
     }
 
-    console.log('2. Getting offline state');
+    console.log('Step 2: Getting offline state');
     const offlineState = useOffline.getState();
-    console.log('3. offlineState:', offlineState);
     const offlineIds = offlineState.ids;
-    console.log('4. offlineIds:', offlineIds);
     const offlineSongIds = Object.keys(offlineIds);
+    console.log('Step 3: Found', offlineSongIds.length, 'offline songs');
 
     if (!offlineSongIds.length) {
       Alert.alert('エクスポート', 'オフライン保存した曲がありません');
       return;
     }
 
+    console.log('Step 4: Opening database');
     const db = await openDb();
+    console.log('Step 5: Getting song data for', offlineSongIds.length, 'songs');
     const songs = await Promise.all(offlineSongIds.map((id) => repo.getSong(db, id)));
     const validSongs = songs.filter((s) => s !== null) as any[];
+    console.log('Step 6: Got', validSongs.length, 'valid songs');
 
     if (!validSongs.length) {
       Alert.alert('エクスポート', 'オフライン保存した曲の情報が見つかりません');
       return;
     }
 
-    console.log('5. Creating temp directory');
-    console.log('6. cacheDirectory:', FileSystem.cacheDirectory);
-    const tempDir = `${FileSystem.cacheDirectory}musicspace-export-${Date.now()}/`;
-    console.log('7. tempDir:', tempDir);
+    console.log('Step 7: Creating temp directory');
+    const cacheDir = FileSystem.cacheDirectory;
+    if (!cacheDir) throw new Error('cacheDirectory is not available');
+    const tempDir = `${cacheDir}musicspace-export-${Date.now()}/`;
+    console.log('Step 8: tempDir =', tempDir);
     await FileSystem.makeDirectoryAsync(tempDir, { intermediates: true });
-    console.log('8. tempDir created');
+    console.log('Step 9: Temp directory created');
 
-    console.log('9. Getting offline directory');
+    console.log('Step 10: Getting offline directory');
     const offline = offlineDir();
-    console.log('10. offline directory:', offline);
+    console.log('Step 11: offline directory =', offline);
     let copiedCount = 0;
-    const exportedFiles: string[] = [];
+    let failedCount = 0;
 
     for (const song of validSongs) {
-      const fileName = await repo.getOfflineFileName(db, song.id);
-      if (!fileName) continue;
-
-      const srcFile = `${offline}${fileName}`;
-      const safeName = `${song.title.replace(/[/\\:*?"<>|]/g, '_')} - ${song.artists[0]?.name || 'Unknown'}`;
-      const ext = fileName.split('.').pop() || 'm4a';
-      const dstFile = `${tempDir}${safeName}.${ext}`;
-
       try {
+        const fileName = await repo.getOfflineFileName(db, song.id);
+        if (!fileName) {
+          console.warn(`No filename for song: ${song.title}`);
+          failedCount++;
+          continue;
+        }
+
+        const srcFile = `${offline}${fileName}`;
+        console.log(`Copying: ${srcFile}`);
+
+        // Check if source file exists
+        const fileInfo = await FileSystem.getInfoAsync(srcFile);
+        if (!fileInfo.exists) {
+          console.warn(`Source file not found: ${srcFile}`);
+          failedCount++;
+          continue;
+        }
+
+        const safeName = `${song.title.replace(/[/\\:*?"<>|]/g, '_')} - ${song.artists[0]?.name || 'Unknown'}`;
+        const ext = fileName.split('.').pop() || 'm4a';
+        const dstFile = `${tempDir}${safeName}.${ext}`;
+
         await FileSystem.copyAsync({ from: srcFile, to: dstFile });
-        exportedFiles.push(dstFile);
+        console.log(`✓ Copied: ${safeName}.${ext}`);
         copiedCount++;
       } catch (e) {
-        console.warn(`ファイルコピー失敗: ${song.title}`, e);
+        console.warn(`File copy failed for song:`, song.title, e);
+        failedCount++;
       }
     }
 
+    console.log(`Step 12: Copied ${copiedCount} files, failed ${failedCount}`);
+
     if (copiedCount === 0) {
-      await FileSystem.deleteAsync(tempDir);
-      Alert.alert('エクスポート', 'ファイルのコピーに失敗しました');
+      await FileSystem.deleteAsync(tempDir).catch(() => undefined);
+      Alert.alert('エクスポート失敗', 'ファイルのコピーに失敗しました。\n\nデバッグ情報:\n- 曲の数: ' + validSongs.length + '\n- コピー成功: ' + copiedCount);
       return;
     }
 
+    console.log('Step 13: Checking Sharing availability');
     if (await Sharing.isAvailableAsync()) {
+      console.log('Step 14: Sharing available, opening share dialog');
       await Sharing.shareAsync(tempDir, {
         dialogTitle: `${copiedCount} 曲をエクスポート`,
       });
+      console.log('Step 15: Share dialog closed');
     } else {
-      Alert.alert('エクスポート', `${copiedCount} 曲をディレクトリに出力しました: ${tempDir}`);
+      Alert.alert('エクスポート完了', `${copiedCount} 曲をディレクトリに出力しました:\n${tempDir}`);
     }
 
     setTimeout(() => {
@@ -142,7 +165,9 @@ export async function exportOfflineMp3(secretKey: string, inputKey: string): Pro
     }, 2000);
   } catch (error) {
     console.error('exportOfflineMp3 error:', error);
-    console.error('error stack:', error instanceof Error ? error.stack : 'no stack');
+    if (error instanceof Error) {
+      console.error('error stack:', error.stack);
+    }
     let message = 'エクスポートに失敗しました';
     if (error instanceof Error) {
       message = error.message;
