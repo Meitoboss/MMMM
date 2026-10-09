@@ -43,7 +43,7 @@ export const IOS: ClientProfile = {
 export type AppPlatform = 'ios' | 'android';
 
 /** which audio stream to play – see streams/quality.ts */
-export type AudioQuality = 'standard' | 'saver' | 'high';
+export type AudioQuality = 'low' | 'medium' | 'standard' | 'high' | 'veryHigh';
 
 export interface InnerTubeConfig {
   platform: AppPlatform;
