@@ -55,7 +55,9 @@ export default function RootLayout() {
           }}
         >
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          <Stack.Screen name="player" options={{ presentation: 'modal', headerShown: false, gestureEnabled: false }} />
+          {/* iPhone: the player is a sheet, and the sheet's own pull-down closes it (a JS swipe cannot: iOS takes the touch away half-way).
+              Android has no such gesture – there src/ui/useSwipeDown does it. */}
+          <Stack.Screen name="player" options={{ presentation: 'modal', headerShown: false, gestureEnabled: Platform.OS === 'ios' }} />
           <Stack.Screen name="add-to-playlist" options={{ presentation: 'modal', title: 'プレイリストに追加' }} />
           <Stack.Screen name="import-playlist" options={{ title: 'プレイリストを取り込む' }} />
           <Stack.Screen name="trending" options={{ title: '流行' }} />

@@ -23,7 +23,7 @@ import { useAddToPlaylist } from '../src/ui/actions';
 import { Aurora } from '../src/ui/Aurora';
 import { BpmPanel } from '../src/ui/BpmPanel';
 import { promptText, showActionSheet } from '../src/ui/dialogs';
-import { useSwipeDown } from '../src/ui/useSwipeDown';
+import { SYSTEM_CLOSES_SHEET, useSwipeDown } from '../src/ui/useSwipeDown';
 import { requestOfflineSave } from '../src/ui/offlineActions';
 import { useOffline } from '../src/state/offline';
 import { colors, useScheme } from '../src/ui/theme';
@@ -34,12 +34,19 @@ const SLEEP = [5, 15, 30, 45, 60];
 
 type View_ = 'cover' | 'lyrics' | 'queue' | 'dj';
 
+/** How far the play button's lower edge is from the bottom of the screen, as a part of the screen's height (like Spotify's player:
+ *  the controls are where the thumb is, not at the very bottom). */
+const CONTROLS_LIFT = 0.14;
+const CONTROLS_LIFT_MAX = 140;
+/** iPhone: a list at its top hands a pull-down to the sheet (which closes) – that needs the list's normal bounce. */
+const LIST_BOUNCES = SYSTEM_CLOSES_SHEET;
+
 export default function PlayerScreen() {
   useScheme();
   const showDebug = useSettings((st) => st.showDebug);
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
   const p = usePlayer();
   // Swipe down from anywhere to close. A list that has been scrolled down scrolls back first – except for a touch that begins in the top bar.
   const listTop = useRef(0);
@@ -50,6 +57,7 @@ export default function PlayerScreen() {
   const [view, setView] = useState<View_>('cover');
   useEffect(() => { listTop.current = 0; }, [view]); // a tab starts at its top
   const [seeking, setSeeking] = useState<number | null>(null);
+  const [coverRoom, setCoverRoom] = useState(0); // the height that is left for the cover (0: not measured yet)
   const [lyrics, setLyrics] = useState<Lyrics | null | 'loading'>(null);
   const autoLyrics = useSettings((s) => s.autoLyrics);
   const fadeSeconds = useSettings((s) => s.fadeSeconds);
@@ -107,7 +115,9 @@ export default function PlayerScreen() {
   }
 
   const shown = seeking ?? livePosition;
-  const cover = Math.min(width - 90, 300); // the aurora glows around and behind it
+  // the aurora glows around and behind it; on a short screen the cover gets smaller instead of running into the title
+  const cover = Math.min(width - 90, 300, coverRoom > 0 ? Math.max(120, coverRoom - 24) : 300);
+  const bottomGap = Math.max(insets.bottom + 12, Math.min(CONTROLS_LIFT_MAX, Math.round(height * CONTROLS_LIFT)));
 
   const reloadCues = async () => {
     if (song) setCues(await repo.hotCues(await openDb(), song.id));
@@ -204,7 +214,7 @@ export default function PlayerScreen() {
   };
 
   return (
-    <Animated.View testID="player-root" {...swipe.panHandlers} style={{ flex: 1, backgroundColor: colors.bg, paddingTop: 12, paddingBottom: insets.bottom + 12, transform: [{ translateY: swipe.translateY }] }}>
+    <Animated.View testID="player-root" {...swipe.panHandlers} style={{ flex: 1, backgroundColor: colors.bg, paddingTop: 12, paddingBottom: bottomGap, transform: [{ translateY: swipe.translateY }] }}>
       <View testID="player-header" style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20 }}>
         <Pressable hitSlop={12} onPress={() => router.back()}><Ionicons name="chevron-down" size={28} color={colors.text} /></Pressable>
         <View style={{ flexDirection: 'row', gap: 16 }}>
@@ -219,7 +229,7 @@ export default function PlayerScreen() {
 
       <View style={{ flex: 1, marginTop: 16 }}>
         {view === 'cover' && (
-          <View testID="player-cover" style={{ flex: 1 }}>
+          <View testID="player-cover" style={{ flex: 1 }} onLayout={(e) => setCoverRoom(e.nativeEvent.layout.height)}>
             {/* the aurora is the background of this whole area, BEHIND the cover – no frame; its edges dissolve into the screen */}
             {!showLog && <Aurora testID="aurora" playing={p.status === 'playing'} rate={p.tempo ?? p.rate} style={StyleSheet.absoluteFill} />}
             <View style={showLog ? { alignItems: 'center' } : { flex: 1, alignItems: 'center', justifyContent: 'center' }}>
@@ -228,7 +238,7 @@ export default function PlayerScreen() {
               </View>
             </View>
             {showLog && (
-              <ScrollView testID="player-log" onScroll={onList} scrollEventThrottle={16} bounces={false} overScrollMode="never" style={{ flex: 1, marginTop: 8 }} contentContainerStyle={{ paddingHorizontal: 20 }}>
+              <ScrollView testID="player-log" onScroll={onList} scrollEventThrottle={16} bounces={LIST_BOUNCES} overScrollMode="never" style={{ flex: 1, marginTop: 8 }} contentContainerStyle={{ paddingHorizontal: 20 }}>
                 <Text selectable style={{ color: colors.sub, fontSize: 10 }}>
                   {p.debug.join('\n')}
                 </Text>
@@ -245,7 +255,7 @@ export default function PlayerScreen() {
         {view === 'lyrics' && (
           lyrics === 'loading' ? <Text style={{ color: colors.sub, textAlign: 'center', marginTop: 40 }}>歌詞を検索中…</Text>
           : !lines.length ? <Text style={{ color: colors.sub, textAlign: 'center', marginTop: 40 }}>歌詞が見つかりませんでした</Text>
-          : <FlatList testID="player-lyrics" ref={listRef} onScroll={onList} scrollEventThrottle={16} bounces={false} overScrollMode="never" data={lines} keyExtractor={(_, i) => String(i)} onScrollToIndexFailed={() => undefined}
+          : <FlatList testID="player-lyrics" ref={listRef} onScroll={onList} scrollEventThrottle={16} bounces={LIST_BOUNCES} overScrollMode="never" data={lines} keyExtractor={(_, i) => String(i)} onScrollToIndexFailed={() => undefined}
               contentContainerStyle={{ paddingHorizontal: 24, paddingVertical: 40 }}
               renderItem={({ item, index }) => (
                 <Pressable disabled={!(lyrics as Lyrics).synced} onPress={() => void p.seekTo(item.time / 1000)} onLongPress={() => { const r = lineRegion(lines.map((l) => l.time), index, song.durationSec ?? (duration || undefined)); if (r) void p.loopRegion(r); }}>
@@ -254,7 +264,7 @@ export default function PlayerScreen() {
               )} />
         )}
         {view === 'dj' && (
-          <ScrollView testID="player-dj" onScroll={onList} scrollEventThrottle={16} bounces={false} overScrollMode="never" contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 24, gap: 20 }}>
+          <ScrollView testID="player-dj" onScroll={onList} scrollEventThrottle={16} bounces={LIST_BOUNCES} overScrollMode="never" contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 24, gap: 20 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               <Text style={{ color: colors.text, fontSize: 20, fontWeight: '800' }}>DJ</Text>
               <View style={{ paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8, backgroundColor: colors.accent }}>
@@ -333,7 +343,7 @@ export default function PlayerScreen() {
           </ScrollView>
         )}
         {view === 'queue' && (
-          <FlatList testID="player-queue" onScroll={onList} scrollEventThrottle={16} bounces={false} overScrollMode="never" data={p.queue} keyExtractor={(x, i) => `${x.id}-${i}`}
+          <FlatList testID="player-queue" onScroll={onList} scrollEventThrottle={16} bounces={LIST_BOUNCES} overScrollMode="never" data={p.queue} keyExtractor={(x, i) => `${x.id}-${i}`}
             initialScrollIndex={Math.max(0, Math.min(p.index, p.queue.length - 1))} getItemLayout={(_, i) => ({ length: 64, offset: 64 * i, index: i })}
             renderItem={({ item, index }) => (
               <View style={{ backgroundColor: index === p.index ? colors.surface : undefined }}>

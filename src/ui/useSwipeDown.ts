@@ -1,5 +1,5 @@
 import { useMemo, useRef } from 'react';
-import { Animated, PanResponder, useWindowDimensions } from 'react-native';
+import { Animated, PanResponder, Platform, useWindowDimensions } from 'react-native';
 
 import { startsSwipeDown, swipeOutcome } from '../core/swipe';
 
@@ -11,7 +11,13 @@ import { startsSwipeDown, swipeOutcome } from '../core/swipe';
  * Only a drag that goes down and is mostly vertical counts, so a slider (sideways) is never taken, and a tap is not a swipe.
  * `canStart(y)`: a list that has been scrolled down must scroll up first (and not close the screen) – the caller says whether the
  * touch, which began at height `y` on the screen, may start a swipe.
+ *
+ * iPhone: the screen is a native sheet (`presentation: 'modal'`), and the sheet has its own pull-down gesture. As soon as that
+ * one notices the drag, iOS cancels the touch for JS – the screen sprang back and never closed. So there the system's gesture
+ * closes the screen (`gestureEnabled` in app/_layout.tsx) and this hook stays out of its way (no handlers, no movement).
  */
+export const SYSTEM_CLOSES_SHEET = Platform.OS === 'ios';
+
 export function useSwipeDown(onClose: () => void, canStart: (touchStartY: number) => boolean = () => true) {
   const { height } = useWindowDimensions();
   const translateY = useRef(new Animated.Value(0)).current;
@@ -45,5 +51,5 @@ export function useSwipeDown(onClose: () => void, canStart: (touchStartY: number
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  return { panHandlers: pan.panHandlers, translateY };
+  return { panHandlers: SYSTEM_CLOSES_SHEET ? {} : pan.panHandlers, translateY };
 }
