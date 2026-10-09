@@ -224,21 +224,7 @@ export default function Settings() {
             <Text style={{ color: colors.accentText, fontWeight: '700' }}>エクスポート</Text>
           </Row>
         </Pressable>
-        <Pressable onPress={() => {
-          const secretKey = st.secretKey;
-          Alert.prompt('秘密キーを入力', '', [
-            { text: 'キャンセル', style: 'cancel' },
-            {
-              text: 'エクスポート',
-              onPress: (keyInput) => {
-                if (keyInput) {
-                  console.log('Exporting with key:', keyInput);
-                  void exportOfflineMp3(secretKey, keyInput);
-                }
-              },
-            },
-          ]);
-        }}>
+        <Pressable onPress={() => setShowKeyPrompt(true)}>
           <Row title="オフライン保存した曲（mp3）をエクスポート" sub="オフライン保存した曲を mp3 ファイルで出力します。秘密キーが必要です" last>
             <Text style={{ color: colors.accentText, fontWeight: '700' }}>エクスポート</Text>
           </Row>
