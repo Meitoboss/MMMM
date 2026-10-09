@@ -1,5 +1,5 @@
 import { useMemo, useRef } from 'react';
-import { Animated, PanResponder, useWindowDimensions } from 'react-native';
+import { Animated, PanResponder, useWindowDimensions, Platform } from 'react-native';
 
 import { startsSwipeDown, swipeOutcome } from '../core/swipe';
 
@@ -18,6 +18,7 @@ export function useSwipeDown(onClose: () => void) {
   const pan = useMemo(() => {
     const springBack = () => Animated.spring(translateY, { toValue: 0, bounciness: 0, useNativeDriver: true }).start();
     return PanResponder.create({
+      onStartShouldSetPanResponderCapture: (_e, g) => startsSwipeDown(g.dx, g.dy),
       onMoveShouldSetPanResponder: (_e, g) => startsSwipeDown(g.dx, g.dy),
       onPanResponderMove: (_e, g) => translateY.setValue(Math.max(0, g.dy)),
       onPanResponderRelease: (_e, g) => {
