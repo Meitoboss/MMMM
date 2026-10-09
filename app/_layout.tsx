@@ -12,13 +12,16 @@ import { restoreResume, startResumeSaving } from '../src/state/resume';
 import { ensurePlayer } from '../src/player/setup';
 import { applySettings, useSettings } from '../src/state/settings';
 import { useUpdate } from '../src/state/update';
+import { useOta } from '../src/state/ota';
 import { DialogHost } from '../src/ui/dialogs';
 import { EngineHost } from '../src/ui/EngineHost';
 import { MiniPlayer } from '../src/ui/MiniPlayer';
+import { useOtaUpdateDialog } from '../src/ui/OtaUpdateDialog';
 import { colors, useScheme } from '../src/ui/theme';
 
 export default function RootLayout() {
   const scheme = useScheme();
+  useOtaUpdateDialog(); // show OTA update dialog when available
   useEffect(() => {
     applySettings(useSettings.getState());
     restoreResume(); // last session's queue, paused (nothing starts by itself)
@@ -31,7 +34,10 @@ export default function RootLayout() {
     void openDb();
     void useOffline.getState().load();
     void ensureFolders(); // creates Documents/Music, which then shows up in the Files app
-    const updateCheck = setTimeout(() => void useUpdate.getState().check(), 4000); // the "new version" notice; nothing happens without an address in Settings
+    const updateCheck = setTimeout(() => {
+      void useUpdate.getState().check(); // check for new app versions (requires URL in settings)
+      void useOta.getState().checkForOtaUpdate(); // check for OTA updates (automatic)
+    }, 4000);
     void ensurePlayer();
     // Android 13+: the media notification (lock-screen controls) needs this permission
     if (Platform.OS === 'android' && Number(Platform.Version) >= 33) {
