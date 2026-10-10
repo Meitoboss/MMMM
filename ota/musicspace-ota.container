@@ -1,0 +1,27 @@
+# Music space update (OTA) server – a small container, like the token server. Installed by setup.sh.
+[Unit]
+Description=Music space update (OTA) server
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+Image=docker.io/library/node:22-alpine
+ContainerName=musicspace-ota
+# a tight JavaScript heap: the garbage collector then works early (measured: 56-77 MB normally, 93 MB at the very most with 10 big downloads at once)
+Exec=node --max-old-space-size=48 --max-semi-space-size=1 /app/server.mjs
+Volume=__BASE__/app:/app:ro,Z
+Volume=__BASE__/data:/data:Z
+EnvironmentFile=__BASE__/ota.env
+# only this machine can reach it; Caddy (HTTPS) is the door
+PublishPort=127.0.0.1:8789:8789
+# a memory cap (this VM has little – the token server has its own), no writes except /data, no extra rights
+PodmanArgs=--init --memory=160m --memory-swap=160m --read-only --tmpfs /tmp --cap-drop=ALL --security-opt=no-new-privileges
+
+[Service]
+Restart=always
+RestartSec=5
+# the first start downloads the Node image
+TimeoutStartSec=300
+
+[Install]
+WantedBy=default.target
