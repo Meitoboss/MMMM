@@ -1,9 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, FlatList, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Alert, FlatList, Pressable, ScrollView, Share, Text, TextInput, View } from 'react-native';
 
 import { describeRules } from '../../src/core/smart';
+import { explainDownloadError } from '../../src/core/downloadFallback';
 import type { AlbumItem, ArtistItem, SongItem } from '../../src/core/types';
 import { openDb } from '../../src/db/expo';
 import * as repo from '../../src/db/repo';
@@ -230,8 +231,13 @@ export default function Library() {
                       <Text style={{ flex: 1, color: j.status === 'error' ? colors.danger : colors.text }} numberOfLines={1}>
                         {names[id] ?? id}
                       </Text>
-                      <Text style={{ color: j.status === 'error' ? colors.danger : colors.sub, fontSize: 12 }} numberOfLines={1}>
-                        {j.status === 'queued' ? '待機中' : j.status === 'downloading' ? `${Math.round(j.progress * 100)}%` : j.status === 'done' ? '完了' : (j.error ?? 'エラー').slice(0, 40)}
+                      <Text
+                        testID={j.status === 'error' ? 'offline-error' : undefined}
+                        style={{ color: j.status === 'error' ? colors.danger : colors.sub, fontSize: 12, flexShrink: 1, maxWidth: '58%' }}
+                        numberOfLines={j.status === 'error' ? 3 : 1}
+                        onLongPress={j.status === 'error' ? () => void Share.share({ message: `保存の失敗: ${names[id] ?? id}\n${j.error ?? ''}` }).catch(() => undefined) : undefined}
+                      >
+                        {j.status === 'queued' ? '待機中' : j.status === 'downloading' ? `${Math.round(j.progress * 100)}%` : j.status === 'done' ? '完了' : explainDownloadError(j.error)}
                       </Text>
                       <Pressable hitSlop={10} onPress={() => (j.status === 'error' || j.status === 'done' ? useOffline.getState().dismiss(id) : useOffline.getState().cancel(id))}>
                         <Ionicons name="close-circle-outline" size={20} color={colors.sub} />

@@ -95,7 +95,7 @@ const queue = new DownloadQueue(
     } else if (state?.status === 'error') {
       pending.delete(id);
       useOffline.setState({ jobs: next });
-      setTimeout(() => queue.clear(id), 20000);
+      setTimeout(() => queue.clear(id), 60000); // long enough to read the reason (and to share it with a long press)
     } else {
       if (!state) pending.delete(id);
       useOffline.setState({ jobs: next });
