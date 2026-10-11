@@ -26,6 +26,7 @@ import { useAddToPlaylist } from '../src/ui/actions';
 import { Aurora } from '../src/ui/Aurora';
 import { BpmPanel } from '../src/ui/BpmPanel';
 import { promptText, showActionSheet } from '../src/ui/dialogs';
+import { SeekBar } from '../src/ui/SeekBar';
 import { useSwipeDown } from '../src/ui/useSwipeDown';
 import { requestOfflineSave } from '../src/ui/offlineActions';
 import { useOffline } from '../src/state/offline';
@@ -148,6 +149,20 @@ export default function PlayerScreen() {
   // a slider falls back to when neither is known yet
   const total = seekLength(duration, song.durationSec);
   const given = sliderValue(drag, hold, livePosition); // the value the slider is handed: what it reports back is an echo, not a finger
+  // what the seek bar does with a finger (the same on both platforms): a drag shows the finger's position, lifting seeks there
+  const seekStart = (v: number) => setDrag((d) => dragMoved(d, v));
+  const seekFinger = (v: number) => setDrag((d) => dragMoved(d, v));
+  const seekDone = async (v: number) => {
+    setHold(v);
+    setDrag(null);
+    p.log(`seek: to ${v.toFixed(1)}s (the bar runs to ${total.toFixed(0)}s)`);
+    try {
+      await p.seekTo(v);
+      p.log(`seek: the player is at ${(await p.getPosition()).toFixed(1)}s`);
+    } catch (e) {
+      p.log(`seek: failed – ${e instanceof Error ? e.message : String(e)}`);
+    }
+  };
   // iPhone: the screen is a sheet that already starts below the status bar. Android: it reaches under it, and the header would be covered
   const topPad = (Platform.OS === 'android' ? insets.top + 8 : 0) + 12;
   const sidePad = Math.max(20, insets.left + 12, insets.right + 12);
@@ -403,29 +418,36 @@ export default function PlayerScreen() {
           </Pressable>
         </View>
 
-        <View ref={seekRef} testID="player-seek" collapsable={false} onLayout={measureSeek}>
-          <Slider
-            style={{ marginTop: 12, height: 40 }}
-            minimumValue={0}
-            maximumValue={total}
-            value={given}
-            minimumTrackTintColor={colors.accent}
-            maximumTrackTintColor={colors.surface2}
-            thumbTintColor={colors.accent}
-            onSlidingStart={(v) => setDrag((d) => dragMoved(d, v))}
-            onValueChange={(v) => setDrag((d) => (d || !isEcho(v, given) ? dragMoved(d, v) : d))}
-            onSlidingComplete={async (v) => {
-              setHold(v);
-              setDrag(null);
-              p.log(`seek: to ${v.toFixed(1)}s (the bar runs to ${total.toFixed(0)}s)`);
-              try {
-                await p.seekTo(v);
-                p.log(`seek: the player is at ${(await p.getPosition()).toFixed(1)}s`);
-              } catch (e) {
-                p.log(`seek: failed – ${e instanceof Error ? e.message : String(e)}`);
-              }
-            }}
-          />
+        <View ref={seekRef} testID="player-seek" collapsable={false} onLayout={measureSeek} style={{ marginTop: 12 }}>
+          {Platform.OS === 'android' ? (
+            // Android: the app's own bar (the native slider did not react to touches at all); it follows the finger itself
+            <SeekBar
+              testID="player-seekbar"
+              value={shown}
+              max={total}
+              onStart={seekStart}
+              onChange={seekFinger}
+              onComplete={seekDone}
+              onCancel={() => setDrag(null)}
+              report={showDebug ? (line) => p.log(line) : undefined}
+              trackColor={colors.surface2}
+              fillColor={colors.accent}
+              thumbColor={colors.accent}
+            />
+          ) : (
+            <Slider
+              style={{ height: 40 }}
+              minimumValue={0}
+              maximumValue={total}
+              value={given}
+              minimumTrackTintColor={colors.accent}
+              maximumTrackTintColor={colors.surface2}
+              thumbTintColor={colors.accent}
+              onSlidingStart={seekStart}
+              onValueChange={(v) => setDrag((d) => (d || !isEcho(v, given) ? dragMoved(d, v) : d))}
+              onSlidingComplete={seekDone}
+            />
+          )}
         </View>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
           <Text style={{ color: colors.sub, fontSize: 12 }}>{fmt(shown)}</Text>
