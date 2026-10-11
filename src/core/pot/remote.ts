@@ -29,6 +29,25 @@ export const MINT_TIMEOUT_MS = 8_000;
 let consecutiveFailures = 0;
 let pausedUntil = 0;
 
+/**
+ * Every request to the token server reports how it went (a cache hit is no request and reports nothing): the app keeps these as a
+ * record, so that "it sometimes does not connect" can be looked at afterwards (core/netlog.ts).
+ */
+export type RemoteOutcome = 'ok' | 'timeout' | 'network' | 'http' | 'key' | 'badbody' | 'paused';
+export type RemoteObserver = (e: { at: number; what: 'mint' | 'ping'; outcome: RemoteOutcome; ms: number; status?: number }) => void;
+let observer: RemoteObserver | undefined;
+export function setRemoteObserver(f?: RemoteObserver): void {
+  observer = f;
+}
+function emit(what: 'mint' | 'ping', outcome: RemoteOutcome, startedAt: number, status?: number): void {
+  try {
+    observer?.({ at: Date.now(), what, outcome, ms: Math.max(0, Date.now() - startedAt), ...(status ? { status } : {}) });
+  } catch {
+    /* a record must never break playback */
+  }
+}
+const outcomeOfError = (e: unknown): RemoteOutcome => (e instanceof Error && e.name === 'TimeoutError' ? 'timeout' : 'network');
+
 export function resetRemoteBreaker(): void {
   consecutiveFailures = 0;
   pausedUntil = 0;
@@ -64,7 +83,7 @@ async function timedFetch(url: string, init: RequestInit, timeoutMs: number): Pr
   try {
     return await fetch(url, { ...init, credentials: 'omit', signal: ctl.signal });
   } catch (e) {
-    if (e instanceof Error && e.name === 'AbortError') throw new Error(`token server did not answer within ${timeoutMs / 1000}s`);
+    if (e instanceof Error && e.name === 'AbortError') throw Object.assign(new Error(`token server did not answer within ${timeoutMs / 1000}s`), { name: 'TimeoutError' });
     throw e;
   } finally {
     clearTimeout(timer);
@@ -77,9 +96,11 @@ export async function mintRemote(binding: string, timeoutMs = MINT_TIMEOUT_MS): 
   const hit = cache.get(binding);
   if (hit && hit.expiresAt - 60_000 > Date.now()) return hit.token;
   if (Date.now() < pausedUntil) {
+    emit('mint', 'paused', Date.now());
     throw new Error(`token server paused after repeated failures (retrying in ${remotePauseSecondsLeft()}s)`);
   }
 
+  const started = Date.now();
   let res: Response;
   try {
     res = await timedFetch(
@@ -89,18 +110,25 @@ export async function mintRemote(binding: string, timeoutMs = MINT_TIMEOUT_MS): 
     );
   } catch (e) {
     noteFailure(); // no answer at all: timeout / connection refused / no network
+    emit('mint', outcomeOfError(e), started);
     throw e;
   }
-  if (res.status === 401) throw new Error('token server refused the key (HTTP 401) – check "Token server key"');
+  if (res.status === 401) {
+    emit('mint', 'key', started, 401);
+    throw new Error('token server refused the key (HTTP 401) – check "Token server key"');
+  }
   if (!res.ok) {
     if (res.status >= 500) noteFailure();
+    emit('mint', 'http', started, res.status);
     throw new Error(`token server HTTP ${res.status}`);
   }
   const body = (await res.json().catch(() => ({}))) as { poToken?: string; error?: string };
   if (!body.poToken) {
     noteFailure();
+    emit('mint', 'badbody', started, res.status);
     throw new Error(`token server: ${body.error ?? 'no poToken in the answer'}`);
   }
+  emit('mint', 'ok', started, res.status);
   resetRemoteBreaker();
 
   const expiresAt = Date.parse((body as { expiresAt?: string }).expiresAt ?? '') || Date.now() + 6 * 3_600_000;
@@ -110,9 +138,23 @@ export async function mintRemote(binding: string, timeoutMs = MINT_TIMEOUT_MS): 
 
 export async function pingRemote(timeoutMs = 8_000): Promise<string> {
   if (!cfg) throw new Error('token server is not configured');
-  const res = await timedFetch(`${cfg.url}/ping`, { headers: headers() }, timeoutMs);
-  if (res.status === 401) throw new Error('refused the key (HTTP 401)');
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const started = Date.now();
+  let res: Response;
+  try {
+    res = await timedFetch(`${cfg.url}/ping`, { headers: headers() }, timeoutMs);
+  } catch (e) {
+    emit('ping', outcomeOfError(e), started);
+    throw e;
+  }
+  if (res.status === 401) {
+    emit('ping', 'key', started, 401);
+    throw new Error('refused the key (HTTP 401)');
+  }
+  if (!res.ok) {
+    emit('ping', 'http', started, res.status);
+    throw new Error(`HTTP ${res.status}`);
+  }
+  emit('ping', 'ok', started, res.status);
   return res.text();
 }
 
