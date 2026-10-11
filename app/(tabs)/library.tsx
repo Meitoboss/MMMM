@@ -5,14 +5,18 @@ import { Alert, FlatList, Pressable, ScrollView, Share, Text, TextInput, View } 
 
 import { describeRules } from '../../src/core/smart';
 import { explainDownloadError } from '../../src/core/downloadFallback';
+import { type SortTab, isRelease, sortFor } from '../../src/core/librarySort';
 import type { AlbumItem, ArtistItem, SongItem } from '../../src/core/types';
 import { openDb } from '../../src/db/expo';
 import * as repo from '../../src/db/repo';
 import { chooseAndroidFolder, importLocalFiles, isAndroid, listInbox, savedAndroidFolder } from '../../src/player/localFiles';
+import { useLibrarySort } from '../../src/state/librarySort';
 import { useOffline } from '../../src/state/offline';
+import { useReleaseYears } from '../../src/state/releaseYears';
 import { usePlayer } from '../../src/state/player';
 import { Button, Cover, ItemRow, SongRow, s } from '../../src/ui/components';
 import { promptText, showActionSheet } from '../../src/ui/dialogs';
+import { SortBar } from '../../src/ui/SortBar';
 import { MINI_HEIGHT, colors, useScheme } from '../../src/ui/theme';
 
 type Tab = 'songs' | 'local' | 'offline' | 'liked' | 'tags' | 'playlists' | 'albums' | 'artists' | 'history' | 'stats';
@@ -56,25 +60,35 @@ export default function Library() {
   const jobs = useOffline((st) => st.jobs);
   const names = useOffline((st) => st.names);
   const offlineVersion = useOffline((st) => st.version);
+  const prefs = useLibrarySort((st) => st.prefs);
+  const setSort = useLibrarySort((st) => st.set);
+  const yearsVersion = useReleaseYears((st) => st.version);
+  const [missingYears, setMissingYears] = useState(0);
+  // the lists that can be ordered (and the order chosen for the one that is open)
+  const sortTab: SortTab | null = tab === 'songs' || tab === 'local' || tab === 'offline' || tab === 'liked' || tab === 'tags' || tab === 'history' ? tab : null;
+  const sort = sortTab ? sortFor(prefs, sortTab) : null;
 
   const load = useCallback(async () => {
     const db = await openDb();
-    if (tab === 'songs') setSongs(await repo.allSongs(db));
+    const order = sortTab ? sortFor(prefs, sortTab) : 'title';
+    if (tab === 'songs') setSongs(await repo.libraryList(db, 'songs', order));
     if (tab === 'local') {
-      setSongs(await repo.localSongs(db));
+      setSongs(await repo.libraryList(db, 'local', order));
       setWaiting((await listInbox()).length);
     }
     if (tab === 'offline') {
-      setSongs(await repo.offlineSongs(db));
+      setSongs(await repo.libraryList(db, 'offline', order));
       setOfflineBytes(await repo.offlineTotalSize(db));
     }
-    if (tab === 'liked') setSongs(await repo.likedSongs(db));
-    if (tab === 'history') setSongs(await repo.history(db));
+    if (tab === 'liked') setSongs(await repo.libraryList(db, 'liked', order));
+    if (tab === 'history') setSongs(await repo.libraryList(db, 'history', order));
     if (tab === 'tags') {
       const all = await repo.tags(db);
       setTagList(all);
-      setSongs(await repo.songsByTags(db, selectedTags.filter((id) => all.some((t) => t.id === id)), tagMode));
+      setSongs(await repo.libraryList(db, 'tags', order, { tagIds: selectedTags.filter((id) => all.some((t) => t.id === id)), tagMode }));
     }
+    // the release order needs the year of the albums: how many are still unknown?
+    setMissingYears(sortTab && isRelease(order) ? (await repo.albumsMissingYear(db)).length : 0);
     if (tab === 'playlists') {
       setPlaylists(await repo.playlists(db));
       setSmartList(await repo.smartPlaylists(db));
@@ -86,13 +100,18 @@ export default function Library() {
       setTop(await repo.topSongs(db, range));
       setTotal(await repo.totalListeningMs(db, range));
     }
-  }, [tab, range, selectedTags, tagMode]);
+  }, [tab, range, selectedTags, tagMode, prefs]);
   useFocusEffect(useCallback(() => { void load(); }, [load]));
   // a download finished / a copy was removed
   useEffect(() => {
     if (tab === 'offline') void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [offlineVersion]);
+  // release years were looked up
+  useEffect(() => {
+    if (yearsVersion > 0) void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [yearsVersion]);
 
   const addFiles = async () => {
     setImporting(true);
@@ -166,6 +185,7 @@ export default function Library() {
           contentContainerStyle={pad}
           ListHeaderComponent={tab === 'local' || tab === 'offline' || tab === 'tags' || songs.length ? (
             <View>
+              {sortTab && sort && songs.length > 1 && <SortBar tab={sortTab} value={sort} onChange={(k) => setSort(sortTab, k)} missingYears={missingYears} />}
               {tab === 'local' && (
                 <View style={{ paddingHorizontal: 16, marginBottom: 6, gap: 6 }}>
                   <Text style={s.sub}>

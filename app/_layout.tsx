@@ -11,6 +11,7 @@ import { useOffline } from '../src/state/offline';
 import { restoreResume, startResumeSaving } from '../src/state/resume';
 import { ensurePlayer } from '../src/player/setup';
 import { applySettings, useSettings } from '../src/state/settings';
+import { startNetLog } from '../src/state/netlog';
 import { useUpdate } from '../src/state/update';
 import { DialogHost } from '../src/ui/dialogs';
 import { EngineHost } from '../src/ui/EngineHost';
@@ -34,11 +35,15 @@ export default function RootLayout() {
     void ensureFolders(); // creates Documents/Music, which then shows up in the Files app
     const updateCheck = setTimeout(() => void useUpdate.getState().check(), 4000); // the "new version" notice; nothing happens without an address in Settings
     void ensurePlayer();
+    const stopNetLog = startNetLog(); // every answer of the token server is written down (Settings → 通信の記録)
     // Android 13+: the media notification (lock-screen controls) needs this permission
     if (Platform.OS === 'android' && Number(Platform.Version) >= 33) {
       void PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS).catch(() => undefined);
     }
-    return () => clearTimeout(updateCheck);
+    return () => {
+      clearTimeout(updateCheck);
+      stopNetLog();
+    };
   }, []);
 
   return (
@@ -55,10 +60,9 @@ export default function RootLayout() {
           }}
         >
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          {/* iPhone: the player is a sheet, and the sheet's own pull-down closes it (a JS swipe cannot: iOS takes the touch away half-way).
-              Android has no such gesture – there src/ui/useSwipeDown does it. */}
-          <Stack.Screen name="player" options={{ presentation: 'modal', headerShown: false, gestureEnabled: Platform.OS === 'ios' }} />
+          <Stack.Screen name="player" options={{ presentation: 'modal', headerShown: false, gestureEnabled: false }} />
           <Stack.Screen name="add-to-playlist" options={{ presentation: 'modal', title: 'プレイリストに追加' }} />
+          <Stack.Screen name="archive-pick" options={{ presentation: 'modal', title: '入れる曲を選ぶ' }} />
           <Stack.Screen name="import-playlist" options={{ title: 'プレイリストを取り込む' }} />
           <Stack.Screen name="trending" options={{ title: '流行' }} />
           <Stack.Screen name="song-tags" options={{ presentation: 'modal', title: 'タグ' }} />

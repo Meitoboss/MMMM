@@ -2,6 +2,7 @@ import { create } from 'zustand';
 
 import { APP_VERSION } from '../appVersion';
 import { ArchiveError, type ArchiveReader } from '../core/archive';
+import type { PickItem } from '../core/songPick';
 import { type Manifest, type RestoreResult, exportSongArchive, formatBytes, openSongArchive, restoreSongArchive, songArchiveFileName, spaceNeeded } from '../core/songArchive';
 import { openDb } from '../db/expo';
 import * as repo from '../db/repo';
@@ -63,6 +64,18 @@ export async function savedSongsSummary(): Promise<{ count: number; bytes: numbe
   return { count, bytes };
 }
 
+/** the saved songs whose file is really there, as the list the person chooses from */
+export async function listSavedForPick(): Promise<PickItem[]> {
+  const db = await openDb();
+  const ops = await offlineOps();
+  const out: PickItem[] = [];
+  for (const x of await listExportSongs(db)) {
+    const size = await ops.fileSize(x.fileName);
+    if (size !== null) out.push({ id: x.song.id, title: x.song.title, artist: x.song.artists.map((a) => a.name).join(', '), bytes: size });
+  }
+  return out;
+}
+
 export interface CreatedArchive {
   name: string;
   uri: string;
@@ -72,13 +85,15 @@ export interface CreatedArchive {
   bytes: number;
 }
 
-export async function createSongArchive(opts: { secretKey: string; withLibrary: boolean }): Promise<CreatedArchive> {
+/** `songIds`: only these saved songs go into the file (not given: all of them) */
+export async function createSongArchive(opts: { secretKey: string; withLibrary: boolean; songIds?: string[] }): Promise<CreatedArchive> {
   start('key');
   let output: ArchiveOutput | undefined;
   try {
     const db = await openDb();
     const ops = await offlineOps();
-    const songs = await listExportSongs(db);
+    const chosen = opts.songIds ? new Set(opts.songIds) : null;
+    const songs = (await listExportSongs(db)).filter((x) => !chosen || chosen.has(x.song.id));
     let approx = 0;
     for (const x of songs) approx += (await ops.fileSize(x.fileName)) ?? 0;
     const free = await freeDiskBytes();

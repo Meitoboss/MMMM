@@ -1,10 +1,13 @@
+import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Alert, Pressable, Share, Switch, Text, View } from 'react-native';
 
 import { checkSecretKey, KEY_ADVICE } from '../core/secretKey';
 import { estimateSeconds, formatBytes, formatDuration, spaceNeeded } from '../core/songArchive';
 import { listSongArchives, whereArchives } from '../player/songArchivePlatform';
-import { type OpenedArchive, archiveErrorText, createSongArchive, isCancelledError, isWrongKeyError, openSongArchiveFile, restoreOpenedArchive, savedSongsSummary, useSongArchive } from '../state/songArchive';
+import { pickSongs } from '../state/archivePick';
+import { type OpenedArchive, archiveErrorText, createSongArchive, isCancelledError, isWrongKeyError, listSavedForPick, openSongArchiveFile, restoreOpenedArchive, useSongArchive } from '../state/songArchive';
+import type { PickItem } from '../core/songPick';
 import type { BackupEntry } from '../player/backupFiles';
 import { promptSecret, showActionSheet } from './dialogs';
 import { Row, Section } from './SettingsParts';
@@ -42,6 +45,7 @@ function Progress() {
 /** Settings → 保存した曲のバックアップ（暗号化）: the saved songs in one file that only the secret key opens */
 export function SongArchiveSection() {
   useScheme();
+  const router = useRouter();
   const [withLibrary, setWithLibrary] = useState(true);
   const phase = useSongArchive((s) => s.phase);
   const busy = phase !== 'idle';
@@ -68,20 +72,34 @@ export function SongArchiveSection() {
 
   const create = async () => {
     if (busy) return;
-    let summary: { count: number; bytes: number };
+    let items: PickItem[];
     try {
-      summary = await savedSongsSummary();
+      items = await listSavedForPick();
     } catch (e) {
       Alert.alert('調べられませんでした', archiveErrorText(e));
       return;
     }
-    if (summary.count === 0 && !withLibrary) {
+    if (items.length === 0 && !withLibrary) {
       Alert.alert('保存した曲がありません', 'オフライン用に保存した曲が、まだありません。プレイリストなどだけを入れるには、「プレイリストなども入れる」を、オンにしてください。');
       return;
     }
+    // which songs go into the file: a screen with the whole list (everything is chosen at first)
+    let songIds: string[] | undefined;
+    let chosen = items;
+    if (items.length > 0) {
+      const picked = await pickSongs(items, () => router.push('/archive-pick'));
+      if (picked === null) return; // "やめる"
+      songIds = picked;
+      chosen = items.filter((i) => picked.includes(i.id));
+      if (chosen.length === 0 && !withLibrary) {
+        Alert.alert('曲が選ばれていません', '入れる曲を、1曲以上、選んでください。プレイリストなどだけを入れるには、「プレイリストなども入れる」を、オンにしてください。');
+        return;
+      }
+    }
+    const summary = { count: chosen.length, bytes: chosen.reduce((a, i) => a + i.bytes, 0) };
     askNewKey((key) => {
       const body = [
-        `保存した曲 ${summary.count}曲（${formatBytes(summary.bytes)}）を、秘密のキーで守ったファイルに入れます。`,
+        `選んだ曲 ${summary.count}曲（${formatBytes(summary.bytes)}）を、秘密のキーで守ったファイルに入れます。`,
         withLibrary ? 'お気に入り、プレイリストなども、一緒に入れます。' : '',
         `時間は、${formatDuration(estimateSeconds(summary.bytes))}が目安です（機種によります）。`,
         `保存先: ${whereArchives()}`,
@@ -90,13 +108,13 @@ export function SongArchiveSection() {
       ]
         .filter((l, i) => l !== '' || i > 0)
         .join('\n');
-      Alert.alert('ファイルに入れます', body, [{ text: 'はじめる', onPress: () => void run(key) }, { text: 'やめる', style: 'cancel' }]);
+      Alert.alert('ファイルに入れます', body, [{ text: 'はじめる', onPress: () => void run(key, songIds) }, { text: 'やめる', style: 'cancel' }]);
     });
   };
 
-  const run = async (key: string) => {
+  const run = async (key: string, songIds?: string[]) => {
     try {
-      const r = await createSongArchive({ secretKey: key, withLibrary });
+      const r = await createSongArchive({ secretKey: key, withLibrary, songIds });
       const note = r.skipped ? `\n\nファイルが見つからなかった ${r.skipped}曲は、入っていません。` : '';
       const body = `${r.name}\n${r.included}曲（${formatBytes(r.bytes)}）\n\n保存した場所: ${whereArchives()}${note}\n\n別の端末に移すときは、このファイルと、秘密のキーが要ります。`;
       Alert.alert('ファイルに入れました', body, r.shareable ? [{ text: '共有・保存…', onPress: () => void Share.share({ url: r.uri }).catch(() => undefined) }, { text: 'OK', style: 'cancel' }] : [{ text: 'OK' }]);

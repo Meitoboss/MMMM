@@ -3,6 +3,7 @@ import { type HotCue, type Trim, isCueSlot, sanitizeTrim } from '../core/dj';
 import { LOCAL_ARTIST } from '../core/localMeta';
 import { buildSmartQuery, likeContains, likePrefix, sanitizeRules, type SmartRules } from '../core/smart';
 import type { AlbumItem, ArtistItem, Lyrics, SongItem } from '../core/types';
+import { type SortKey, type SortTab, isRelease } from '../core/librarySort';
 import type { Db, SqlValue } from './driver';
 
 /* ------------------------------------------------------------------ *
@@ -680,6 +681,92 @@ export async function offlineIds(db: Db): Promise<string[]> {
 export async function offlineSongs(db: Db): Promise<SongItem[]> {
   const rows = await db.all<SongRow>('SELECT Song.* FROM Offline JOIN Song ON Song.id = Offline.songId ORDER BY Offline.savedAt DESC, Song.title COLLATE NOCASE');
   return rows.map(songFromRow);
+}
+
+/* ------------------------------------------------------------------ *
+ * The Library's lists, in the order the person chose (see core/librarySort.ts)
+ * ------------------------------------------------------------------ */
+
+/** each song with the FIRST year of the albums it is on (an album whose year is not known, or marked as having none, has no year) */
+const RELEASE_JOIN = `LEFT JOIN (SELECT m.songId AS songId, MIN(a.year) AS year FROM SongAlbumMap m JOIN Album a ON a.id = m.albumId WHERE a.year GLOB '[0-9][0-9][0-9][0-9]*' GROUP BY m.songId) rel ON rel.songId = Song.id`;
+
+function orderClause(sort: SortKey, date: string): string {
+  const byName = 'Song.title COLLATE NOCASE ASC';
+  switch (sort) {
+    case 'title':
+      return byName;
+    case 'newest':
+      return `${date} DESC, ${byName}`;
+    case 'oldest':
+      return `${date} ASC, ${byName}`;
+    case 'releaseNewest':
+      return `rel.year IS NULL, rel.year DESC, ${byName}`; // songs with no known year come last
+    case 'releaseOldest':
+      return `rel.year IS NULL, rel.year ASC, ${byName}`;
+  }
+}
+
+export async function libraryList(
+  db: Db,
+  tab: SortTab,
+  sort: SortKey,
+  opts: { tagIds?: number[]; tagMode?: 'any' | 'all'; historyLimit?: number } = {},
+): Promise<SongItem[]> {
+  const rel = isRelease(sort) ? RELEASE_JOIN : '';
+  let sql: string;
+  let params: SqlValue[] = [];
+  let date: string;
+  switch (tab) {
+    case 'songs':
+      date = 'Song.rowid'; // a song's row keeps its place: when it came into the Library
+      sql = `SELECT Song.* FROM Song ${rel} WHERE Song.totalPlayTimeMs > 0 OR Song.likedAt IS NOT NULL OR Song.id IN (SELECT songId FROM SongPlaylistMap)`;
+      break;
+    case 'local':
+      date = 'LocalFile.addedAt';
+      sql = `SELECT Song.* FROM LocalFile JOIN Song ON Song.id = LocalFile.songId ${rel}`;
+      break;
+    case 'offline':
+      date = 'Offline.savedAt';
+      sql = `SELECT Song.* FROM Offline JOIN Song ON Song.id = Offline.songId ${rel}`;
+      break;
+    case 'liked':
+      date = 'Song.likedAt';
+      sql = `SELECT Song.* FROM Song ${rel} WHERE Song.likedAt IS NOT NULL`;
+      break;
+    case 'tags': {
+      const ids = opts.tagIds ?? [];
+      if (!ids.length) return [];
+      date = 'Song.rowid';
+      const having = opts.tagMode === 'all' ? `HAVING COUNT(DISTINCT SongTag.tagId) = ${ids.length}` : '';
+      sql = `SELECT Song.* FROM Song JOIN SongTag ON SongTag.songId = Song.id ${rel} WHERE SongTag.tagId IN (${ids.map(() => '?').join(',')}) GROUP BY Song.id ${having}`;
+      params = ids;
+      break;
+    }
+    case 'history':
+      date = 'e.t';
+      sql = `SELECT Song.* FROM Song JOIN (SELECT songId, MAX(timestamp) AS t FROM Event GROUP BY songId ORDER BY t DESC LIMIT ?) e ON e.songId = Song.id ${rel}`;
+      params = [opts.historyLimit ?? 100];
+      break;
+  }
+  const rows = await db.all<SongRow>(`${sql} ORDER BY ${orderClause(sort, date)}`, params);
+  return rows.map(songFromRow);
+}
+
+/** remembers the year of an album (when the album page, or a look-up, has told it) */
+export async function setAlbumYear(db: Db, albumId: string, year: string): Promise<void> {
+  await db.run('UPDATE Album SET year = ? WHERE id = ? AND (year IS NULL OR year != ?)', [year, albumId, year]);
+}
+
+/** the albums of songs in the Library whose year has never been looked up */
+export async function albumsMissingYear(db: Db, limit = 300): Promise<string[]> {
+  const rows = await db.all<{ id: string }>(
+    `SELECT DISTINCT a.id AS id FROM Album a JOIN SongAlbumMap m ON m.albumId = a.id JOIN Song s ON s.id = m.songId
+     WHERE a.year IS NULL AND a.id LIKE 'MPRE%'
+       AND (s.totalPlayTimeMs > 0 OR s.likedAt IS NOT NULL OR s.id IN (SELECT songId FROM SongPlaylistMap) OR s.id IN (SELECT songId FROM Offline))
+     LIMIT ?`,
+    [limit],
+  );
+  return rows.map((r) => r.id);
 }
 
 export async function offlineTotalSize(db: Db): Promise<number> {

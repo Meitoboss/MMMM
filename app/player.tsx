@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import Slider from '@react-native-community/slider';
 import { useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { Alert, Animated, FlatList, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Alert, Animated, FlatList, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useProgress } from 'react-native-track-player';
 
@@ -10,6 +10,7 @@ import { activeLineIndex, findLyrics, parseLrc } from '../src/core';
 import { HOT_CUE_SLOTS, type HotCue } from '../src/core/dj';
 import { LOCAL_ARTIST, isLocalId } from '../src/core/localMeta';
 import { lineRegion } from '../src/core/loop';
+import { type Drag, HOLD_MS, dragMoved, holdReached, shownPosition, sliderValue } from '../src/core/seekDrag';
 import { encodeSong } from '../src/core/songParam';
 import { toggleLikeSong, useIsLiked } from '../src/state/likes';
 import { showDjBetaOnce } from '../src/ui/betaNotice';
@@ -23,7 +24,7 @@ import { useAddToPlaylist } from '../src/ui/actions';
 import { Aurora } from '../src/ui/Aurora';
 import { BpmPanel } from '../src/ui/BpmPanel';
 import { promptText, showActionSheet } from '../src/ui/dialogs';
-import { SYSTEM_CLOSES_SHEET, useSwipeDown } from '../src/ui/useSwipeDown';
+import { useSwipeDown } from '../src/ui/useSwipeDown';
 import { requestOfflineSave } from '../src/ui/offlineActions';
 import { useOffline } from '../src/state/offline';
 import { colors, useScheme } from '../src/ui/theme';
@@ -34,30 +35,25 @@ const SLEEP = [5, 15, 30, 45, 60];
 
 type View_ = 'cover' | 'lyrics' | 'queue' | 'dj';
 
-/** How far the play button's lower edge is from the bottom of the screen, as a part of the screen's height (like Spotify's player:
- *  the controls are where the thumb is, not at the very bottom). */
-const CONTROLS_LIFT = 0.14;
-const CONTROLS_LIFT_MAX = 140;
-/** iPhone: a list at its top hands a pull-down to the sheet (which closes) – that needs the list's normal bounce. */
-const LIST_BOUNCES = SYSTEM_CLOSES_SHEET;
-
 export default function PlayerScreen() {
   useScheme();
   const showDebug = useSettings((st) => st.showDebug);
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { width, height } = useWindowDimensions();
+  const { width } = useWindowDimensions();
   const p = usePlayer();
   // Swipe down from anywhere to close. A list that has been scrolled down scrolls back first – except for a touch that begins in the top bar.
   const listTop = useRef(0);
   const onList = (e: { nativeEvent: { contentOffset: { y: number } } }) => { listTop.current = e.nativeEvent.contentOffset.y; };
-  const swipe = useSwipeDown(() => router.back(), (touchY) => listTop.current <= 2 || touchY < insets.top + 64);
+  // a touch that begins on the seek bar is never a swipe: on Android the slider and the swipe would fight over it
+  const onSeekBar = useRef(false);
+  const swipe = useSwipeDown(() => router.back(), (touchY) => !onSeekBar.current && (listTop.current <= 2 || touchY < insets.top + 64));
   const showLog = showDebug || p.status === 'error'; // the playback log takes the aurora's place
   const { position, duration } = useProgress(500);
   const [view, setView] = useState<View_>('cover');
   useEffect(() => { listTop.current = 0; }, [view]); // a tab starts at its top
-  const [seeking, setSeeking] = useState<number | null>(null);
-  const [coverRoom, setCoverRoom] = useState(0); // the height that is left for the cover (0: not measured yet)
+  const [drag, setDrag] = useState<Drag | null>(null); // while a finger is on the seek bar
+  const [hold, setHold] = useState<number | null>(null); // the chosen position, until the player has caught up
   const [lyrics, setLyrics] = useState<Lyrics | null | 'loading'>(null);
   const autoLyrics = useSettings((s) => s.autoLyrics);
   const fadeSeconds = useSettings((s) => s.fadeSeconds);
@@ -100,6 +96,13 @@ export default function PlayerScreen() {
 
   const lines = lyrics && lyrics !== 'loading' ? lyrics.lines : [];
   const livePosition = p.needsLoad ? (p.resumePosition ?? 0) : position; // a restored song has not been loaded yet
+  // the hold ends when the player reports a position close to the chosen one (or after a moment)
+  useEffect(() => { if (holdReached(hold, livePosition)) setHold(null); }, [hold, livePosition]);
+  useEffect(() => {
+    if (hold === null) return;
+    const t = setTimeout(() => setHold(null), HOLD_MS);
+    return () => clearTimeout(t);
+  }, [hold]);
   const active = lyrics && lyrics !== 'loading' && lyrics.synced ? activeLineIndex(lines, livePosition * 1000) : -1;
   useEffect(() => {
     if (view === 'lyrics' && active > 0) listRef.current?.scrollToIndex({ index: active, viewPosition: 0.4, animated: true });
@@ -114,10 +117,11 @@ export default function PlayerScreen() {
     );
   }
 
-  const shown = seeking ?? livePosition;
-  // the aurora glows around and behind it; on a short screen the cover gets smaller instead of running into the title
-  const cover = Math.min(width - 90, 300, coverRoom > 0 ? Math.max(120, coverRoom - 24) : 300);
-  const bottomGap = Math.max(insets.bottom + 12, Math.min(CONTROLS_LIFT_MAX, Math.round(height * CONTROLS_LIFT)));
+  const shown = shownPosition(drag, hold, livePosition);
+  // iPhone: the screen is a sheet that already starts below the status bar. Android: it reaches under it, and the header would be covered
+  const topPad = (Platform.OS === 'android' ? insets.top + 8 : 0) + 12;
+  const sidePad = Math.max(20, insets.left + 12, insets.right + 12);
+  const cover = Math.min(width - 90, 300); // the aurora glows around and behind it
 
   const reloadCues = async () => {
     if (song) setCues(await repo.hotCues(await openDb(), song.id));
@@ -214,22 +218,22 @@ export default function PlayerScreen() {
   };
 
   return (
-    <Animated.View testID="player-root" {...swipe.panHandlers} style={{ flex: 1, backgroundColor: colors.bg, paddingTop: 12, paddingBottom: bottomGap, transform: [{ translateY: swipe.translateY }] }}>
-      <View testID="player-header" style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20 }}>
-        <Pressable hitSlop={12} onPress={() => router.back()}><Ionicons name="chevron-down" size={28} color={colors.text} /></Pressable>
-        <View style={{ flexDirection: 'row', gap: 16 }}>
+    <Animated.View testID="player-root" {...swipe.panHandlers} style={{ flex: 1, backgroundColor: colors.bg, paddingTop: topPad, paddingBottom: insets.bottom + 12, transform: [{ translateY: swipe.translateY }] }}>
+      <View testID="player-header" style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: sidePad }}>
+        <Pressable hitSlop={16} onPress={() => router.back()}><Ionicons name="chevron-down" size={28} color={colors.text} /></Pressable>
+        <View style={{ flexDirection: 'row', gap: 8 }}>
           {(['cover', 'lyrics', 'queue', 'dj'] as const).map((v) => (
-            <Pressable key={v} onPress={() => { setView(v); if (v === 'dj') showDjBetaOnce(); }}>
+            <Pressable key={v} hitSlop={{ top: 12, bottom: 12 }} style={{ paddingHorizontal: 8, paddingVertical: 6 }} onPress={() => { setView(v); if (v === 'dj') showDjBetaOnce(); }}>
               <Text style={{ color: view === v ? colors.accentText : colors.sub, fontWeight: view === v ? '800' : '600' }}>{{ cover: 'ジャケット', lyrics: '歌詞', queue: 'キュー', dj: 'DJ' }[v]}</Text>
             </Pressable>
           ))}
         </View>
-        <Pressable hitSlop={12} onPress={menu}><Ionicons name="ellipsis-horizontal" size={24} color={colors.text} /></Pressable>
+        <Pressable hitSlop={16} onPress={menu}><Ionicons name="ellipsis-horizontal" size={24} color={colors.text} /></Pressable>
       </View>
 
       <View style={{ flex: 1, marginTop: 16 }}>
         {view === 'cover' && (
-          <View testID="player-cover" style={{ flex: 1 }} onLayout={(e) => setCoverRoom(e.nativeEvent.layout.height)}>
+          <View testID="player-cover" style={{ flex: 1 }}>
             {/* the aurora is the background of this whole area, BEHIND the cover – no frame; its edges dissolve into the screen */}
             {!showLog && <Aurora testID="aurora" playing={p.status === 'playing'} rate={p.tempo ?? p.rate} style={StyleSheet.absoluteFill} />}
             <View style={showLog ? { alignItems: 'center' } : { flex: 1, alignItems: 'center', justifyContent: 'center' }}>
@@ -238,7 +242,7 @@ export default function PlayerScreen() {
               </View>
             </View>
             {showLog && (
-              <ScrollView testID="player-log" onScroll={onList} scrollEventThrottle={16} bounces={LIST_BOUNCES} overScrollMode="never" style={{ flex: 1, marginTop: 8 }} contentContainerStyle={{ paddingHorizontal: 20 }}>
+              <ScrollView testID="player-log" onScroll={onList} scrollEventThrottle={16} bounces={false} overScrollMode="never" style={{ flex: 1, marginTop: 8 }} contentContainerStyle={{ paddingHorizontal: 20 }}>
                 <Text selectable style={{ color: colors.sub, fontSize: 10 }}>
                   {p.debug.join('\n')}
                 </Text>
@@ -255,7 +259,7 @@ export default function PlayerScreen() {
         {view === 'lyrics' && (
           lyrics === 'loading' ? <Text style={{ color: colors.sub, textAlign: 'center', marginTop: 40 }}>歌詞を検索中…</Text>
           : !lines.length ? <Text style={{ color: colors.sub, textAlign: 'center', marginTop: 40 }}>歌詞が見つかりませんでした</Text>
-          : <FlatList testID="player-lyrics" ref={listRef} onScroll={onList} scrollEventThrottle={16} bounces={LIST_BOUNCES} overScrollMode="never" data={lines} keyExtractor={(_, i) => String(i)} onScrollToIndexFailed={() => undefined}
+          : <FlatList testID="player-lyrics" ref={listRef} onScroll={onList} scrollEventThrottle={16} bounces={false} overScrollMode="never" data={lines} keyExtractor={(_, i) => String(i)} onScrollToIndexFailed={() => undefined}
               contentContainerStyle={{ paddingHorizontal: 24, paddingVertical: 40 }}
               renderItem={({ item, index }) => (
                 <Pressable disabled={!(lyrics as Lyrics).synced} onPress={() => void p.seekTo(item.time / 1000)} onLongPress={() => { const r = lineRegion(lines.map((l) => l.time), index, song.durationSec ?? (duration || undefined)); if (r) void p.loopRegion(r); }}>
@@ -264,7 +268,7 @@ export default function PlayerScreen() {
               )} />
         )}
         {view === 'dj' && (
-          <ScrollView testID="player-dj" onScroll={onList} scrollEventThrottle={16} bounces={LIST_BOUNCES} overScrollMode="never" contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 24, gap: 20 }}>
+          <ScrollView testID="player-dj" onScroll={onList} scrollEventThrottle={16} bounces={false} overScrollMode="never" contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 24, gap: 20 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               <Text style={{ color: colors.text, fontSize: 20, fontWeight: '800' }}>DJ</Text>
               <View style={{ paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8, backgroundColor: colors.accent }}>
@@ -343,7 +347,7 @@ export default function PlayerScreen() {
           </ScrollView>
         )}
         {view === 'queue' && (
-          <FlatList testID="player-queue" onScroll={onList} scrollEventThrottle={16} bounces={LIST_BOUNCES} overScrollMode="never" data={p.queue} keyExtractor={(x, i) => `${x.id}-${i}`}
+          <FlatList testID="player-queue" onScroll={onList} scrollEventThrottle={16} bounces={false} overScrollMode="never" data={p.queue} keyExtractor={(x, i) => `${x.id}-${i}`}
             initialScrollIndex={Math.max(0, Math.min(p.index, p.queue.length - 1))} getItemLayout={(_, i) => ({ length: 64, offset: 64 * i, index: i })}
             renderItem={({ item, index }) => (
               <View style={{ backgroundColor: index === p.index ? colors.surface : undefined }}>
@@ -360,22 +364,34 @@ export default function PlayerScreen() {
             <Text style={{ color: colors.text, fontSize: 20, fontWeight: '700' }} numberOfLines={1}>{song.title}</Text>
             <Text style={{ color: colors.sub, fontSize: 15 }} numberOfLines={1}>{song.artists.map((a) => a.name).join(', ')}</Text>
           </View>
-          <Pressable hitSlop={12} onPress={() => void toggleLikeSong(song)}>
+          {/* make a playlist / put the song in one: the same screen as the menu's "プレイリストに追加" (it can create one too) */}
+          <Pressable testID="player-add-playlist" hitSlop={12} onPress={() => { useAddToPlaylist.setState({ song }); router.push('/add-to-playlist'); }} style={{ marginRight: 16 }}>
+            <Ionicons name="add-circle-outline" size={28} color={colors.text} />
+          </Pressable>
+          <Pressable testID="player-like" hitSlop={12} onPress={() => void toggleLikeSong(song)}>
             <Ionicons name={liked ? 'heart' : 'heart-outline'} size={28} color={liked ? colors.accentText : colors.text} />
           </Pressable>
         </View>
 
-        <Slider
-          style={{ marginTop: 12 }}
-          minimumValue={0}
-          maximumValue={Math.max(1, duration || song.durationSec || 1)}
-          value={shown}
-          minimumTrackTintColor={colors.accent}
-          maximumTrackTintColor={colors.surface2}
-          thumbTintColor={colors.accent}
-          onValueChange={setSeeking}
-          onSlidingComplete={async (v) => { await p.seekTo(v); setSeeking(null); }}
-        />
+        <View
+          testID="player-seek"
+          onTouchStart={() => { onSeekBar.current = true; }}
+          onTouchEnd={() => { onSeekBar.current = false; }}
+          onTouchCancel={() => { onSeekBar.current = false; }}
+        >
+          <Slider
+            style={{ marginTop: 12, height: 40 }}
+            minimumValue={0}
+            maximumValue={Math.max(1, duration || song.durationSec || 1)}
+            value={sliderValue(drag, hold, livePosition)}
+            minimumTrackTintColor={colors.accent}
+            maximumTrackTintColor={colors.surface2}
+            thumbTintColor={colors.accent}
+            onSlidingStart={(v) => setDrag((d) => dragMoved(d, v))}
+            onValueChange={(v) => setDrag((d) => dragMoved(d, v))}
+            onSlidingComplete={async (v) => { setHold(v); setDrag(null); await p.seekTo(v); }}
+          />
+        </View>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
           <Text style={{ color: colors.sub, fontSize: 12 }}>{fmt(shown)}</Text>
           <Text style={{ color: colors.sub, fontSize: 12 }}>{fmt(duration || song.durationSec || 0)}</Text>

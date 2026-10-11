@@ -102,11 +102,30 @@ describe('search results grouped by kind', () => {
   const playlist = { kind: 'playlist', id: 'p1', title: 'List' } as unknown as MusicItem;
   const mixed = [artist, song('s1'), album, video, song('s2'), playlist, video && ({ ...video, id: 'v2' } as MusicItem)];
 
-  it('songs with songs, videos with videos, albums with albums – in a fixed order', () => {
+  it('songs with songs, videos with videos, albums with albums – in a fixed order, the artists FIRST', () => {
     const groups = groupResults(mixed);
-    assert.deepEqual(groups.map((g) => g.label), ['曲', 'ビデオ', 'アルバム', 'アーティスト', 'プレイリスト']);
-    assert.deepEqual(groups[0].items.map((i) => i.id), ['s1', 's2']);
-    assert.deepEqual(groups[1].items.map((i) => i.id), ['v1', 'v2']);
+    assert.deepEqual(groups.map((g) => g.label), ['アーティスト', '曲', 'ビデオ', 'アルバム', 'プレイリスト']);
+    assert.deepEqual(groups[0].items.map((i) => i.id), ['ar1']);
+    assert.deepEqual(groups[1].items.map((i) => i.id), ['s1', 's2']);
+    assert.deepEqual(groups[2].items.map((i) => i.id), ['v1', 'v2']);
+  });
+
+  it('the artists are above the songs whatever order the search returned them in', () => {
+    for (const items of [[song('s1'), artist], [artist, song('s1')], [song('s1'), song('s2'), album, artist]]) {
+      const kinds = groupResults(items).map((g) => g.kind);
+      assert.ok(kinds.indexOf('artist') < kinds.indexOf('song'), JSON.stringify(kinds));
+    }
+    const rows = toRows(groupResults([song('s1'), artist]));
+    assert.equal(rows[0].type, 'header');
+    assert.equal((rows[0] as { group: { kind: string } }).group.kind, 'artist');
+  });
+
+  it('only the first three artists are shown among the results (the heading\'s "すべて見る" opens all of them); other kinds are not cut', () => {
+    const artists = Array.from({ length: 5 }, (_, i) => ({ kind: 'artist', id: `ar${i}`, title: `Artist ${i}` }) as unknown as MusicItem);
+    const groups = groupResults([...artists, song('s1'), song('s2'), song('s3'), song('s4'), song('s5')]);
+    assert.deepEqual(groups[0].items.map((i) => i.id), ['ar0', 'ar1', 'ar2']);
+    assert.equal(groups[0].filter, 'artist');
+    assert.equal(groups[1].items.length, 5);
   });
 
   it('empty kinds get no header', () => {
@@ -117,7 +136,7 @@ describe('search results grouped by kind', () => {
 
   it('every group knows the filter that shows only that kind', () => {
     const f = Object.fromEntries(groupResults(mixed).map((g) => [g.kind, g.filter]));
-    assert.deepEqual(f, { song: 'song', video: 'video', album: 'album', artist: 'artist', playlist: 'community_playlist' });
+    assert.deepEqual(f, { artist: 'artist', song: 'song', video: 'video', album: 'album', playlist: 'community_playlist' });
   });
 
   it('the flat list alternates a header with its items', () => {
