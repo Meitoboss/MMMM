@@ -9,7 +9,9 @@ import { describe, it } from 'node:test';
 import { applyOtaToApp, channelOf } from '../scripts/apply-ota.mjs';
 import { isUuid, parseSignatureHeader, verifyRsaSha256 } from '../ota/lib.mjs';
 import { computeNativeHash, listNativePackages, normalizedConfig } from '../ota/native-hash.mjs';
+import { cleanReleaseNote } from '../ota/lib.mjs';
 import { buildRollback, buildUpdate, describeNetworkError, send } from '../ota/publish.mjs';
+import { cleanNote } from '../src/core/updater';
 
 const tmp = (p: string) => mkdtempSync(path.join(tmpdir(), p));
 const rsa = generateKeyPairSync('rsa', { modulusLength: 2048, privateKeyEncoding: { type: 'pkcs8', format: 'pem' }, publicKeyEncoding: { type: 'spki', format: 'pem' } });
@@ -467,5 +469,35 @@ describe('the repository\'s own OTA settings', () => {
     if (!existsSync('ota/certificate.pem')) return; // not added yet
     const x = new X509Certificate(readFileSync('ota/certificate.pem'));
     assert.ok(x.validTo && new Date(x.validTo) > new Date(), 'not expired');
+  });
+});
+
+describe('the note of an update', () => {
+  const built = (note?: string, over: Record<string, unknown> = {}) => buildUpdate({ channel: 'trial', runtimeVersion: '1', nativeHash: '0123456789abcdef', baseUrl: 'https://example.com', distDir: dist(), privateKeyPem: null, note, ...over } as never);
+  const bodyOf = (b: ReturnType<typeof built>) => JSON.parse(b.publish.platforms.ios.body) as { extra: { expoClient: unknown; releaseNote?: string } };
+
+  it('goes into the manifest (inside what is signed), cleaned; the app settings stay beside it', () => {
+    const b = bodyOf(built('  検索が速くなりました\u0000\n\n\n\nBPMを追加  ', { expoClient: { name: 'x' } }));
+    assert.equal(b.extra.releaseNote, '検索が速くなりました\n\nBPMを追加');
+    assert.deepEqual(b.extra.expoClient, { name: 'x' });
+  });
+  it('is the same on both platforms', () => {
+    const b = built('同じ説明');
+    assert.equal(JSON.parse(b.publish.platforms.ios.body).extra.releaseNote, JSON.parse(b.publish.platforms.android.body).extra.releaseNote);
+  });
+  it('nothing written, or only blanks: no note at all (and no empty field)', () => {
+    for (const note of [undefined, '', '   ', '\n\n', '\u0000']) assert.ok(!('releaseNote' in bodyOf(built(note)).extra), JSON.stringify(note));
+  });
+  it('is cut at 400 letters', () => {
+    assert.equal(Array.from(bodyOf(built('あ'.repeat(900))).extra.releaseNote!).length, 400);
+  });
+  it('is cleaned in exactly the same way as the app cleans it (so what is signed is what is shown)', () => {
+    for (const v of ['  x  ', 'a\u0000b', '一\r\n\r\n\r\n\r\n二', 'x'.repeat(1000), '😀'.repeat(500), '', '   ', null, undefined, 5]) assert.equal(cleanReleaseNote(v), cleanNote(v), JSON.stringify(v)?.slice(0, 20));
+  });
+  it('the workflow takes it from an input, through the environment (never pasted into the command)', () => {
+    const w = readFileSync('.github/workflows/ota-publish.yml', 'utf8');
+    assert.match(w, /note:\n\s+description:[^\n]*\n\s+type: string/);
+    assert.match(w, /OTA_NOTE: \$\{\{ inputs\.note \}\}/);
+    assert.doesNotMatch(w, /run:[^\n]*inputs\.note/, 'the text of an input must never be part of a shell command');
   });
 });

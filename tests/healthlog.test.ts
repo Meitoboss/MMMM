@@ -46,6 +46,7 @@ describe('the health recorder', () => {
     const line = s.lines()[0];
     assert.match(line, /^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d load=[\d.]+ avail=\d+MB swap=\d+MB psi=\S+ bgutil=200\/0\.05 ota=200\/0\.05 https=200\/0\.05 ports=\S+ bg_restarts=0 top=/);
     assert.match(line, /ports=(80,443|443,80)\b/);
+    assert.match(line, / topcmd=\S+$/, 'how the biggest program was started is the last field, without spaces');
   });
 
   it('each run adds one line; nothing is changed except ~/healthlog', () => {
@@ -239,8 +240,7 @@ esac`);
     withJournal(s, 'echo "No journal files were found." >&2; exit 1');
     const out = s.run('crash').stdout;
     assert.match(out, /前回の起動の記録が、残っていません/);
-    assert.match(out, /sudo mkdir -p \/var\/log\/journal/);
-    assert.match(out, /systemctl restart systemd-journald/);
+    assert.match(out, /sh ~\/healthlog\/healthlog\.sh journal/);
   });
 });
 
@@ -274,5 +274,89 @@ describe('using it from any folder', () => {
     const env = { PATH: `${path.join(path.dirname(s.home), 'bin')}:${process.env.PATH}`, HOME: s.home, FAKE: s.fake, HEALTHLOG_NO_SYSTEMD: '1' };
     const again = spawnSync('sh', [path.join(s.logDir, 'healthlog.sh'), 'install'], { env, encoding: 'utf8' });
     assert.equal(again.status, 0, again.stderr);
+  });
+});
+
+describe('a restart done by the safety net', () => {
+  it('"crash" says so when the previous start ended with the watchdog restarting the machine', () => {
+    const s = sandbox();
+    const bin = path.join(path.dirname(s.home), 'bin');
+    writeFileSync(path.join(bin, 'sudo'), '#!/bin/sh\n[ "$1" = "-n" ] && shift\nexec "$@"\n');
+    writeFileSync(path.join(bin, 'journalctl'), `#!/bin/sh
+case "$*" in
+  *--list-boots*) echo "-1 aaa x";;
+  *"-b -1 -k"*) echo "Oct 10 03:11:02 host kernel: Out of memory: Killed process 4242 (node)"; echo "Oct 10 03:12:03 host kernel: softdog: Initiating system reboot";;
+  *) echo "line";;
+esac
+`);
+    chmodSync(path.join(bin, 'sudo'), 0o755);
+    chmodSync(path.join(bin, 'journalctl'), 0o755);
+    const out = s.run('crash').stdout;
+    assert.match(out, /softdog: Initiating system reboot/);
+    assert.match(out, /★ 前回は、機械が固まって、見張り（ウォッチドッグ）が、自動で再起動しました/);
+  });
+
+  it('the line that every normal start writes ("softdog: initialized") is not mistaken for it', () => {
+    const s = sandbox();
+    const bin = path.join(path.dirname(s.home), 'bin');
+    writeFileSync(path.join(bin, 'sudo'), '#!/bin/sh\n[ "$1" = "-n" ] && shift\nexec "$@"\n');
+    writeFileSync(path.join(bin, 'journalctl'), '#!/bin/sh\ncase "$*" in *--list-boots*) echo "-1 aaa x";; *"-b -1 -k"*) echo "kernel: softdog: initialized. soft_noboot=0 soft_margin=60 sec";; *) echo "line";; esac\n');
+    chmodSync(path.join(bin, 'sudo'), 0o755);
+    chmodSync(path.join(bin, 'journalctl'), 0o755);
+    const out = s.run('crash').stdout;
+    assert.match(out, /メモリ不足の記録は、ありません/);
+    assert.doesNotMatch(out, /★/);
+  });
+});
+
+describe('keeping the system log across restarts', () => {
+  /** stubs that behave like the real thing: "journalctl --flush" is what makes the folder appear */
+  function journalSandbox(flushWorks = true) {
+    const s = sandbox();
+    const bin = path.join(path.dirname(s.home), 'bin');
+    const root = path.join(path.dirname(s.home), 'rootfs');
+    mkdirSync(root, { recursive: true });
+    for (const [name, body] of [['systemd-tmpfiles', 'exit 0'], ['systemctl', 'exit 0'], ['journalctl', flushWorks ? 'if [ "$1" = "--flush" ]; then mkdir -p "$HEALTHLOG_ROOT/var/log/journal/0123abcd"; fi' : 'exit 0']] as const) {
+      writeFileSync(path.join(bin, name), `#!/bin/sh\n${body}\n`);
+      chmodSync(path.join(bin, name), 0o755);
+    }
+    const run = (...args: string[]) => spawnSync('sh', [SCRIPT, ...args], { env: { PATH: `${bin}:${process.env.PATH}`, HOME: s.home, FAKE: s.fake, HEALTHLOG_ROOT: root, HEALTHLOG_SUDO: '', HEALTHLOG_NO_SYSTEMD: '1' }, encoding: 'utf8' });
+    return { run, root };
+  }
+
+  it('writes a setting that keeps the log on disk (and overrides "volatile"), makes the folder, and flushes', () => {
+    const j = journalSandbox();
+    const r = j.run('journal');
+    assert.equal(r.status, 0, r.stderr);
+    assert.match(r.stdout, /再起動しても、残るようになりました/);
+    assert.match(r.stdout, /0123abcd/);
+    const conf = readFileSync(path.join(j.root, 'etc/systemd/journald.conf.d/90-musicspace-persistent.conf'), 'utf8');
+    assert.equal(conf, '[Journal]\nStorage=persistent\nSystemMaxUse=100M\nSyncIntervalSec=30s\n');
+  });
+
+  it('if the folder is still empty it says so and what to show (and fails)', () => {
+    const j = journalSandbox(false);
+    const r = j.run('journal');
+    assert.equal(r.status, 1);
+    assert.match(r.stdout, /まだ \/var\/log\/journal が空です/);
+    assert.match(r.stdout, /grep -ri '\^Storage'/);
+  });
+
+  it('running it again is harmless', () => {
+    const j = journalSandbox();
+    assert.equal(j.run('journal').status, 0);
+    assert.equal(j.run('journal').status, 0);
+  });
+
+  it('"crash" now points to this command (not to the two lines that did not work)', () => {
+    const s = sandbox();
+    const bin = path.join(path.dirname(s.home), 'bin');
+    writeFileSync(path.join(bin, 'sudo'), '#!/bin/sh\n[ "$1" = "-n" ] && shift\nexec "$@"\n');
+    writeFileSync(path.join(bin, 'journalctl'), '#!/bin/sh\necho "No journal files were found." >&2; exit 1\n');
+    chmodSync(path.join(bin, 'sudo'), 0o755);
+    chmodSync(path.join(bin, 'journalctl'), 0o755);
+    const out = s.run('crash').stdout;
+    assert.match(out, /sh ~\/healthlog\/healthlog\.sh journal/);
+    assert.doesNotMatch(out, /systemctl restart systemd-journald/);
   });
 });
