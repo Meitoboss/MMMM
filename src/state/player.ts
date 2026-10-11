@@ -86,7 +86,10 @@ interface PlayerState {
   tick: () => void;
 }
 
+/** how many lines of the playback log are kept (the log is shown in Settings → 再生ログを表示) */
+const DEBUG_LINES = 40;
 let doubledLogged = -1; // the load for which "the file says double" was written to the log
+let lastSource = ''; // what the song that is playing was resolved to: via, itag, mime type – written next to "the file says double"
 let loadToken = 0;
 let loadedAt = 0;
 let playedMs = 0;
@@ -218,6 +221,7 @@ export const usePlayer = create<PlayerState>((set, get) => {
       set({ trim });
       wantFineProgress(trimEndSec !== null);
       if (startAt === 0 && trim?.startSec) startAt = trim.startSec;
+      lastSource = `via=${src.via} itag=${src.itag ?? '-'} ${src.mimeType ?? ''}`.trim();
       get().log(`resolved via=${src.via} itag=${src.itag ?? '-'} ${src.mimeType ?? ''} host=${String(src.url).split('/')[2]}${src.note ? ` ${src.note}` : ''}`);
       await TrackPlayer.reset();
       await TrackPlayer.add({
@@ -293,7 +297,7 @@ export const usePlayer = create<PlayerState>((set, get) => {
     log: (line) => {
       const t = new Date();
       const hh = `${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}:${String(t.getSeconds()).padStart(2, '0')}`;
-      set({ debug: [...get().debug.slice(-9), `${hh} ${line}`] });
+      set({ debug: [...get().debug.slice(-(DEBUG_LINES - 1)), `${hh} ${line}`] });
     },
     repeat: 'off',
     shuffle: false,
@@ -459,7 +463,7 @@ export const usePlayer = create<PlayerState>((set, get) => {
       const doubled = isDoubledDuration(duration, known);
       if (doubled && doubledLogged !== loadToken) {
         doubledLogged = loadToken;
-        get().log(`length: the file says ${Math.round(duration)}s, the song is ${Math.round(known ?? 0)}s – it ends at ${Math.round(known ?? 0)}s`);
+        get().log(`length: the file says ${Math.round(duration)}s, the song is ${Math.round(known ?? 0)}s – it ends at ${Math.round(known ?? 0)}s${lastSource ? ` [${lastSource}]` : ''}`);
       }
       const fadeSec = fadeMs() / 1000;
       const end = trimEndSec ?? songEnd(duration, known);
