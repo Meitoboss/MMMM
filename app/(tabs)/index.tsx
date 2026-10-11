@@ -1,7 +1,7 @@
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect } from 'expo-router';
 import { Image } from 'expo-image';
 import { useCallback, useMemo, useState } from 'react';
-import { RefreshControl, ScrollView, Text, View, Pressable } from 'react-native';
+import { RefreshControl, ScrollView, Text, View } from 'react-native';
 
 import { yt } from '../../src/core';
 import { recentInsertIndex } from '../../src/core/homeLayout';
@@ -30,25 +30,17 @@ function BrandHeader() {
 
 export default function Home() {
   useScheme();
-  const router = useRouter();
   const { data, error, loading, reload } = useAsync(() => yt.home(), []);
   const [refreshing, setRefreshing] = useState(false);
   const [recent, setRecent] = useState<SongItem[]>([]);
-  const [playlists, setPlaylists] = useState<any[]>([]);
 
   // songs played on this device, newest first – refreshed every time the home tab comes back into view
   useFocusEffect(
     useCallback(() => {
       let alive = true;
       openDb()
-        .then(async (db) => {
-          const rows = await repo.recentSongs(db, 20);
-          const playlists = await repo.playlists(db);
-          if (alive) {
-            setRecent(rows);
-            setPlaylists(playlists);
-          }
-        })
+        .then((db) => repo.recentSongs(db, 20))
+        .then((rows) => alive && setRecent(rows))
         .catch(() => undefined);
       return () => {
         alive = false;
@@ -76,21 +68,11 @@ export default function Home() {
       <BrandHeader />
       <OtaBanner />
       <UpdateBanner />
-      {playlists.length > 0 && (
-        <View style={{ marginBottom: 20 }}>
-          <Text style={[s.h2, { paddingHorizontal: 16, marginBottom: 12 }]}>マイライブラリ</Text>
-          {playlists.slice(0, 6).map((p) => (
-            <Pressable key={p.id} onPress={() => router.push(`/local-playlist/${p.id}`)} style={{ paddingHorizontal: 16, paddingVertical: 8 }}>
-              <Text style={[s.title]}>{p.name}</Text>
-            </Pressable>
-          ))}
-        </View>
-      )}
       <TrendingShelf />
       {sections.slice(0, at).map((x, i) => <SectionCarousel key={`${x.title}-${i}`} section={x} />)}
       {/* directly below "Today's hits" / "Trending" */}
       {recent.length ? (
-        <SectionCarousel section={recentSection} onMore={() => router.push('recent-songs')} />
+        <SectionCarousel section={recentSection} />
       ) : (
         <View style={{ marginBottom: 20 }}>
           <Text style={[s.h2]}>最近聞いた曲</Text>

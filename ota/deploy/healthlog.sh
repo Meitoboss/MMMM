@@ -5,6 +5,7 @@
 #
 #   sh healthlog.sh            install and start it (run it from the folder where the file is; it then copies itself to
 #                              ~/healthlog/healthlog.sh, so that the next commands work from ANY folder)
+#   sh ~/healthlog/healthlog.sh journal    make the system keep its own log across restarts (needed for "crash"; asks for sudo)
 #   sh ~/healthlog/healthlog.sh show       the last lines
 #   sh healthlog.sh problems   only the lines where something was wrong (the last 40)
 #   sh healthlog.sh gaps       the places where the lines STOP for minutes: the machine was frozen or off (with the lines before)
@@ -40,8 +41,10 @@ WEB='-'
 PORTS="$(ss -ltn 2>/dev/null | awk '$4 ~ /:(80|443)$/ {n=split($4,a,":"); print a[n]}' | sort -u | tr '\n' ',' | sed 's/,$//')"
 RESTARTS="$(systemctl --user show bgutil.service -p NRestarts --value 2>/dev/null || echo '?')"
 TOP="$(ps -eo rss=,comm= --sort=-rss 2>/dev/null | head -n 3 | awk '{printf "%s:%dMB,", $2, $1/1024}' | sed 's/,$//')"
+# HOW the biggest program was started (its command line, spaces made into _): "dnf makecache" or a package update by an agent tells who woke it up
+TOPCMD="$(ps -eo args= --sort=-rss 2>/dev/null | head -n 1 | cut -c1-90 | tr ' ' '_')"
 
-echo "$TS load=$LOAD avail=${AVAIL}MB swap=${SWAP}MB psi=$PSI bgutil=${BG:-000/0} ota=${OTA:-000/0} https=$WEB ports=${PORTS:-none} bg_restarts=$RESTARTS top=$TOP" >> "$LOG"
+echo "$TS load=$LOAD avail=${AVAIL}MB swap=${SWAP}MB psi=$PSI bgutil=${BG:-000/0} ota=${OTA:-000/0} https=$WEB ports=${PORTS:-none} bg_restarts=$RESTARTS top=$TOP topcmd=$TOPCMD" >> "$LOG"
 find "$DIR" -name 'health-*.log' -mtime +14 -delete 2>/dev/null || true
 LOGGER
   chmod +x "$DIR/log-once.sh"
@@ -100,6 +103,27 @@ gaps() {
     }'
 }
 
+# makes the system's own log (journald) stay on disk, so that the end of a start that froze can be read after the restart
+journal() {
+  JROOT="${HEALTHLOG_ROOT:-}"
+  JSUDO="${HEALTHLOG_SUDO-sudo}"
+  $JSUDO mkdir -p "$JROOT/etc/systemd/journald.conf.d" "$JROOT/var/log/journal"
+  # "persistent" overrides a "volatile" setting of the image; the size is capped so that the small disk is not filled;
+  # the log is made permanent every 30 seconds (the default is 5 minutes: a freeze that ends in a forced restart would lose them)
+  printf '[Journal]\nStorage=persistent\nSystemMaxUse=100M\nSyncIntervalSec=30s\n' | $JSUDO tee "$JROOT/etc/systemd/journald.conf.d/90-musicspace-persistent.conf" >/dev/null
+  $JSUDO systemd-tmpfiles --create --prefix /var/log/journal 2>/dev/null || true
+  $JSUDO systemctl restart systemd-journald
+  $JSUDO journalctl --flush # writes what has been collected so far from memory to the disk
+  if [ -n "$(ls "$JROOT/var/log/journal" 2>/dev/null)" ]; then
+    echo "OS の記録が、再起動しても、残るようになりました（100MB まで）。"
+    ls "$JROOT/var/log/journal"
+  else
+    echo "まだ /var/log/journal が空です。次の出力を、見せてください:"
+    echo "  grep -ri '^Storage' /etc/systemd/journald.conf /etc/systemd/journald.conf.d/"
+    return 1
+  fi
+}
+
 # the end of the previous start of the machine, from the journal (needs it to be kept on disk: /var/log/journal)
 crash() {
   command -v journalctl >/dev/null 2>&1 || { echo "journalctl がありません"; return 1; }
@@ -107,21 +131,29 @@ crash() {
   sudo -n journalctl --list-boots --no-pager 2>/dev/null | tail -n 4 || true
   if ! sudo -n journalctl -b -1 -n 1 --no-pager >/dev/null 2>&1; then
     echo
-    echo "前回の起動の記録が、残っていません。次の2行を実行すると、次回から残ります:"
-    echo "  sudo mkdir -p /var/log/journal"
-    echo "  sudo systemctl restart systemd-journald"
+    echo "前回の起動の記録が、残っていません（OS が、再起動すると消える場所にだけ、記録しています）。"
+    echo "次を実行すると、これから先の記録が、残るようになります:"
+    echo "  sh ~/healthlog/healthlog.sh journal"
     return 0
   fi
   echo
   echo "=== 前回の起動の、メモリ不足・固まりの跡"
-  found="$(sudo -n journalctl -b -1 -k --no-pager 2>/dev/null | grep -iE 'out of memory|oom-kill|killed process|hung task|blocked for more than|soft lockup|rcu.*stall|call trace' | tail -n 15 || true)"
+  found="$(sudo -n journalctl -b -1 -k --no-pager 2>/dev/null | grep -iE 'out of memory|oom-kill|killed process|hung task|blocked for more than|soft lockup|rcu.*stall|call trace|softdog: initiating system reboot' | tail -n 15 || true)"
   if [ -n "$found" ]; then echo "$found"; else echo "（見つかりませんでした: メモリ不足の記録は、ありません）"; fi
+  # the safety net of selfheal.sh writes this line right before it restarts a machine that has frozen
+  if echo "$found" | grep -qi 'softdog: initiating system reboot'; then
+    echo
+    echo "★ 前回は、機械が固まって、見張り（ウォッチドッグ）が、自動で再起動しました。"
+  fi
   echo
   echo "=== 前回の起動の、最後の20行"
   sudo -n journalctl -b -1 --no-pager -n 20 2>/dev/null || true
 }
 
 case "${1:-install}" in
+  journal)
+    journal
+    ;;
   gaps)
     gaps "${2:-150}"
     ;;
@@ -180,7 +212,7 @@ UNIT
     tail -n 1 "$DIR"/health-*.log
     ;;
   *)
-    echo "使い方: sh healthlog.sh [install|show|problems|gaps|crash|stop]"
+    echo "使い方: sh healthlog.sh [install|show|problems|gaps|crash|journal|stop]"
     exit 1
     ;;
 esac

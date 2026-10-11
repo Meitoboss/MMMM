@@ -19,6 +19,7 @@ import { MINI_HEIGHT, colors, useScheme } from '../../src/ui/theme';
 import { Chips, Row, Section } from '../../src/ui/SettingsParts';
 import { BackupSection } from '../../src/ui/BackupSection';
 import { SongArchiveSection } from '../../src/ui/SongArchiveSection';
+import { NetLogRow } from '../../src/ui/NetLogRow';
 import { OtaSection } from '../../src/ui/OtaSection';
 import { ThemeEditor } from '../../src/ui/ThemeEditor';
 
@@ -191,6 +192,7 @@ export default function Settings() {
         <Field label="キー" value={st.potServerKey} secure onSave={(v) => { clearStreamCache(); st.update({ potServerKey: v }); }} />
         <Action title="接続テスト" sub="届くか、キーが合っているか、トークンを作れるかを確認します" disabled={running} onPress={() => void runTests(setTokenSteps, runTokenServerTest)} right="テスト" />
         <Results steps={tokenSteps} />
+        <NetLogRow />
       </Section>
 
       <BackupSection />
@@ -257,6 +259,7 @@ export default function Settings() {
         <Text style={{ color: colors.text, fontWeight: '800' }}>Music space</Text>
         <Text style={s.sub}>バージョン {APP_VERSION}</Text>
         <Text style={[s.sub, { textAlign: 'center', marginTop: 6 }]}>
+          fast4x 氏の RiMusic をもとにした派生ソフトです（GPL-3.0）。
         </Text>
       </View>
     </ScrollView>

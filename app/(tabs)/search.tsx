@@ -300,17 +300,7 @@ export default function Search() {
   return (
     <View style={{ flex: 1 }}>
       <View style={st.box}>
-        <Pressable onPress={() => {
-          if (text) {
-            setText('');
-            setItems([]);
-            setToken(undefined);
-            setShown('');
-            setOffItems([]);
-          }
-        }} style={{ padding: 8 }}>
-          <Ionicons name="search" size={18} color={colors.sub} />
-        </Pressable>
+        <Ionicons name="search" size={18} color={colors.sub} />
         <TextInput
           value={text}
           onChangeText={setText}

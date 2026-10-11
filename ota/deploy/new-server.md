@@ -19,7 +19,7 @@ OS は Oracle Linux 9（ユーザー名 `opc`）、メモリ約1GBを想定し�
    free -h
    ```
    `swapon: swapfile has holes` と出たら、1行目を `sudo dd if=/dev/zero of=/swapfile bs=1M count=2048` に替えます。
-3. **パッケージ**（重い2つの一覧を外します）:
+3. **パッケージ**（重い2つの一覧を外します。`dnf` は、この大きな一覧を読むと、約400MBを使って、機械が固まります。入れ終わったら、次の「dnf を軽くする」も、忘れずに行います）:
    ```
    sudo dnf install -y --disablerepo=ol9_oci_included --disablerepo=ol9_ksplice podman unzip
    sudo firewall-cmd --permanent --add-service=http --add-service=https
@@ -48,8 +48,14 @@ OS は Oracle Linux 9（ユーザー名 `opc`）、メモリ約1GBを想定し�
    systemctl --user start bgutil.service
    sleep 10; curl -s http://127.0.0.1:4416/ping
    ```
-5. **合言葉と Caddy:** `KEY=$(openssl rand -hex 16); echo "合言葉: $KEY"` で合言葉を作り、`/etc/caddy/Caddyfile` を作ります。
+5. **合言葉と Caddy:** `KEY=$(openssl rand -hex 16); echo "合言葉: $KEY"` で合言葉を作り、`/etc/caddy/Caddyfile` を作ります。先頭の `{ servers { protocols h1 h2 } }` は、**HTTP/3（QUIC）を使わない**という指定です。OCI の入口で開けてあるのは TCP の443だけなので、HTTP/3 の案内を出すと、iPhone が、届かない UDP を試して、数秒待ってから TCP に戻り、その待ちが、アプリの8秒の上限に、ぶつかることがあります。
    ```
+   {
+   	servers {
+   		protocols h1 h2
+   	}
+   }
+
    130-210-45-154.sslip.io {
    	@ok {
    		path /ping /get_pot
@@ -177,9 +183,24 @@ sh selfheal.sh remove      外す
 ```
 systemd が、30秒ごとに、ソフトウェアのウォッチドッグへ「生きている」と知らせます。機械が固まって、**60秒たっても知らせが止まったまま**なら、機械が自分で再起動します。再起動のあと、トークンサーバー、更新サーバー、Caddy は、自動で戻ります。カーネルのパニックも、30秒後に再起動になります。**固まった原因を、直すものではありません**（原因は、`gaps` と `crash` で調べます）。変えるのは、`/etc` の小さな4つのファイルだけです。
 
-### 記録を、残るようにしておく
-`sh ~/healthlog/healthlog.sh crash` が「記録が残っていません」と言ったときは、次を1回だけ実行します。
+### OS の記録を、再起動しても残るようにしておく
+`sh ~/healthlog/healthlog.sh crash` は、前回の終わりに、見張りが機械を再起動したときは、「★ 前回は、機械が固まって、見張り（ウォッチドッグ）が、自動で再起動しました」と書きます。（手で探すなら `sudo journalctl -b -1 -k | grep -i "Initiating system reboot"`）
+
+`sh ~/healthlog/healthlog.sh crash` が「記録が残っていません」と言うときは、次を1回だけ実行します（sudo を使います）。
 ```
-sudo mkdir -p /var/log/journal
-sudo systemctl restart systemd-journald
+sh ~/healthlog/healthlog.sh journal
 ```
+`/var/log/journal` に、英数字の長い名前のフォルダが、1つ出れば成功です。OS の記録は、100MB まで、ディスクに残ります。記録を確定する間隔は、30秒です（ふつうは5分で、固まって強制的に再起動すると、直前の数分が失われます）。（手で行うなら、「フォルダを作って、journald を再起動」だけでは足りません。**記録を、ディスクへ書き出す** `sudo journalctl --flush` が、要ります。また、設定が「再起動で消える」になっていると、書き出されません。この道具は、`Storage=persistent` を設定して、書き出しまで行います。）
+
+## 固まる原因だった「dnf の自動の下調べ」を止める（いちばん大事）
+**2回の固まりの記録（2026-10-10）**: どちらも、`dnf`（パッケージ情報の下調べ、`dnf-makecache`）が、約400MBを使って、スワップが2.4GBまで膨らみ、約3分間、機械が動かなくなりました（SSH もつながらない）。OS が、自動で動かしていたものです。メモリの強制終了の記録は、残りません（強制終了の前に、機械が動かなくなるため）。
+
+`lean.sh` が、次の2つを、まとめて行います。
+```
+sh lean.sh status     いまの様子（自動の下調べ、大きな2つの一覧、dnf が動いているか）
+sh lean.sh apply      自動の下調べを止めて（mask）、大きな2つの一覧（ol9_oci_included、ol9_ksplice）を無効にする
+sh lean.sh undo       元に戻す
+```
+- 変えるのは、`/etc/yum.repos.d/*.repo` の中の、その2つの `enabled` の行だけです。変える前に、ファイルを `*.bak-lean` に写します。
+- あとで、パッケージを入れる必要が出たら、`sh lean.sh undo` で戻して、入れ終わったら、もう一度 `apply` します。**戻している間に、機械が固まることがあるので、入れるのは、短時間にします。**
+- 固まったかどうかは、`sh ~/healthlog/healthlog.sh gaps` で分かります。`top=` の中に `dnf` が出ていたら、まだ、どこかで動いています。
