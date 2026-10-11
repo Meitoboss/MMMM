@@ -42,11 +42,6 @@ interface PlayerState {
   /** last playback events, shown on the player screen to explain silent failures */
   debug: string[];
   log: (line: string) => void;
-  /** current audio format (itag) and mimeType for duration correction */
-  currentItag?: number;
-  currentMimeType?: string;
-  /** expected duration in seconds (from metadata) for duration correction */
-  expectedDuration?: number;
 
   playSongs: (songs: SongItem[], startIndex?: number) => Promise<void>;
   playRadio: (song: SongItem) => Promise<void>;
@@ -218,7 +213,7 @@ export const usePlayer = create<PlayerState>((set, get) => {
       const trim = await openDb().then((db) => repo.trimOf(db, song.id)).catch(() => null);
       if (token !== loadToken) return;
       trimEndSec = trim?.endSec ?? null;
-      set({ trim, currentItag: src.itag, currentMimeType: src.mimeType, expectedDuration: song.durationSec });
+      set({ trim });
       wantFineProgress(trimEndSec !== null);
       if (startAt === 0 && trim?.startSec) startAt = trim.startSec;
       get().log(`resolved via=${src.via} itag=${src.itag ?? '-'} ${src.mimeType ?? ''} host=${String(src.url).split('/')[2]}${src.note ? ` ${src.note}` : ''}`);
@@ -301,9 +296,6 @@ export const usePlayer = create<PlayerState>((set, get) => {
     repeat: 'off',
     shuffle: false,
     rate: useSettings.getState().playbackRate,
-    currentItag: undefined,
-    currentMimeType: undefined,
-    expectedDuration: undefined,
 
     playSongs: async (songs, startIndex = 0) => {
       let queue = songs;
@@ -457,16 +449,11 @@ export const usePlayer = create<PlayerState>((set, get) => {
     },
 
     checkTransition: (position, duration) => {
-      const { loop, status, needsLoad, currentMimeType, expectedDuration } = get();
+      const { loop, status, needsLoad } = get();
       if (loop) return cancelFade(true);
       if (status !== 'playing' || needsLoad) return;
       const fadeSec = fadeMs() / 1000;
-      // Fix for audio/mp4 formats (itag 140, etc) that report doubled duration in some cases
-      let correctedDuration = duration;
-      if (currentMimeType?.startsWith('audio/mp4') && expectedDuration && expectedDuration > 0 && duration > expectedDuration * 1.8 && duration < expectedDuration * 2.2) {
-        correctedDuration = expectedDuration;
-      }
-      const end = trimEndSec ?? (correctedDuration > 0 ? correctedDuration : null);
+      const end = trimEndSec ?? (duration > 0 ? duration : null);
       if (end === null) return;
 
       // 1. fade out before the end (the end of the song, or its trimmed end)
