@@ -451,9 +451,9 @@ describe('the repository\'s own OTA settings', () => {
     assert.match(c.runtimeVersion, /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/);
     assert.ok(Array.isArray(c.enabledFor) && c.enabledFor.every((v: string) => v === 'prod' || v === 'trial'));
   });
-  it('production stays off until you turn it on; the committed app.json has updates OFF', () => {
+  it('both the trial app and the real app take updates (the trial app worked); the committed app.json itself has updates OFF – a build switches them on for its variant', () => {
     const c = JSON.parse(readFileSync('ota/config.json', 'utf8'));
-    assert.ok(!c.enabledFor.includes('prod'), 'prod is not enabled (change this only after the trial app worked)');
+    assert.deepEqual([...c.enabledFor].sort(), ['prod', 'trial'], 'if "prod" is missing the real app gets no automatic updates at all');
     assert.deepEqual(JSON.parse(readFileSync('app.json', 'utf8')).expo.updates, { enabled: false });
   });
   it('expo-updates is a dependency, on the version of SDK 54', () => {

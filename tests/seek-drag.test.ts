@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { HOLD_CLOSE, dragMoved, holdReached, shownPosition, sliderValue } from '../src/core/seekDrag';
+import { HOLD_CLOSE, SEEK_MARGIN, dragMoved, holdReached, shownPosition, sliderValue, touchOnSeekBar } from '../src/core/seekDrag';
 
 describe('the seek bar while dragging', () => {
   it('the first report begins the drag at that value; later reports move only the finger, not the start', () => {
@@ -44,5 +44,27 @@ describe('the seek bar while dragging', () => {
     const d = dragMoved(null, 10);
     assert.equal(sliderValue(d, 120, 40), 10);
     assert.equal(shownPosition(dragMoved(d, 20), 120, 40), 20);
+  });
+});
+
+describe('a touch that begins on the seek bar', () => {
+  const band = { top: 600, bottom: 640 };
+
+  it('is the slider\'s when it begins inside the bar, or just above / below it', () => {
+    for (const y of [600, 620, 640, 600 - SEEK_MARGIN, 640 + SEEK_MARGIN]) assert.equal(touchOnSeekBar(y, band), true, String(y));
+  });
+
+  it('is not when it begins anywhere else (the cover, the title, the buttons below)', () => {
+    for (const y of [0, 100, 300, 600 - SEEK_MARGIN - 1, 640 + SEEK_MARGIN + 1, 700, 800]) assert.equal(touchOnSeekBar(y, band), false, String(y));
+  });
+
+  it('with the position not known (not measured yet) nothing is excluded – a swipe is never blocked for good by a missing measurement', () => {
+    for (const y of [0, 620, 800]) assert.equal(touchOnSeekBar(y, null), false);
+  });
+
+  it('depends only on where the touch began: nothing stays "on" from an earlier touch', () => {
+    assert.equal(touchOnSeekBar(620, band), true);
+    assert.equal(touchOnSeekBar(300, band), false);
+    assert.equal(touchOnSeekBar(620, band), true);
   });
 });

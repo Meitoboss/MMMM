@@ -34,3 +34,22 @@ export const HOLD_CLOSE = 1.5;
 export const HOLD_MS = 1500;
 
 export const holdReached = (hold: number | null, live: number): boolean => hold !== null && Math.abs(live - hold) < HOLD_CLOSE;
+
+/**
+ * Where the seek bar is on the screen (top and bottom, in the same coordinates as a touch's pageY). A touch that BEGINS there is
+ * the slider's, never a swipe that closes the screen. This is decided from the position – not from "a touch started / ended"
+ * messages: on iPhone the slider's own touch handling can swallow the end of a touch, and a flag that is set at the start and cleared
+ * at the end would then stay set, and the screen could never be swiped closed again.
+ */
+/** `top` / `bottom` are pageY values: what View.measure reports, and what a touch reports */
+export interface SeekBand {
+  top: number;
+  bottom: number;
+}
+
+/** a little room above and below the thin bar, for a thumb that is not exactly on it */
+export const SEEK_MARGIN = 10;
+
+export function touchOnSeekBar(touchY: number, band: SeekBand | null): boolean {
+  return !!band && touchY >= band.top - SEEK_MARGIN && touchY <= band.bottom + SEEK_MARGIN;
+}

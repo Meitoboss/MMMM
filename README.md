@@ -106,7 +106,7 @@ Locally: `npx expo prebuild --platform android && cd android && ./gradlew assemb
 
 ## アプリの中身だけを更新する（OTA）
 
-画面や機能の変更を、IPA / APK を入れ直さずに配信できます（自分のサーバーを使います）。手順は [`ota/README.md`](ota/README.md) を見てください。最初は「試験用アプリ」（Music space β）だけで有効にし、確認できてから本番に広げます（`ota/config.json` の `enabledFor`）。
+画面や機能の変更を、IPA / APK を入れ直さずに配信できます（自分のサーバーを使います）。手順は [`ota/README.md`](ota/README.md) を見てください。試験用アプリ（Music space β）と、本番のアプリの、両方で有効です（`ota/config.json` の `enabledFor` が `["trial", "prod"]`）。試験用には channel: trial、本番には channel: main で配信します。
 
 ## バックアップ（ライブラリの書き出し・取り込み）
 

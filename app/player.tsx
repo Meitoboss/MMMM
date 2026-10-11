@@ -10,7 +10,7 @@ import { activeLineIndex, findLyrics, parseLrc } from '../src/core';
 import { HOT_CUE_SLOTS, type HotCue } from '../src/core/dj';
 import { LOCAL_ARTIST, isLocalId } from '../src/core/localMeta';
 import { lineRegion } from '../src/core/loop';
-import { type Drag, HOLD_MS, dragMoved, holdReached, shownPosition, sliderValue } from '../src/core/seekDrag';
+import { type Drag, HOLD_MS, type SeekBand, dragMoved, holdReached, shownPosition, sliderValue, touchOnSeekBar } from '../src/core/seekDrag';
 import { encodeSong } from '../src/core/songParam';
 import { toggleLikeSong, useIsLiked } from '../src/state/likes';
 import { showDjBetaOnce } from '../src/ui/betaNotice';
@@ -45,9 +45,18 @@ export default function PlayerScreen() {
   // Swipe down from anywhere to close. A list that has been scrolled down scrolls back first – except for a touch that begins in the top bar.
   const listTop = useRef(0);
   const onList = (e: { nativeEvent: { contentOffset: { y: number } } }) => { listTop.current = e.nativeEvent.contentOffset.y; };
-  // a touch that begins on the seek bar is never a swipe: on Android the slider and the swipe would fight over it
-  const onSeekBar = useRef(false);
-  const swipe = useSwipeDown(() => router.back(), (touchY) => !onSeekBar.current && (listTop.current <= 2 || touchY < insets.top + 64));
+  // Where the seek bar is on the screen. A touch that BEGINS there is the slider's, never a swipe (on Android the slider and the swipe
+  // would fight over it). Decided from the position, not from "touch started / ended" messages: on iPhone the slider can swallow the
+  // end of a touch, and a flag that waited for it would stay set and the screen could never be swiped closed again.
+  const seekRef = useRef<View>(null);
+  const seekBand = useRef<SeekBand | null>(null);
+  const measureSeek = () => {
+    // `measure` gives pageY: the same coordinates as the pageY of a touch (measureInWindow would be off by the gap above a sheet)
+    seekRef.current?.measure?.((_x, _y, _w, h, _pageX, pageY) => {
+      if (Number.isFinite(pageY) && h > 0) seekBand.current = { top: pageY, bottom: pageY + h };
+    });
+  };
+  const swipe = useSwipeDown(() => router.back(), (touchY) => !touchOnSeekBar(touchY, seekBand.current) && (listTop.current <= 2 || touchY < insets.top + 64));
   const showLog = showDebug || p.status === 'error'; // the playback log takes the aurora's place
   const { position, duration } = useProgress(500);
   const [view, setView] = useState<View_>('cover');
@@ -96,6 +105,12 @@ export default function PlayerScreen() {
 
   const lines = lyrics && lyrics !== 'loading' ? lyrics.lines : [];
   const livePosition = p.needsLoad ? (p.resumePosition ?? 0) : position; // a restored song has not been loaded yet
+  // the bar can move (another tab, another song, a different top): measure it again then
+  useEffect(() => {
+    const id = requestAnimationFrame(measureSeek);
+    return () => cancelAnimationFrame(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view, song?.id, insets.top]);
   // the hold ends when the player reports a position close to the chosen one (or after a moment)
   useEffect(() => { if (holdReached(hold, livePosition)) setHold(null); }, [hold, livePosition]);
   useEffect(() => {
@@ -373,12 +388,7 @@ export default function PlayerScreen() {
           </Pressable>
         </View>
 
-        <View
-          testID="player-seek"
-          onTouchStart={() => { onSeekBar.current = true; }}
-          onTouchEnd={() => { onSeekBar.current = false; }}
-          onTouchCancel={() => { onSeekBar.current = false; }}
-        >
+        <View ref={seekRef} testID="player-seek" collapsable={false} onLayout={measureSeek}>
           <Slider
             style={{ marginTop: 12, height: 40 }}
             minimumValue={0}

@@ -12,7 +12,7 @@ GitHub Actions ──作って署名──▶ あなたのサーバー（OCI）�
 
 - **署名の秘密鍵は GitHub の Secrets にだけ**置きます。サーバーが乗っ取られても、偽の更新は作れません（アプリが署名を確かめて、断ります）。
 - アプリは、自分の**ネイティブ部分の指紋**を送ります。サーバーは、同じ指紋の更新だけを返します。合わない更新が届くことはありません。
-- **試験用アプリ**（名前は「Music space β」、本番とは別のアプリとして入ります）で先に試します。本番は、`ota/config.json` の `enabledFor` に `"prod"` を足すまで、更新を受け取りません。
+- **試験用アプリ**（名前は「Music space β」、本番とは別のアプリとして入ります）は、`trial` から更新を受け取ります。**本番のアプリは、`main` から受け取ります**（`ota/config.json` の `enabledFor` に、`"trial"` と `"prod"` の両方が入っています）。
 
 ## 手順
 
@@ -68,9 +68,11 @@ GitHub の Actions → **Build iOS IPA (unsigned)** → Run workflow → **varia
 
 Actions → **Roll back an over-the-air update** → channel を選んで Run。アプリは、IPA / APK に入っている版へ戻ります。直した更新を配信すれば、また新しい中身になります。
 
-### 6. 本番にも使う（試験用で確認できてから）
+### 6. 本番にも使う（今は、すでに有効です）
 
-`ota/config.json` の `"enabledFor": ["trial"]` を `["trial", "prod"]` にして、本番の IPA / APK を作り直します（一度だけ）。そのあとは、channel: **main** で配信します。
+`ota/config.json` の `enabledFor` は、`["trial", "prod"]` です。本番のアプリは、**この設定で作った IPA / APK**から、更新を受け取ります。そのあとは、channel: **main** で配信します（試験用は、channel: **trial**）。
+
+**この設定を、元に戻さないでください。** `"prod"` が無いと、本番のアプリは、自動更新を、まったく受け取りません（アプリの中の「中身の更新」にも、「更新を使いません」と出ます）。全体のzipで上書きするときも、この設定が入っているか、確認してください。
 
 ## 状態を見る
 
