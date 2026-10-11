@@ -10,7 +10,9 @@ import { activeLineIndex, findLyrics, parseLrc } from '../src/core';
 import { HOT_CUE_SLOTS, type HotCue } from '../src/core/dj';
 import { LOCAL_ARTIST, isLocalId } from '../src/core/localMeta';
 import { lineRegion } from '../src/core/loop';
-import { type Drag, HOLD_MS, type SeekBand, dragMoved, holdReached, shownPosition, sliderValue, touchOnSeekBar } from '../src/core/seekDrag';
+import { type Drag, HOLD_MS, type SeekBand, dragMoved, holdReached, isEcho, shownPosition, sliderValue } from '../src/core/seekDrag';
+import { seekLength } from '../src/core/songLength';
+import { swipeGate } from '../src/core/swipe';
 import { encodeSong } from '../src/core/songParam';
 import { toggleLikeSong, useIsLiked } from '../src/state/likes';
 import { showDjBetaOnce } from '../src/ui/betaNotice';
@@ -56,7 +58,16 @@ export default function PlayerScreen() {
       if (Number.isFinite(pageY) && h > 0) seekBand.current = { top: pageY, bottom: pageY + h };
     });
   };
-  const swipe = useSwipeDown(() => router.back(), (touchY) => !touchOnSeekBar(touchY, seekBand.current) && (listTop.current <= 2 || touchY < insets.top + 64));
+  // The seek bar is left out of the swipe on Android only (that is where the two fight; on iPhone the slider does not, and a wrong
+  // measurement must never be able to refuse a swipe there). With "デバッグ表示" on, what happens to every touch is written to the log.
+  // iPhone: the player is a sheet, and the sheet's OWN swipe closes it (it was taken away from our swipe after a few points: the screen moved
+  // a little and sprang back). Android: the screen is closed by the swipe of this app.
+  const closesBySwipe = Platform.OS !== 'ios';
+  const swipe = useSwipeDown(
+    () => router.back(),
+    (touchY) => swipeGate({ touchY, seekBand: Platform.OS === 'android' ? seekBand.current : null, listTop: listTop.current, topLimit: insets.top + 64 }),
+    showDebug ? (line) => p.log(line) : undefined,
+  );
   const showLog = showDebug || p.status === 'error'; // the playback log takes the aurora's place
   const { position, duration } = useProgress(500);
   const [view, setView] = useState<View_>('cover');
@@ -133,6 +144,10 @@ export default function PlayerScreen() {
   }
 
   const shown = shownPosition(drag, hold, livePosition);
+  // the length the seek bar runs over: the player's, unless it says about double (then the song's own), and never the one second that
+  // a slider falls back to when neither is known yet
+  const total = seekLength(duration, song.durationSec);
+  const given = sliderValue(drag, hold, livePosition); // the value the slider is handed: what it reports back is an echo, not a finger
   // iPhone: the screen is a sheet that already starts below the status bar. Android: it reaches under it, and the header would be covered
   const topPad = (Platform.OS === 'android' ? insets.top + 8 : 0) + 12;
   const sidePad = Math.max(20, insets.left + 12, insets.right + 12);
@@ -233,7 +248,7 @@ export default function PlayerScreen() {
   };
 
   return (
-    <Animated.View testID="player-root" {...swipe.panHandlers} style={{ flex: 1, backgroundColor: colors.bg, paddingTop: topPad, paddingBottom: insets.bottom + 12, transform: [{ translateY: swipe.translateY }] }}>
+    <Animated.View testID="player-root" {...(closesBySwipe ? swipe.panHandlers : {})} style={{ flex: 1, backgroundColor: colors.bg, paddingTop: topPad, paddingBottom: insets.bottom + 12, transform: [{ translateY: swipe.translateY }] }}>
       <View testID="player-header" style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: sidePad }}>
         <Pressable hitSlop={16} onPress={() => router.back()}><Ionicons name="chevron-down" size={28} color={colors.text} /></Pressable>
         <View style={{ flexDirection: 'row', gap: 8 }}>
@@ -392,19 +407,29 @@ export default function PlayerScreen() {
           <Slider
             style={{ marginTop: 12, height: 40 }}
             minimumValue={0}
-            maximumValue={Math.max(1, duration || song.durationSec || 1)}
-            value={sliderValue(drag, hold, livePosition)}
+            maximumValue={total}
+            value={given}
             minimumTrackTintColor={colors.accent}
             maximumTrackTintColor={colors.surface2}
             thumbTintColor={colors.accent}
             onSlidingStart={(v) => setDrag((d) => dragMoved(d, v))}
-            onValueChange={(v) => setDrag((d) => dragMoved(d, v))}
-            onSlidingComplete={async (v) => { setHold(v); setDrag(null); await p.seekTo(v); }}
+            onValueChange={(v) => setDrag((d) => (d || !isEcho(v, given) ? dragMoved(d, v) : d))}
+            onSlidingComplete={async (v) => {
+              setHold(v);
+              setDrag(null);
+              p.log(`seek: to ${v.toFixed(1)}s (the bar runs to ${total.toFixed(0)}s)`);
+              try {
+                await p.seekTo(v);
+                p.log(`seek: the player is at ${(await p.getPosition()).toFixed(1)}s`);
+              } catch (e) {
+                p.log(`seek: failed – ${e instanceof Error ? e.message : String(e)}`);
+              }
+            }}
           />
         </View>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
           <Text style={{ color: colors.sub, fontSize: 12 }}>{fmt(shown)}</Text>
-          <Text style={{ color: colors.sub, fontSize: 12 }}>{fmt(duration || song.durationSec || 0)}</Text>
+          <Text style={{ color: colors.sub, fontSize: 12 }}>{fmt(duration > 1 || song.durationSec ? total : 0)}</Text>
         </View>
 
         {(p.loop || p.loopA !== undefined) && (

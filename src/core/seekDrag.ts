@@ -53,3 +53,11 @@ export const SEEK_MARGIN = 10;
 export function touchOnSeekBar(touchY: number, band: SeekBand | null): boolean {
   return !!band && touchY >= band.top - SEEK_MARGIN && touchY <= band.bottom + SEEK_MARGIN;
 }
+
+/**
+ * A slider that is handed a new value (the playing position, twice a second) can report that value back through its own
+ * "value changed" callback (Android does). That is an echo, not a finger. Told apart by size: the echo is the value we gave,
+ * a finger moves it by more.
+ */
+export const ECHO_TOLERANCE = 0.75;
+export const isEcho = (reported: number, given: number): boolean => Math.abs(reported - given) < ECHO_TOLERANCE;

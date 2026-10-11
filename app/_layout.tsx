@@ -60,7 +60,7 @@ export default function RootLayout() {
           }}
         >
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          <Stack.Screen name="player" options={{ presentation: 'modal', headerShown: false, gestureEnabled: false }} />
+          <Stack.Screen name="player" options={{ presentation: 'modal', headerShown: false, gestureEnabled: Platform.OS === 'ios' }} />
           <Stack.Screen name="add-to-playlist" options={{ presentation: 'modal', title: 'プレイリストに追加' }} />
           <Stack.Screen name="archive-pick" options={{ presentation: 'modal', title: '入れる曲を選ぶ' }} />
           <Stack.Screen name="import-playlist" options={{ title: 'プレイリストを取り込む' }} />

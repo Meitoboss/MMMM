@@ -5,6 +5,7 @@ import { getConfig } from '../core/config';
 import { MAX_RATE, MIN_RATE, scaleLoopRegion } from '../core/beat';
 import { FADE_STEP_MS, type Trim, fadeGain, planFadeOut } from '../core/dj';
 import { type LoopRegion, loopJumpTarget, makeLoop } from '../core/loop';
+import { isDoubledDuration, songEnd } from '../core/songLength';
 import { normalizedVolume } from '../core/loudness';
 import { isLocalId } from '../core/localMeta';
 import { yt } from '../core';
@@ -85,6 +86,7 @@ interface PlayerState {
   tick: () => void;
 }
 
+let doubledLogged = -1; // the load for which "the file says double" was written to the log
 let loadToken = 0;
 let loadedAt = 0;
 let playedMs = 0;
@@ -452,8 +454,15 @@ export const usePlayer = create<PlayerState>((set, get) => {
       const { loop, status, needsLoad } = get();
       if (loop) return cancelFade(true);
       if (status !== 'playing' || needsLoad) return;
+      // a file that claims about twice the song's length (the second half is silence): the song ends at its own length
+      const known = get().current?.durationSec;
+      const doubled = isDoubledDuration(duration, known);
+      if (doubled && doubledLogged !== loadToken) {
+        doubledLogged = loadToken;
+        get().log(`length: the file says ${Math.round(duration)}s, the song is ${Math.round(known ?? 0)}s – it ends at ${Math.round(known ?? 0)}s`);
+      }
       const fadeSec = fadeMs() / 1000;
-      const end = trimEndSec ?? (duration > 0 ? duration : null);
+      const end = trimEndSec ?? songEnd(duration, known);
       if (end === null) return;
 
       // 1. fade out before the end (the end of the song, or its trimmed end)
@@ -475,6 +484,24 @@ export const usePlayer = create<PlayerState>((set, get) => {
             );
           }
         }
+      }
+
+      // 3. the end of a song whose file claims double: go to the next song instead of playing the silence
+      if (doubled && trimEndSec === null && known && leftSongToken !== loadToken && position >= known - 0.2) {
+        leftSongToken = loadToken;
+        if (get().repeat === 'one') {
+          // "repeat one": the same song again from the start (as when a song really ends); the end of the next round is handled the same way
+          stopFadeTimers();
+          void (async () => {
+            await TrackPlayer.setVolume(baseVolume).catch(() => undefined);
+            await TrackPlayer.seekTo(0).catch(() => undefined);
+            await TrackPlayer.play().catch(() => undefined);
+            leftSongToken = -1;
+          })();
+        } else {
+          void advance(true);
+        }
+        return;
       }
 
       // 2. a trimmed end: go to the next song (a running fade does it itself, unless it fell behind)
