@@ -258,7 +258,6 @@ export default function Settings() {
       <View style={{ alignItems: 'center', paddingHorizontal: 24, paddingTop: 28, gap: 4 }}>
         <Text style={{ color: colors.text, fontWeight: '800' }}>Music space</Text>
         <Text style={s.sub}>バージョン {APP_VERSION}</Text>
-        </Text>
       </View>
     </ScrollView>
   );
