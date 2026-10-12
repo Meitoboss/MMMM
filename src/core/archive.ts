@@ -15,13 +15,20 @@ import { pbkdf2Sha256 } from './crypto/sha256';
  *
  * Every chunk is checked on its own, the header and the order are part of what is checked, and the last chunk is marked: a wrong
  * key, a changed byte, a missing, repeated or swapped chunk, and a file that was cut short are all noticed.
+ *
+ * Without encryption (kdf 0, "the fast way"): the same file, but nothing is calculated – no key, no sealing – so it is written and
+ * read as fast as the storage allows. The chunks are the plain bytes (no tag), the iterations and the salt are zero. Nothing protects
+ * the contents or notices a changed byte; a file that was cut short is still noticed (the end record is missing).
  * Nothing here knows about files or songs: bytes go in and out through a sink and a source.
  */
 export const ARCHIVE_MAGIC = 'MSBX';
 export const ARCHIVE_VERSION = 1;
+export const KDF_NONE = 0;
 export const KDF_PBKDF2_SHA256 = 1;
 export const DEFAULT_ITERATIONS = 100_000;
 export const DEFAULT_CHUNK = 64 * 1024;
+/** without encryption the chunk is large: fewer round trips to the storage */
+export const PLAIN_CHUNK = 1024 * 1024;
 const MIN_ITERATIONS = 1000;
 const MAX_ITERATIONS = 2_000_000; // a file must not be able to make the phone calculate for an hour
 const MIN_CHUNK = 16;
@@ -123,27 +130,30 @@ export class ArchiveWriter {
   private index = 0;
   private finished = false;
 
-  private constructor(private sink: ByteSink, private key: Uint8Array, private header: Uint8Array, private chunkSize: number) {
+  /** `key`: null = no encryption */
+  private constructor(private sink: ByteSink, private key: Uint8Array | null, private header: Uint8Array, private chunkSize: number) {
     this.buf = new Uint8Array(chunkSize);
   }
 
-  static async create(sink: ByteSink, secretKey: string, opts: WriterOptions = {}): Promise<ArchiveWriter> {
-    const iterations = opts.iterations ?? DEFAULT_ITERATIONS;
-    const chunkSize = opts.chunkSize ?? DEFAULT_CHUNK;
-    if (!Number.isInteger(iterations) || iterations < MIN_ITERATIONS || iterations > MAX_ITERATIONS) fail('bad-use');
+  /** `secretKey`: the pass phrase; null writes the file WITHOUT encryption (fast) */
+  static async create(sink: ByteSink, secretKey: string | null, opts: WriterOptions = {}): Promise<ArchiveWriter> {
+    const plain = secretKey === null;
+    const iterations = plain ? 0 : opts.iterations ?? DEFAULT_ITERATIONS;
+    const chunkSize = opts.chunkSize ?? (plain ? PLAIN_CHUNK : DEFAULT_CHUNK);
+    if (!plain && (!Number.isInteger(iterations) || iterations < MIN_ITERATIONS || iterations > MAX_ITERATIONS)) fail('bad-use');
     if (!Number.isInteger(chunkSize) || chunkSize < MIN_CHUNK || chunkSize > MAX_CHUNK) fail('bad-use');
-    const salt = (opts.random ?? ((n) => randomBytes(n).bytes))(16);
-    const header = concatBytes(utf8Encode(ARCHIVE_MAGIC), Uint8Array.of(ARCHIVE_VERSION, KDF_PBKDF2_SHA256), u32le(iterations), u32le(chunkSize), salt);
-    const key = await deriveKey(secretKey, salt, iterations, opts);
+    const salt = plain ? new Uint8Array(16) : (opts.random ?? ((n) => randomBytes(n).bytes))(16);
+    const header = concatBytes(utf8Encode(ARCHIVE_MAGIC), Uint8Array.of(ARCHIVE_VERSION, plain ? KDF_NONE : KDF_PBKDF2_SHA256), u32le(iterations), u32le(chunkSize), salt);
+    const key = plain ? null : await deriveKey(secretKey, salt, iterations, opts);
     await sink.write(header);
     return new ArchiveWriter(sink, key, header, chunkSize);
   }
 
   private async flush(final: boolean): Promise<void> {
-    const sealed = aeadSeal(this.key, nonceFor(this.index), aadFor(this.header, this.index, final), this.buf.subarray(0, this.fill));
+    const body = this.key ? aeadSeal(this.key, nonceFor(this.index), aadFor(this.header, this.index, final), this.buf.subarray(0, this.fill)) : this.buf.subarray(0, this.fill);
     this.index++;
     this.fill = 0;
-    await this.sink.write(concatBytes(u32le(sealed.length), sealed));
+    await this.sink.write(concatBytes(u32le(body.length), body));
   }
 
   private async put(bytes: Uint8Array): Promise<void> {
@@ -210,16 +220,28 @@ export class ArchiveReader {
   private done = false; // the end record has been read
   private current: { left: number } | null = null;
 
-  private constructor(private source: ByteSource, private key: Uint8Array, private header: Uint8Array) {}
+  /** `key`: null = a file without encryption */
+  private constructor(private source: ByteSource, private key: Uint8Array | null, private header: Uint8Array) {}
 
+  /** does the file have encryption (was a key used to open it)? */
+  get encrypted(): boolean {
+    return this.key !== null;
+  }
+
+  /** `secretKey` is not used (and not asked for) when the file has no encryption */
   static async open(source: ByteSource, secretKey: string, opts: KeyOptions = {}): Promise<ArchiveReader> {
     const header = await readUpTo(source, HEADER_LEN); // a file that is shorter, or starts differently, is simply not one of ours
-    if (header.length < HEADER_LEN || utf8Decode(header.subarray(0, 4)) !== ARCHIVE_MAGIC) return fail('not-archive');
-    if (header[4] > ARCHIVE_VERSION) return fail('newer');
-    if (header[4] < 1 || header[5] !== KDF_PBKDF2_SHA256) return fail('unsupported');
+    const kind = headerKind(header);
     const iterations = readU32le(header, 6);
     const chunkSize = readU32le(header, 10);
-    if (iterations < MIN_ITERATIONS || iterations > MAX_ITERATIONS || chunkSize < MIN_CHUNK || chunkSize > MAX_CHUNK) return fail('corrupt');
+    if (chunkSize < MIN_CHUNK || chunkSize > MAX_CHUNK) return fail('corrupt');
+    if (kind === 'plain') {
+      if (iterations !== 0) return fail('corrupt');
+      const r = new ArchiveReader(source, null, header);
+      r.chunkSize = chunkSize;
+      return r;
+    }
+    if (iterations < MIN_ITERATIONS || iterations > MAX_ITERATIONS) return fail('corrupt');
     const key = await deriveKey(secretKey, header.slice(14, 30), iterations, opts);
     const r = new ArchiveReader(source, key, header);
     r.chunkSize = chunkSize;
@@ -231,8 +253,9 @@ export class ArchiveReader {
     const len = await readExactly(this.source, 4, true);
     if (len === null) return null; // a clean end, between two chunks
     const n = readU32le(len, 0);
-    if (n < TAG || n > this.chunkSize + TAG) return fail('corrupt');
-    return (await readExactly(this.source, n, false)) as Uint8Array;
+    const tag = this.key ? TAG : 0;
+    if (n < tag || n > this.chunkSize + tag) return fail('corrupt');
+    return n === 0 ? new Uint8Array(0) : ((await readExactly(this.source, n, false)) as Uint8Array);
   }
 
   /** decrypts the next chunk into `plain`; false at the end */
@@ -243,15 +266,16 @@ export class ArchiveReader {
     if (sealed === null) return fail('corrupt'); // the file ended before the chunk that is marked as the last
     this.lookahead = await this.sealedChunk();
     const final = this.lookahead === null;
-    const opened = aeadOpen(this.key, nonceFor(this.index), aadFor(this.header, this.index, final), sealed);
-    if (opened === null) {
+    // without encryption there is nothing to open: the chunk is the data (a cut-short file is noticed later: the end record is missing)
+    const opened = this.key ? aeadOpen(this.key, nonceFor(this.index), aadFor(this.header, this.index, final), sealed) : sealed;
+    if (opened === null && this.key) {
       if (this.index > 0) return fail('corrupt');
       // the first chunk: a wrong key – or a right key and a file that was cut after the first chunk (it would open as "not the last")
       const cutShort = final && aeadOpen(this.key, nonceFor(0), aadFor(this.header, 0, false), sealed) !== null;
       return fail(cutShort ? 'corrupt' : 'wrong-key');
     }
     this.index++;
-    this.plain = opened;
+    this.plain = opened as Uint8Array;
     this.pos = 0;
     if (final) this.ended = true;
     return true;
@@ -340,17 +364,32 @@ export class ArchiveReader {
   }
 }
 
-/** up to `n` bytes (fewer only at the end of the source) */
+/** what the first 30 bytes say: a file with encryption, or without; anything else is an error (the same ones the reader gives) */
+function headerKind(header: Uint8Array): 'encrypted' | 'plain' {
+  if (header.length < HEADER_LEN || utf8Decode(header.subarray(0, 4)) !== ARCHIVE_MAGIC) return fail('not-archive');
+  if (header[4] > ARCHIVE_VERSION) return fail('newer');
+  if (header[4] < 1) return fail('unsupported');
+  if (header[5] === KDF_PBKDF2_SHA256) return 'encrypted';
+  if (header[5] === KDF_NONE) return 'plain';
+  return fail('unsupported');
+}
+
+/** Is the file encrypted (does it need the secret key)? Reads only the first 30 bytes; the source is used up – open the file again to read it. */
+export async function peekArchive(source: ByteSource): Promise<{ encrypted: boolean }> {
+  return { encrypted: headerKind(await readUpTo(source, HEADER_LEN)) === 'encrypted' };
+}
+
+/** up to `n` bytes (fewer only at the end of the source) – filled into one buffer as the pieces arrive (never a spread of a million pieces) */
 async function readUpTo(source: ByteSource, n: number): Promise<Uint8Array> {
-  const parts: Uint8Array[] = [];
+  const out = new Uint8Array(n);
   let got = 0;
   while (got < n) {
     const p = await source.read(n - got);
     if (p.length === 0) break;
-    parts.push(Uint8Array.from(p));
+    out.set(p.length > n - got ? p.subarray(0, n - got) : p, got);
     got += p.length;
   }
-  return parts.length === 1 ? parts[0] : concatBytes(...parts);
+  return got === n ? out : out.subarray(0, got);
 }
 
 /** exactly `n` bytes; `allowEmptyEnd`: nothing at all is the clean end of the file (null), anything in between is an error */

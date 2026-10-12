@@ -144,7 +144,8 @@ export interface ExportDeps extends KeyOptions {
   /** the library backup as JSON text (playlists, tags …), if it should go along */
   library?: string;
   sink: ByteSink;
-  secretKey: string;
+  /** the pass phrase; null: no encryption (fast) */
+  secretKey: string | null;
   appVersion: string;
   now?: Date;
   iterations?: number;
@@ -341,7 +342,8 @@ export function formatBytes(n: number): string {
 }
 
 /** a rough time on a phone, in seconds: making the key (about 5 s) plus the bytes at about 3 MB a second */
-export const estimateSeconds = (bytes: number): number => 5 + Math.ceil(Math.max(0, bytes) / 3_000_000);
+/** a rough time for writing or reading a file: encrypted ≈ 3 MB a second plus the time the key takes; without encryption only the storage counts */
+export const estimateSeconds = (bytes: number, encrypted = true): number => (encrypted ? 5 + Math.ceil(Math.max(0, bytes) / 3_000_000) : 2 + Math.ceil(Math.max(0, bytes) / 25_000_000));
 
 export function formatDuration(sec: number): string {
   if (sec < 60) return '1分未満';
