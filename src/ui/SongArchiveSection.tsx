@@ -4,9 +4,9 @@ import { Alert, Pressable, Share, Switch, Text, View } from 'react-native';
 
 import { checkSecretKey, KEY_ADVICE } from '../core/secretKey';
 import { estimateSeconds, formatBytes, formatDuration, spaceNeeded } from '../core/songArchive';
-import { listSongArchives, whereArchives } from '../player/songArchivePlatform';
+import { listSongArchives, whereArchives, whereAudio } from '../player/songArchivePlatform';
 import { pickSongs } from '../state/archivePick';
-import { type OpenedArchive, archiveErrorText, createSongArchive, isCancelledError, isWrongKeyError, listSavedForPick, openSongArchiveFile, restoreOpenedArchive, useSongArchive } from '../state/songArchive';
+import { type OpenedArchive, archiveErrorText, createSongArchive, isCancelledError, isWrongKeyError, listSavedForPick, openSongArchiveFile, exportSavedAsAudio, restoreOpenedArchive, peekSongArchiveFile, useSongArchive } from '../state/songArchive';
 import type { PickItem } from '../core/songPick';
 import type { BackupEntry } from '../player/backupFiles';
 import { promptSecret, showActionSheet } from './dialogs';
@@ -42,7 +42,7 @@ function Progress() {
   );
 }
 
-/** Settings → 保存した曲のバックアップ（暗号化）: the saved songs in one file that only the secret key opens */
+/** Settings → 保存した曲のバックアップ: the saved songs in one file – fast without encryption, or protected by a secret key */
 export function SongArchiveSection() {
   useScheme();
   const router = useRouter();
@@ -97,6 +97,41 @@ export function SongArchiveSection() {
       }
     }
     const summary = { count: chosen.length, bytes: chosen.reduce((a, i) => a + i.bytes, 0) };
+    // the fast way (no encryption: nothing to calculate) or the protected way (a secret key, and the time it takes)
+    showActionSheet(
+      {
+        title: 'どちらで、ファイルに入れますか？',
+        message: [
+          `選んだ曲 ${summary.count}曲（${formatBytes(summary.bytes)}）`,
+          '',
+          `・暗号化なし: ${formatDuration(estimateSeconds(summary.bytes, false))}ほどで終わります。ファイルを手に入れた人は、だれでも開けます`,
+          `・暗号化あり: 秘密のキーで守ります。${formatDuration(estimateSeconds(summary.bytes))}ほどかかります`,
+        ].join('\n'),
+        options: ['暗号化なし（速い）', '暗号化あり（キーで守る）', 'やめる'],
+        cancelButtonIndex: 2,
+      },
+      (i) => {
+        if (i === 0) confirmPlain(summary, songIds);
+        else if (i === 1) confirmEncrypted(summary, songIds);
+      },
+    );
+  };
+
+  const confirmPlain = (summary: { count: number; bytes: number }, songIds?: string[]) => {
+    const body = [
+      `選んだ曲 ${summary.count}曲（${formatBytes(summary.bytes)}）を、暗号化せずに、ファイルに入れます。`,
+      withLibrary ? 'お気に入り、プレイリストなども、一緒に入れます。' : '',
+      `時間は、${formatDuration(estimateSeconds(summary.bytes, false))}が目安です。空きは、${formatBytes(spaceNeeded(summary.bytes))}ほど、必要です。`,
+      `保存先: ${whereArchives()}`,
+      '',
+      '※ このファイルを手に入れた人は、だれでも、中の曲を取り出せます。人に渡すときや、クラウドに置くときは、「暗号化あり」にしてください。',
+    ]
+      .filter((l, i) => l !== '' || i > 0)
+      .join('\n');
+    Alert.alert('暗号化なしで、ファイルに入れます', body, [{ text: 'はじめる', onPress: () => void run(null, songIds) }, { text: 'やめる', style: 'cancel' }]);
+  };
+
+  const confirmEncrypted = (summary: { count: number; bytes: number }, songIds?: string[]) => {
     askNewKey((key) => {
       const body = [
         `選んだ曲 ${summary.count}曲（${formatBytes(summary.bytes)}）を、秘密のキーで守ったファイルに入れます。`,
@@ -112,15 +147,64 @@ export function SongArchiveSection() {
     });
   };
 
-  const run = async (key: string, songIds?: string[]) => {
+  /** `key`: the secret key; null writes the file without encryption (fast) */
+  const run = async (key: string | null, songIds?: string[]) => {
     try {
       const r = await createSongArchive({ secretKey: key, withLibrary, songIds });
       const note = r.skipped ? `\n\nファイルが見つからなかった ${r.skipped}曲は、入っていません。` : '';
-      const body = `${r.name}\n${r.included}曲（${formatBytes(r.bytes)}）\n\n保存した場所: ${whereArchives()}${note}\n\n別の端末に移すときは、このファイルと、秘密のキーが要ります。`;
+      const how = r.encrypted ? '別の端末に移すときは、このファイルと、秘密のキーが要ります。' : '暗号化していません。別の端末に移すときは、このファイルだけで開けます（手に入れた人は、だれでも開けます）。';
+      const body = `${r.name}\n${r.included}曲（${formatBytes(r.bytes)}）\n\n保存した場所: ${whereArchives()}${note}\n\n${how}`;
       Alert.alert('ファイルに入れました', body, r.shareable ? [{ text: '共有・保存…', onPress: () => void Share.share({ url: r.uri }).catch(() => undefined) }, { text: 'OK', style: 'cancel' }] : [{ text: 'OK' }]);
     } catch (e) {
       if (isCancelledError(e)) Alert.alert('中止しました', '途中のファイルは、消しました。');
       else Alert.alert('入れられませんでした', `${archiveErrorText(e)}\n\n途中のファイルは、消しました。`);
+    }
+  };
+
+  /* ---------------------------------------------------------------- one audio file per song */
+  const exportAudio = async () => {
+    if (busy) return;
+    let items: PickItem[];
+    try {
+      items = await listSavedForPick();
+    } catch (e) {
+      Alert.alert('調べられませんでした', archiveErrorText(e));
+      return;
+    }
+    if (items.length === 0) {
+      Alert.alert('保存した曲がありません', 'オフライン用に保存した曲が、まだありません。');
+      return;
+    }
+    const picked = await pickSongs(items, () => router.push('/archive-pick'));
+    if (picked === null) return; // "やめる"
+    if (picked.length === 0) {
+      Alert.alert('曲が選ばれていません', '書き出す曲を、1曲以上、選んでください。');
+      return;
+    }
+    const chosen = items.filter((i) => picked.includes(i.id));
+    const bytes = chosen.reduce((a, i) => a + i.bytes, 0);
+    const body = [
+      `選んだ曲 ${chosen.length}曲（${formatBytes(bytes)}）を、曲ごとの音声ファイルで、書き出します。`,
+      `変換はしません。保存した音のままなので、速く終わります（${formatDuration(estimateSeconds(bytes, false))}が目安です）。`,
+      'ファイルの種類は、保存したときのままです（m4a など。Android で「高音質」にした曲は、webm のことがあります）。',
+      '',
+      `書き出し先: ${whereAudio()}`,
+      `空きは、${formatBytes(spaceNeeded(bytes))}ほど、必要です。`,
+      '',
+      '※ mp3 には、変換できません（変換には、専用のソフトが必要です）。mp3 しか使えない機器には、パソコンなどで、変換してください。',
+      '※ ファイルは、暗号化されません。',
+    ].join('\n');
+    Alert.alert('音声ファイルで書き出します', body, [{ text: 'はじめる', onPress: () => void runAudio(picked) }, { text: 'やめる', style: 'cancel' }]);
+  };
+
+  const runAudio = async (songIds: string[]) => {
+    try {
+      const r = await exportSavedAsAudio({ songIds });
+      const skipped = r.skipped ? `\n\nファイルが見つからなかった ${r.skipped}曲は、書き出していません。` : '';
+      if (r.cancelled) Alert.alert('中止しました', `書き終わった ${r.written}曲（${formatBytes(r.bytes)}）は、そのまま残っています。途中のファイルは、消しました。\n\n書き出し先: ${whereAudio()}${skipped}`);
+      else Alert.alert('書き出しました', `${r.written}曲（${formatBytes(r.bytes)}）を、音声ファイルで書き出しました。\n\n書き出し先: ${whereAudio()}${skipped}`);
+    } catch (e) {
+      Alert.alert('書き出せませんでした', `${archiveErrorText(e)}\n\n途中のファイルは、消しました。書き終わっていた曲は、そのまま残っています。`);
     }
   };
 
@@ -140,22 +224,34 @@ export function SongArchiveSection() {
     }
     const shown = files.slice(0, 8);
     showActionSheet({ title: 'どのファイルから戻しますか？', options: [...shown.map((f) => f.name), 'キャンセル'], cancelButtonIndex: shown.length }, (i) => {
-      if (i < shown.length) askKey(shown[i]);
+      if (i < shown.length) void openEntry(shown[i]);
     });
   };
 
-  const askKey = (entry: BackupEntry) =>
-    promptSecret('秘密のキーを入力', entry.name, (key) => {
-      void (async () => {
-        try {
-          confirm(await openSongArchiveFile(entry, key));
-        } catch (e) {
-          if (isCancelledError(e)) return;
-          if (isWrongKeyError(e)) Alert.alert('開けません', archiveErrorText(e), [{ text: 'もう一度', onPress: () => askKey(entry) }, { text: 'やめる', style: 'cancel' }]);
-          else Alert.alert('開けません', archiveErrorText(e));
-        }
-      })();
-    });
+  /** a file with encryption is opened with the secret key; one without is opened at once (nothing to ask) */
+  const openEntry = async (entry: BackupEntry) => {
+    let encrypted: boolean;
+    try {
+      encrypted = (await peekSongArchiveFile(entry)).encrypted;
+    } catch (e) {
+      Alert.alert('開けません', archiveErrorText(e));
+      return;
+    }
+    if (encrypted) askKey(entry);
+    else void tryOpen(entry, '');
+  };
+
+  const tryOpen = async (entry: BackupEntry, key: string) => {
+    try {
+      confirm(await openSongArchiveFile(entry, key));
+    } catch (e) {
+      if (isCancelledError(e)) return;
+      if (isWrongKeyError(e)) Alert.alert('開けません', archiveErrorText(e), [{ text: 'もう一度', onPress: () => askKey(entry) }, { text: 'やめる', style: 'cancel' }]);
+      else Alert.alert('開けません', archiveErrorText(e));
+    }
+  };
+
+  const askKey = (entry: BackupEntry) => promptSecret('秘密のキーを入力', entry.name, (key) => void tryOpen(entry, key));
 
   const confirm = (o: OpenedArchive) => {
     const m = o.manifest;
@@ -171,7 +267,8 @@ export function SongArchiveSection() {
       `・すでにあるので、飛ばす: ${o.alreadyIds.size}曲`,
       m.hasLibrary ? '・お気に入り、プレイリストなども、戻します（追加だけで、消しません）' : '',
       '',
-      `時間は、${formatDuration(estimateSeconds(o.newBytes))}が目安です。いまの曲は、消えません。`,
+      o.encrypted ? '' : '暗号化なしのファイルです（キーは、要りません）。',
+      `時間は、${formatDuration(estimateSeconds(o.newBytes, o.encrypted))}が目安です。いまの曲は、消えません。`,
     ].filter((l, i) => l !== '' || i > 0);
     Alert.alert('戻す内容の確認', lines.join('\n'), [{ text: '戻す', onPress: () => void doRestore(o) }, { text: 'やめる', style: 'cancel', onPress: o.close }], { cancelable: false });
   };
@@ -188,18 +285,23 @@ export function SongArchiveSection() {
   };
 
   return (
-    <Section title="保存した曲のバックアップ（暗号化）">
+    <Section title="保存した曲のバックアップ">
       <Progress />
       <Row title="プレイリストなども入れる" sub="お気に入り、プレイリスト、スマートプレイリスト、タグ、キューなど">
         <Switch testID="archive-library" value={withLibrary} onValueChange={setWithLibrary} trackColor={{ true: colors.accent }} />
       </Row>
       <Pressable testID="archive-create" onPress={() => void create()} disabled={busy}>
-        <Row title="保存した曲を、ファイルに入れる" sub={`オフライン用に保存した曲を、元の音のまま、あなたが決める秘密のキーで守ったファイルに入れます。機種の変更や、バックアップに使えます。\n保存先: ${whereArchives()}`}>
+        <Row title="保存した曲を、ファイルに入れる" sub={`オフライン用に保存した曲を、元の音のまま、1つのファイルに入れます。「暗号化なし」なら、すぐに終わります。「暗号化あり」は、あなたが決める秘密のキーで守ります（時間がかかります）。機種の変更や、バックアップに使えます。\n保存先: ${whereArchives()}`}>
           <Text style={{ color: busy ? colors.sub : colors.accentText, fontWeight: '700' }}>入れる</Text>
         </Row>
       </Pressable>
+      <Pressable testID="audio-export" onPress={() => void exportAudio()} disabled={busy}>
+        <Row title="保存した曲を、音声ファイルで書き出す" sub={`曲ごとに1つずつの音声ファイル（m4a など）で書き出します。変換はしないので速く、保存した音のままです。ほかのプレーヤーや、ほかの機器でも使えます（mp3 には、変換しません）。\n書き出し先: ${whereAudio()}`}>
+          <Text style={{ color: busy ? colors.sub : colors.accentText, fontWeight: '700' }}>書き出す</Text>
+        </Row>
+      </Pressable>
       <Pressable testID="archive-restore" onPress={() => void restore()} disabled={busy}>
-        <Row title="ファイルから、保存した曲を戻す" sub="秘密のキーで開きます。すでにある曲は、そのままで、足りないものだけを戻します" last>
+        <Row title="ファイルから、保存した曲を戻す" sub="暗号化したファイルは、秘密のキーで開きます。すでにある曲は、そのままで、足りないものだけを戻します" last>
           <Text style={{ color: busy ? colors.sub : colors.accentText, fontWeight: '700' }}>選ぶ</Text>
         </Row>
       </Pressable>
