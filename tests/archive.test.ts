@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { createCipheriv, createDecipheriv, pbkdf2Sync, randomBytes as nodeRandom } from 'node:crypto';
 import { describe, it } from 'node:test';
 
-import { ARCHIVE_MAGIC, ArchiveError, type ArchiveErrorCode, ArchiveReader, ArchiveWriter, REC_END, memorySink, memorySource, normalizeSecretKey } from '../src/core/archive';
+import { ARCHIVE_MAGIC, ArchiveError, KDF_NONE, PLAIN_CHUNK, peekArchive, type ArchiveErrorCode, ArchiveReader, ArchiveWriter, REC_END, memorySink, memorySource, normalizeSecretKey } from '../src/core/archive';
 import { concatBytes } from '../src/core/crypto/bytes';
 
 const KEY = 'correct horse battery staple';
@@ -357,5 +357,125 @@ describe('the writer checks its own work', () => {
     await w.finish();
     assert.equal(pieces[0], 30);
     assert.ok(pieces.slice(1).every((n) => n <= 4 + 1024 + 16), JSON.stringify(Math.max(...pieces)));
+  });
+});
+
+describe('the file without encryption (the fast way)', () => {
+  const SAMPLE_PLAIN: Rec[] = [
+    { type: 3, meta: { hello: 'こんにちは' }, data: new Uint8Array([1, 2, 3]) },
+    { type: 2, meta: { id: 'song' }, data: rnd(200_000) },
+    { type: 1, meta: {}, data: new Uint8Array(0) },
+  ];
+  async function plain(records: Rec[], chunkSize?: number): Promise<Uint8Array> {
+    const sink = memorySink();
+    const w = await ArchiveWriter.create(sink, null, { chunkSize });
+    for (const r of records) await w.writeRecord(r.type, r.meta, r.data);
+    await w.finish();
+    return sink.bytes();
+  }
+
+  it('records come back as they went in, whatever the chunk size and the size of the pieces they are read in', async () => {
+    for (const chunk of [16, 64, 1000, 65_536, undefined]) {
+      const bytes = await plain(SAMPLE_PLAIN, chunk);
+      for (const piece of [1, 7, 4096, Number.MAX_SAFE_INTEGER]) {
+        const got = await readAll(bytes, '', piece);
+        assert.equal(got.length, 3, `chunk ${chunk}`);
+        same(got[1].data, SAMPLE_PLAIN[1].data, `chunk ${chunk} piece ${piece}`);
+        assert.deepEqual(got[0].meta, { hello: 'こんにちは' });
+      }
+    }
+  });
+
+  it('an empty archive, and a file that is exactly one or two chunks long, work', async () => {
+    assert.equal((await readAll(await plain([]))).length, 0);
+    for (const extra of [-1, 0, 1]) {
+      const rec: Rec[] = [{ type: 2, meta: {}, data: rnd(64 * 3 + extra) }];
+      const got = await readAll(await plain(rec, 64), '');
+      same(got[0].data, rec[0].data, `length ${64 * 3 + extra}`);
+    }
+  });
+
+  it('the header says "no encryption": the method is 0, no iterations, no salt', async () => {
+    const bytes = await plain(SAMPLE_PLAIN);
+    assert.equal(Buffer.from(bytes.subarray(0, 4)).toString('latin1'), ARCHIVE_MAGIC);
+    assert.equal(bytes[5], KDF_NONE);
+    assert.deepEqual([...bytes.subarray(6, 10)], [0, 0, 0, 0]);
+    assert.deepEqual([...bytes.subarray(14, 30)], new Array(16).fill(0));
+    assert.equal(new DataView(bytes.buffer, bytes.byteOffset).getUint32(10, true), PLAIN_CHUNK, 'one megabyte per chunk by default');
+  });
+
+  it('nothing is calculated: no key is made (no progress report at all), and the file is only a little bigger than the data', async () => {
+    let reported = 0;
+    const sink = memorySink();
+    const w = await ArchiveWriter.create(sink, null, { onKeyProgress: () => void reported++ });
+    await w.writeRecord(2, {}, rnd(300_000));
+    await w.finish();
+    assert.equal(reported, 0);
+    const size = sink.bytes().length;
+    assert.ok(size > 300_000 && size < 300_000 + 300, `size ${size}: header, a few small fields and one length per chunk – no tag, no padding`);
+    let opened = 0;
+    await ArchiveReader.open(memorySource(sink.bytes()), 'ignored', { onKeyProgress: () => void opened++ });
+    assert.equal(opened, 0);
+  });
+
+  it('what is written is readable as it is: the data of the record is in the file, unchanged', async () => {
+    const data = rnd(5000);
+    const bytes = await plain([{ type: 2, meta: {}, data }]);
+    assert.ok(Buffer.from(bytes).includes(Buffer.from(data)), 'plain bytes (that is what "without encryption" means)');
+  });
+
+  it('the key given when reading is not used (a file without encryption never says "wrong key")', async () => {
+    const bytes = await plain(SAMPLE_PLAIN);
+    for (const key of ['', 'anything', KEY]) same((await readAll(bytes, key))[1].data, SAMPLE_PLAIN[1].data);
+  });
+
+  it('a file that is cut short at ANY length is noticed (never half a file taken for a whole one)', async () => {
+    const bytes = await plain([{ type: 2, meta: { a: 1 }, data: rnd(500) }], 64);
+    let noticed = 0;
+    for (let n = 0; n < bytes.length; n++) {
+      const code = await codeOf(readAll(bytes.subarray(0, n)));
+      assert.notEqual(code, 'no error', `cut at ${n}`);
+      noticed++;
+    }
+    assert.equal(noticed, bytes.length);
+    assert.equal(await codeOf(readAll(bytes)), 'no error');
+  });
+
+  it('extra bytes after the end, and a missing chunk in the middle, are noticed', async () => {
+    const bytes = await plain([{ type: 2, meta: {}, data: rnd(400) }], 64);
+    assert.notEqual(await codeOf(readAll(concatBytes(bytes, Uint8Array.of(0)))), 'no error');
+    const spans = chunkSpans(bytes);
+    const cut = concatBytes(bytes.subarray(0, spans[1][0]), bytes.subarray(spans[2][0]));
+    assert.notEqual(await codeOf(readAll(cut)), 'no error');
+  });
+
+  it('bad settings in the header of such a file are refused (iterations must be zero; the chunk size must make sense)', async () => {
+    const good = await plain(SAMPLE_PLAIN);
+    const edit = (f: (b: Uint8Array) => void) => { const b = Uint8Array.from(good); f(b); return b; };
+    assert.equal(await codeOf(readAll(edit((b) => { b.set([5, 0, 0, 0], 6); }))), 'corrupt');
+    assert.equal(await codeOf(readAll(edit((b) => { b.set([1, 0, 0, 0], 10); }))), 'corrupt');
+  });
+
+  it('peekArchive says whether a key is needed, from the first 30 bytes only', async () => {
+    assert.deepEqual(await peekArchive(memorySource(await plain(SAMPLE_PLAIN))), { encrypted: false });
+    assert.deepEqual(await peekArchive(memorySource(await build(SAMPLE))), { encrypted: true });
+    let read = 0;
+    await peekArchive({ read: (n) => { read += n; return new Uint8Array(n).fill(0); } }).catch(() => undefined);
+    assert.ok(read <= 30, `at most 30 bytes were asked for (${read})`);
+  });
+
+  it('peekArchive gives the same errors as opening: not a backup, newer, unsupported method', async () => {
+    const good = await build(SAMPLE);
+    const edit = (f: (b: Uint8Array) => void) => { const b = Uint8Array.from(good); f(b); return b; };
+    assert.equal(await codeOf(peekArchive(memorySource(new TextEncoder().encode('this is not an archive at all, just text')))), 'not-archive');
+    assert.equal(await codeOf(peekArchive(memorySource(new Uint8Array(5)))), 'not-archive');
+    assert.equal(await codeOf(peekArchive(memorySource(edit((b) => { b[4] = 2; })))), 'newer');
+    assert.equal(await codeOf(peekArchive(memorySource(edit((b) => { b[5] = 9; })))), 'unsupported');
+  });
+
+  it('the encrypted file is unchanged by all this (same header, same size, still protected)', async () => {
+    const bytes = await build(SAMPLE);
+    assert.equal(bytes[5], 1);
+    assert.equal(await codeOf(readAll(bytes, 'wrong key')), 'wrong-key');
   });
 });

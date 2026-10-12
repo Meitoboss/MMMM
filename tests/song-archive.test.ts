@@ -401,3 +401,81 @@ describe('a larger collection', () => {
     assert.ok(Date.now() - t0 < 30_000);
   });
 });
+
+describe('without encryption (the fast way)', () => {
+  const plainOver = { secretKey: null, iterations: undefined, chunkSize: undefined };
+
+  it('a whole phone → file → another phone: every song comes back byte for byte, with nothing asked for', async () => {
+    const a = await phoneWithSongs();
+    const { bytes, result } = await exportAll(a.db, a.fs, plainOver);
+    assert.equal(result.included, 4);
+    const b = { db: await fresh(), fs: new FakeFs() };
+    const { reader, manifest } = await openSongArchive(memorySource(bytes, 3000), '');
+    assert.equal(manifest.songs.length, 4);
+    const rep = await restoreSongArchive(restoreDeps(b.db, b.fs, reader, manifest, { hasSong: async (id) => hasOfflineRow(b.db, id) }));
+    assert.deepEqual({ restored: rep.restored, alreadyHad: rep.alreadyHad, invalid: rep.invalid, library: rep.libraryRestored }, { restored: 4, alreadyHad: 0, invalid: 0, library: true });
+    for (const [name, data] of a.fs.files) assert.equal(hex(b.fs.files.get(name)!), hex(data), name);
+    assert.deepEqual((await repo.offlineSongs(b.db)).map((s) => s.id).sort(), ['aaaaaaaaaaa', 'bbbbbbbbbbb', 'ccccccccccc', 'ddddddddddd']);
+    assert.deepEqual((await repo.playlists(b.db)).map((p) => p.name), ['ドライブ']);
+  });
+
+  it('it is much smaller work: no key is made, and the file is only a little bigger than the songs', async () => {
+    const a = await phoneWithSongs();
+    let keyReports = 0;
+    const { bytes } = await exportAll(a.db, a.fs, { ...plainOver, onKeyProgress: () => void keyReports++ });
+    assert.equal(keyReports, 0);
+    const songBytes = [...a.fs.files.values()].reduce((n, f) => n + f.length, 0);
+    assert.ok(bytes.length > songBytes && bytes.length < songBytes + 20_000, `${bytes.length} for ${songBytes} bytes of songs`);
+  });
+
+  it('the file holds the songs in the clear (that is what "without encryption" means) – and the preview needs no key', async () => {
+    const a = await phoneWithSongs();
+    const { bytes } = await exportAll(a.db, a.fs, plainOver);
+    for (const f of a.fs.files.values()) assert.ok(Buffer.from(bytes).includes(Buffer.from(f.subarray(0, 64))));
+    for (const key of ['', 'anything']) assert.equal((await openSongArchive(memorySource(bytes), key)).manifest.songs.length, 4);
+  });
+
+  it('a file cut short is noticed – when it is opened or while it is restored – and nothing half-written stays', async () => {
+    const a = await phoneWithSongs();
+    const { bytes } = await exportAll(a.db, a.fs, plainOver);
+    for (const fraction of [0.3, 0.7, 0.99]) {
+      const cut = bytes.subarray(0, Math.floor(bytes.length * fraction));
+      const b = { db: await fresh(), fs: new FakeFs() };
+      await assert.rejects(
+        async () => {
+          const { reader, manifest } = await openSongArchive(memorySource(cut, 3000), '');
+          await restoreSongArchive(restoreDeps(b.db, b.fs, reader, manifest, { hasSong: async (id) => hasOfflineRow(b.db, id) }));
+        },
+        (e: unknown) => e instanceof ArchiveError && e.code === 'corrupt',
+        `cut to ${fraction}`,
+      );
+      assert.equal(b.fs.files.size, 0, `no half song stays (cut to ${fraction})`);
+    }
+  });
+
+  it('a file in several chunks, cut at a chunk boundary or inside one, is noticed while restoring (the song being written is removed)', async () => {
+    const a = await phoneWithSongs();
+    const { bytes } = await exportAll(a.db, a.fs, { ...plainOver, chunkSize: 4096 });
+    for (const fraction of [0.4, 0.8]) {
+      const cut = bytes.subarray(0, Math.floor(bytes.length * fraction));
+      const b = { db: await fresh(), fs: new FakeFs() };
+      await assert.rejects(
+        async () => {
+          const { reader, manifest } = await openSongArchive(memorySource(cut, 3000), '');
+          await restoreSongArchive(restoreDeps(b.db, b.fs, reader, manifest, { hasSong: async (id) => hasOfflineRow(b.db, id) }));
+        },
+        (e: unknown) => e instanceof ArchiveError && e.code === 'corrupt',
+      );
+      for (const [, data] of b.fs.files) assert.ok(data.length > 0, 'only complete songs stay');
+    }
+  });
+
+  it('with the key and without it the same songs come out (the two ways differ only in how the file is written)', async () => {
+    const a = await phoneWithSongs();
+    const withKey = (await exportAll(a.db, a.fs)).bytes;
+    const without = (await exportAll(a.db, a.fs, plainOver)).bytes;
+    assert.notEqual(withKey[5], without[5]);
+    const names = async (bytes: Uint8Array, key: string) => (await openSongArchive(memorySource(bytes), key)).manifest.songs.map((s) => s.id).sort();
+    assert.deepEqual(await names(withKey, KEY), await names(without, ''));
+  });
+});
