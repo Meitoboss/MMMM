@@ -1,6 +1,8 @@
+import Storage from 'expo-sqlite/kv-store';
 import * as FileSystem from 'expo-file-system/legacy';
 import { Platform } from 'react-native';
 
+import { type SessionKind, downloadWithFallback } from '../core/downloadFallback';
 import { runDownload, type DownloadDeps, type DownloadResult } from '../core/offlineJobs';
 import { resolveAudio } from '../core/streams/resolver';
 import type { AudioSource, SongItem } from '../core/types';
@@ -28,7 +30,44 @@ export async function ensureOfflineDir(): Promise<void> {
 
 const MIN_BYTES = 20_000; // anything smaller is an error page, not a song
 
+/**
+ * iPhone: expo-file-system downloads in a BACKGROUND session by default (the system's transfer service does it for the app). That
+ * service depends on the app's signature: with some signing tools it cuts a download in the middle (NSURLErrorDomain). When that
+ * happens the song is downloaded again in a FOREGROUND session (inside the app), and the phone remembers that this is the way that works.
+ */
+const SESSION_KEY = 'offline.session.v1';
+function sessionPreference(): SessionKind {
+  try {
+    return Storage.getItemSync(SESSION_KEY) === 'foreground' ? 'foreground' : 'background';
+  } catch {
+    return 'background';
+  }
+}
+function rememberSession(kind: SessionKind): void {
+  try {
+    Storage.setItemSync(SESSION_KEY, kind);
+  } catch {
+    /* it is only a shortcut: the next song tries the usual way first */
+  }
+}
+
 async function downloadFile(
+  src: AudioSource,
+  fileName: string,
+  onProgress: (fraction: number) => void,
+  isCancelled: () => boolean,
+): Promise<number> {
+  if (Platform.OS !== 'ios') return downloadOnce('background', src, fileName, onProgress, isCancelled);
+  return downloadWithFallback({
+    prefer: sessionPreference(),
+    attempt: (kind) => downloadOnce(kind, src, fileName, onProgress, isCancelled),
+    isCancelled,
+    remember: rememberSession,
+  });
+}
+
+async function downloadOnce(
+  kind: SessionKind,
   src: AudioSource,
   fileName: string,
   onProgress: (fraction: number) => void,
@@ -43,7 +82,8 @@ async function downloadFile(
   const headers: Record<string, string> = { Range: 'bytes=0-' };
   if (src.userAgent) headers['User-Agent'] = src.userAgent;
 
-  const dl = FileSystem.createDownloadResumable(src.url, tmp, { headers }, (p) => {
+  const options: FileSystem.DownloadOptions = kind === 'foreground' && Platform.OS === 'ios' ? { headers, sessionType: FileSystem.FileSystemSessionType.FOREGROUND } : { headers };
+  const dl = FileSystem.createDownloadResumable(src.url, tmp, options, (p) => {
     if (isCancelled()) {
       void dl.pauseAsync().catch(() => undefined);
       return;

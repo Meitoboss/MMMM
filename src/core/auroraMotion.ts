@@ -11,6 +11,8 @@ export interface AuroraLayer {
   calmMs: number;
   /** brightness when paused */
   baseOpacity: number;
+  /** where the ribbon lies up (−) or down (+), as a share of the height – so that, behind the cover, one peeks out above it and another below */
+  offsetY: number;
   /** extra height of the ribbon at the peak of a beat (0.2 = 20 % taller) */
   beatScale: number;
   /** starts at the far end, like CSS "alternate-reverse" */
@@ -25,16 +27,19 @@ export const AURORA_STRENGTH = 1;
 
 /** bottom to top, as in the original: red, purple, green */
 export const LAYERS: AuroraLayer[] = [
-  { key: 'red', calmMs: 38000, baseOpacity: 0.5, beatScale: 0.1, reverse: false },
-  { key: 'purple', calmMs: 30000, baseOpacity: 0.58, beatScale: 0.16, reverse: true },
-  { key: 'green', calmMs: 22000, baseOpacity: 0.62, beatScale: 0.22, reverse: false },
+  { key: 'red', calmMs: 38000, baseOpacity: 0.6, offsetY: 0.1, beatScale: 0.1, reverse: false },
+  { key: 'purple', calmMs: 30000, baseOpacity: 0.68, offsetY: 0.26, beatScale: 0.16, reverse: true },
+  { key: 'green', calmMs: 22000, baseOpacity: 0.74, offsetY: -0.2, beatScale: 0.22, reverse: false },
 ];
+
+/** on a light background the same colours are much stronger: they are taken down a little */
+export const LIGHT_STRENGTH = 0.7;
 
 export const clamp01 = (v: number): number => Math.max(0, Math.min(1, v));
 
-/** brightness of a layer: `beat` 0 = rest, 1 = peak of a beat */
-export const layerOpacity = (l: AuroraLayer, beat = 0): number =>
-  clamp01(l.baseOpacity * AURORA_STRENGTH * (1 + 0.55 * clamp01(beat)));
+/** brightness of a layer: `beat` 0 = rest, 1 = peak of a beat; `scale` 1 on a dark background, LIGHT_STRENGTH on a light one */
+export const layerOpacity = (l: AuroraLayer, beat = 0, scale = 1): number =>
+  clamp01(l.baseOpacity * AURORA_STRENGTH * scale * (1 + 0.55 * clamp01(beat)));
 
 /** the original "auroraWav" keyframes (translation as a share of the picture's width / height) */
 export const DRIFT = {
@@ -70,3 +75,7 @@ export function auroraMotion(opts: { playing: boolean; rate?: number; reduceMoti
 
 /** below this height the aurora is not drawn (no room for a ribbon) */
 export const MIN_AURORA_HEIGHT = 56;
+
+/** how far the edges dissolve into the background: top / bottom as a share of the height, left / right of the width */
+export const FADE_VERTICAL = 0.22;
+export const FADE_HORIZONTAL = 0.12;

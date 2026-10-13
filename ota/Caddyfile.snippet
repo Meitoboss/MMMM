@@ -1,0 +1,5 @@
+# Put this INSIDE the block of 130-210-45-154.sslip.io in /etc/caddy/Caddyfile,
+# above any catch-all line (like "respond 404"), then:  sudo systemctl reload caddy
+	handle /ota/* {
+		reverse_proxy 127.0.0.1:8789
+	}

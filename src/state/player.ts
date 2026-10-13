@@ -3,8 +3,9 @@ import { create } from 'zustand';
 
 import { getConfig } from '../core/config';
 import { MAX_RATE, MIN_RATE, scaleLoopRegion } from '../core/beat';
-import { FADE_STEP_MS, type Trim, fadeGain, planFadeOut } from '../core/dj';
+import { FADE_STEP_MS, type Trim, fadeBetween, fadeGain, onThisPhone, planFadeOut } from '../core/dj';
 import { type LoopRegion, loopJumpTarget, makeLoop } from '../core/loop';
+import { isDoubledDuration, songEnd } from '../core/songLength';
 import { normalizedVolume } from '../core/loudness';
 import { isLocalId } from '../core/localMeta';
 import { yt } from '../core';
@@ -15,6 +16,7 @@ import * as repo from '../db/repo';
 import { resolveLocal } from '../player/localFiles';
 import { resolveOffline } from '../player/offline';
 import { LOOP_INTERVAL, NORMAL_INTERVAL, ensurePlayer, setProgressInterval } from '../player/setup';
+import { useOffline } from './offline';
 import { resolverOptions, useSettings } from './settings';
 
 export type RepeatMode = 'off' | 'all' | 'one';
@@ -42,11 +44,6 @@ interface PlayerState {
   /** last playback events, shown on the player screen to explain silent failures */
   debug: string[];
   log: (line: string) => void;
-  /** current audio format (itag) and mimeType for duration correction */
-  currentItag?: number;
-  currentMimeType?: string;
-  /** expected duration in seconds (from metadata) for duration correction */
-  expectedDuration?: number;
 
   playSongs: (songs: SongItem[], startIndex?: number) => Promise<void>;
   playRadio: (song: SongItem) => Promise<void>;
@@ -90,6 +87,10 @@ interface PlayerState {
   tick: () => void;
 }
 
+/** how many lines of the playback log are kept (the log is shown in Settings → 再生ログを表示) */
+const DEBUG_LINES = 40;
+let doubledLogged = -1; // the load for which "the file says double" was written to the log
+let lastSource = ''; // what the song that is playing was resolved to: via, itag, mime type – written next to "the file says double"
 let loadToken = 0;
 let loadedAt = 0;
 let playedMs = 0;
@@ -147,6 +148,8 @@ function ramp(kind: 'in' | 'out', durationMs: number, done?: () => void): void {
 }
 
 const fadeMs = (): number => Math.max(0, useSettings.getState().fadeSeconds) * 1000;
+/** fades are for songs on this phone only (see fadeBetween) */
+const fadeMsBetween = (from: SongItem | undefined, to: SongItem | undefined): number => (fadeBetween(from?.id, to?.id, useOffline.getState().ids) ? fadeMs() : 0);
 
 let sleepTimeout: ReturnType<typeof setTimeout> | undefined;
 
@@ -215,12 +218,13 @@ export const usePlayer = create<PlayerState>((set, get) => {
         : (await resolveOffline(song.id)) ?? (await resolveAudio(song.id, resolverOptions())); // a saved copy plays without the network
       if (token !== loadToken) return; // user skipped again while resolving
       // start / end trim of this song (best effort)
-      const trim = await openDb().then((db) => repo.trimOf(db, song.id)).catch(() => null);
+      const trim = onThisPhone(song.id, useOffline.getState().ids) ? await openDb().then((db) => repo.trimOf(db, song.id)).catch(() => null) : null;
       if (token !== loadToken) return;
       trimEndSec = trim?.endSec ?? null;
-      set({ trim, currentItag: src.itag, currentMimeType: src.mimeType, expectedDuration: song.durationSec });
+      set({ trim });
       wantFineProgress(trimEndSec !== null);
       if (startAt === 0 && trim?.startSec) startAt = trim.startSec;
+      lastSource = `via=${src.via} itag=${src.itag ?? '-'} ${src.mimeType ?? ''}`.trim();
       get().log(`resolved via=${src.via} itag=${src.itag ?? '-'} ${src.mimeType ?? ''} host=${String(src.url).split('/')[2]}${src.note ? ` ${src.note}` : ''}`);
       await TrackPlayer.reset();
       await TrackPlayer.add({
@@ -261,7 +265,8 @@ export const usePlayer = create<PlayerState>((set, get) => {
   /** to the next song. `auto`: the previous one ended by itself – then the next one fades in (when a fade is set) */
   async function advance(auto: boolean): Promise<void> {
     const { queue, index, repeat, current } = get();
-    const fadeIn = auto && fadeMs() > 0;
+    const upcoming = index + 1 < queue.length ? queue[index + 1] : repeat === 'all' ? queue[0] : undefined;
+    const fadeIn = auto && fadeMsBetween(current, upcoming) > 0;
     if (index + 1 < queue.length) return loadAt(index + 1, 0, fadeIn);
     if (repeat === 'all' && queue.length) return loadAt(0, 0, fadeIn);
     if (useSettings.getState().autoRadio && current && (await appendRadio(current)) > 0) return loadAt(index + 1, 0, fadeIn);
@@ -296,14 +301,11 @@ export const usePlayer = create<PlayerState>((set, get) => {
     log: (line) => {
       const t = new Date();
       const hh = `${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}:${String(t.getSeconds()).padStart(2, '0')}`;
-      set({ debug: [...get().debug.slice(-9), `${hh} ${line}`] });
+      set({ debug: [...get().debug.slice(-(DEBUG_LINES - 1)), `${hh} ${line}`] });
     },
     repeat: 'off',
     shuffle: false,
     rate: useSettings.getState().playbackRate,
-    currentItag: undefined,
-    currentMimeType: undefined,
-    expectedDuration: undefined,
 
     playSongs: async (songs, startIndex = 0) => {
       let queue = songs;
@@ -429,7 +431,7 @@ export const usePlayer = create<PlayerState>((set, get) => {
 
     markTrimStart: async (position) => {
       const song = get().current;
-      if (!song) return null;
+      if (!song || !onThisPhone(song.id, useOffline.getState().ids)) return null;
       const kept = await repo.setTrim(await openDb(), song, { startSec: position, endSec: get().trim?.endSec });
       set({ trim: kept });
       trimEndSec = kept?.endSec ?? null;
@@ -439,7 +441,7 @@ export const usePlayer = create<PlayerState>((set, get) => {
 
     markTrimEnd: async (position) => {
       const song = get().current;
-      if (!song) return null;
+      if (!song || !onThisPhone(song.id, useOffline.getState().ids)) return null;
       const kept = await repo.setTrim(await openDb(), song, { startSec: get().trim?.startSec, endSec: position });
       set({ trim: kept });
       trimEndSec = kept?.endSec ?? null;
@@ -457,16 +459,20 @@ export const usePlayer = create<PlayerState>((set, get) => {
     },
 
     checkTransition: (position, duration) => {
-      const { loop, status, needsLoad, currentMimeType, expectedDuration } = get();
+      const { loop, status, needsLoad } = get();
       if (loop) return cancelFade(true);
       if (status !== 'playing' || needsLoad) return;
-      const fadeSec = fadeMs() / 1000;
-      // Fix for audio/mp4 formats (itag 140, etc) that report doubled duration in some cases
-      let correctedDuration = duration;
-      if (currentMimeType?.startsWith('audio/mp4') && expectedDuration && expectedDuration > 0 && duration > expectedDuration * 1.8 && duration < expectedDuration * 2.2) {
-        correctedDuration = expectedDuration;
+      // a file that claims about twice the song's length (the second half is silence): the song ends at its own length
+      const known = get().current?.durationSec;
+      const doubled = isDoubledDuration(duration, known);
+      if (doubled && doubledLogged !== loadToken) {
+        doubledLogged = loadToken;
+        get().log(`length: the file says ${Math.round(duration)}s, the song is ${Math.round(known ?? 0)}s – it ends at ${Math.round(known ?? 0)}s${lastSource ? ` [${lastSource}]` : ''}`);
       }
-      const end = trimEndSec ?? (correctedDuration > 0 ? correctedDuration : null);
+      const queue = get().queue;
+      const upcoming = get().index + 1 < queue.length ? queue[get().index + 1] : get().repeat === 'all' ? queue[0] : undefined;
+      const fadeSec = fadeMsBetween(get().current, upcoming) / 1000;
+      const end = trimEndSec ?? songEnd(duration, known);
       if (end === null) return;
 
       // 1. fade out before the end (the end of the song, or its trimmed end)
@@ -488,6 +494,24 @@ export const usePlayer = create<PlayerState>((set, get) => {
             );
           }
         }
+      }
+
+      // 3. the end of a song whose file claims double: go to the next song instead of playing the silence
+      if (doubled && trimEndSec === null && known && leftSongToken !== loadToken && position >= known - 0.2) {
+        leftSongToken = loadToken;
+        if (get().repeat === 'one') {
+          // "repeat one": the same song again from the start (as when a song really ends); the end of the next round is handled the same way
+          stopFadeTimers();
+          void (async () => {
+            await TrackPlayer.setVolume(baseVolume).catch(() => undefined);
+            await TrackPlayer.seekTo(0).catch(() => undefined);
+            await TrackPlayer.play().catch(() => undefined);
+            leftSongToken = -1;
+          })();
+        } else {
+          void advance(true);
+        }
+        return;
       }
 
       // 2. a trimmed end: go to the next song (a running fade does it itself, unless it fell behind)

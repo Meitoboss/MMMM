@@ -44,8 +44,8 @@ export async function saveBackupFile(name: string, text: string): Promise<{ uri:
   return { uri, shareable: false };
 }
 
-/** the backups found, newest first (the names carry the date) */
-export async function listBackupFiles(): Promise<BackupEntry[]> {
+/** the files in the backup place that `wanted` accepts, newest first (the names carry the date) */
+export async function listFolderFiles(wanted: (name: string) => boolean): Promise<BackupEntry[]> {
   let entries: BackupEntry[] = [];
   if (isAndroid) {
     const folder = savedAndroidFolder();
@@ -56,7 +56,10 @@ export async function listBackupFiles(): Promise<BackupEntry[]> {
     await FileSystem.makeDirectoryAsync(iosDir(), { intermediates: true }).catch(() => undefined);
     entries = (await FileSystem.readDirectoryAsync(iosDir())).map((name) => ({ uri: `${iosDir()}${name}`, name }));
   }
-  return entries.filter((e) => isBackupFileName(e.name)).sort((a, b) => b.name.localeCompare(a.name));
+  return entries.filter((e) => wanted(e.name)).sort((a, b) => b.name.localeCompare(a.name));
 }
+
+/** the backups found, newest first */
+export const listBackupFiles = (): Promise<BackupEntry[]> => listFolderFiles(isBackupFileName);
 
 export const readBackupFile = (uri: string): Promise<string> => FileSystem.readAsStringAsync(uri);

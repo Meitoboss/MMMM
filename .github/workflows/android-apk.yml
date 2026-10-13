@@ -12,10 +12,6 @@ on:
         type: choice
         options: [prod, trial]
         default: prod
-      branch:
-        description: 'Branch to build from'
-        type: string
-        default: main
 
 jobs:
   build-android:
@@ -30,8 +26,6 @@ jobs:
           df -h /
 
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.branch }}
 
       - uses: actions/setup-node@v4
         with:

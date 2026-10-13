@@ -54,6 +54,13 @@ describe('the publish and roll-back workflows', () => {
       assert.deepEqual(order, [...order].sort((a, b) => a - b));
     }
   });
+  it('first check that the update server answers – before the long steps – and say in words when it does not', () => {
+    for (const t of [pub, rb]) {
+      assert.ok(at(t, 'Check that the update server answers') < at(t, 'npm install'), 'before anything is installed');
+      assert.ok(t.includes('/ota/health') && t.includes('--retry 5') && t.includes('--retry-all-errors'));
+      assert.ok(t.includes('更新サーバーに届きません'));
+    }
+  });
   it('export both platforms, then sign and publish with the two secrets', () => {
     assert.ok(at(pub, 'expo export --platform all --output-dir dist') < at(pub, 'ota/publish.mjs update'));
     for (const t of [pub, rb]) {

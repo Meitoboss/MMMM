@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, Stack } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { FlatList, Pressable, Text, View } from 'react-native';
 
 import { yt } from '../../src/core';
@@ -18,6 +18,11 @@ export default function Album() {
   const play = usePlayer((p) => p.playSongs);
   const { data, error, loading, reload } = useAsync(() => yt.album(id), [id]);
   const [bookmarked, setBookmarked] = useState(false);
+  // the year of an album is what the release order of the Library uses: remembered whenever the page shows it
+  useEffect(() => {
+    const year = data?.year;
+    if (year && /^(19|20)\d{2}/.test(year)) void openDb().then((db) => repo.setAlbumYear(db, id, year.slice(0, 4))).catch(() => undefined);
+  }, [data?.year, id]);
 
   if (loading && !data) return <Loading />;
   if (error || !data) return <ErrorView message={error ?? '見つかりません'} onRetry={reload} />;

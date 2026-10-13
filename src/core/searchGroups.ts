@@ -9,17 +9,21 @@ export interface Group {
   items: MusicItem[];
 }
 
-const ORDER: { kind: MusicItem['kind']; label: string; filter: SearchFilter }[] = [
+/** the artists come first: the artist that was searched for is usually what is wanted, and it should not be buried under songs */
+const ORDER: { kind: MusicItem['kind']; label: string; filter: SearchFilter; /** at most this many are shown (the heading's "すべて見る" shows the rest) */ limit?: number }[] = [
+  { kind: 'artist', label: 'アーティスト', filter: 'artist', limit: 3 },
   { kind: 'song', label: '曲', filter: 'song' },
   { kind: 'video', label: 'ビデオ', filter: 'video' },
   { kind: 'album', label: 'アルバム', filter: 'album' },
-  { kind: 'artist', label: 'アーティスト', filter: 'artist' },
   { kind: 'playlist', label: 'プレイリスト', filter: 'community_playlist' },
 ];
 
 /** non-empty groups, in a fixed order; the order inside a group is kept */
 export function groupResults(items: MusicItem[]): Group[] {
-  return ORDER.map((o) => ({ ...o, items: items.filter((i) => i.kind === o.kind) })).filter((g) => g.items.length > 0);
+  return ORDER.map(({ limit, ...o }) => {
+    const all = items.filter((i) => i.kind === o.kind);
+    return { ...o, items: limit ? all.slice(0, limit) : all };
+  }).filter((g) => g.items.length > 0);
 }
 
 export type Row = { type: 'header'; group: Group } | { type: 'item'; item: MusicItem };

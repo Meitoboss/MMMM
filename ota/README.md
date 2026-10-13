@@ -12,7 +12,7 @@ GitHub Actions ──作って署名──▶ あなたのサーバー（OCI）�
 
 - **署名の秘密鍵は GitHub の Secrets にだけ**置きます。サーバーが乗っ取られても、偽の更新は作れません（アプリが署名を確かめて、断ります）。
 - アプリは、自分の**ネイティブ部分の指紋**を送ります。サーバーは、同じ指紋の更新だけを返します。合わない更新が届くことはありません。
-- **試験用アプリ**（名前は「Music space β」、本番とは別のアプリとして入ります）で先に試します。本番は、`ota/config.json` の `enabledFor` に `"prod"` を足すまで、更新を受け取りません。
+- **試験用アプリ**（名前は「Music space β」、本番とは別のアプリとして入ります）は、`trial` から更新を受け取ります。**本番のアプリは、`main` から受け取ります**（`ota/config.json` の `enabledFor` に、`"trial"` と `"prod"` の両方が入っています）。
 
 ## 手順
 
@@ -26,7 +26,7 @@ GitHub Actions ──作って署名──▶ あなたのサーバー（OCI）�
    sh setup.sh
    ```
    最後に「起動しました: {"ok":true}」と出ます。**途中で出る「管理用トークン」を、必ず控えてください**（次の手順 3 で GitHub に入れます）。
-3. Caddy に窓口を足します。`sudo nano /etc/caddy/Caddyfile` を開き、`144-24-127-172.sslip.io` のブロックの中（`respond 404` のような最後の行より上）に、`Caddyfile.snippet` の 3 行を足します。
+3. Caddy に窓口を足します。`sudo nano /etc/caddy/Caddyfile` を開き、`130-210-45-154.sslip.io` のブロックの中（`respond 404` のような最後の行より上）に、`Caddyfile.snippet` の 3 行を足します。
    ```
    	handle /ota/* {
    		reverse_proxy 127.0.0.1:8789
@@ -34,7 +34,7 @@ GitHub Actions ──作って署名──▶ あなたのサーバー（OCI）�
    ```
    そのあと `sudo systemctl reload caddy`。確認:
    ```
-   curl https://144-24-127-172.sslip.io/ota/health
+   curl https://130-210-45-154.sslip.io/ota/health
    ```
    `{"ok":true}` が返れば成功です。（Caddyfile の構成が違って迷うときは、`sudo cat /etc/caddy/Caddyfile` の中身を見せてください。鍵の部分は伏せて構いません。）
 
@@ -68,16 +68,18 @@ GitHub の Actions → **Build iOS IPA (unsigned)** → Run workflow → **varia
 
 Actions → **Roll back an over-the-air update** → channel を選んで Run。アプリは、IPA / APK に入っている版へ戻ります。直した更新を配信すれば、また新しい中身になります。
 
-### 6. 本番にも使う（試験用で確認できてから）
+### 6. 本番にも使う（今は、すでに有効です）
 
-`ota/config.json` の `"enabledFor": ["trial"]` を `["trial", "prod"]` にして、本番の IPA / APK を作り直します（一度だけ）。そのあとは、channel: **main** で配信します。
+`ota/config.json` の `enabledFor` は、`["trial", "prod"]` です。本番のアプリは、**この設定で作った IPA / APK**から、更新を受け取ります。そのあとは、channel: **main** で配信します（試験用は、channel: **trial**）。
+
+**この設定を、元に戻さないでください。** `"prod"` が無いと、本番のアプリは、自動更新を、まったく受け取りません（アプリの中の「中身の更新」にも、「更新を使いません」と出ます）。全体のzipで上書きするときも、この設定が入っているか、確認してください。
 
 ## 状態を見る
 
 サーバーで（トークンは `~/musicspace-ota/ota.env` にあります）:
 
 ```
-curl -H "Authorization: Bearer $(grep OTA_ADMIN_TOKEN ~/musicspace-ota/ota.env | cut -d= -f2)" https://144-24-127-172.sslip.io/ota/admin/status
+curl -H "Authorization: Bearer $(grep OTA_ADMIN_TOKEN ~/musicspace-ota/ota.env | cut -d= -f2)" https://130-210-45-154.sslip.io/ota/admin/status
 ```
 
 - `updates`: いま配っている更新（チャンネル、ネイティブの指紋、日時、署名の有無）
@@ -90,6 +92,7 @@ curl -H "Authorization: Bearer $(grep OTA_ADMIN_TOKEN ~/musicspace-ota/ota.env |
 |---|---|
 | Actions の公開で「401」 | Secrets の `OTA_ADMIN_TOKEN` が、サーバーの `ota.env` の値と同じか |
 | 「署名が証明書と合いません」 | `OTA_PRIVATE_KEY` と `ota/certificate.pem` が、同じ組み合わせか（`make-keys.sh` の出力）。サーバーの証明書は `~/musicspace-ota/app/certificate.pem` |
+| 公開で「…につながりません: …」（または `fetch failed`） | 括弧の中が原因です。「接続を断られました」「応答がありません」は、**サーバーか Caddy が止まっています**（SSH で入って `podman ps` と `sudo systemctl status caddy` を見ます。SSH もつながらなければ、OCI のコンソールでインスタンスを再起動します）。まず、PC で `curl.exe -s https://130-210-45-154.sslip.io/ota/health` が `{"ok":true}` を返すか確かめてください。返るのに失敗するなら、Actions の「Re-run failed jobs」です（一時的な通信の失敗は、自動でも3回まで再試行します） |
 | 公開は成功するが、アプリに届かない | `status` の `requests` に、アプリの指紋が出ているか。公開時の指紋（Actions のログの `native=…`）と同じか。違えば、そのアプリの IPA を作り直すか、同じ状態で公開し直します |
 | アプリの「中身の更新」に「取得できませんでした（…）」 | 括弧の中が理由です。多くは、通信できない・証明書が合わない・サーバーの Caddy の窓口がない |
 | `make-keys.sh` が失敗する | サーバーがネットにつながっているか。うまくいかなければ、出力をそのまま見せてください |
@@ -101,3 +104,7 @@ curl -H "Authorization: Bearer $(grep OTA_ADMIN_TOKEN ~/musicspace-ota/ota.env |
 - 更新は**署名つき**だけです。サーバーも、証明書で署名を確かめてから受け取ります。
 - 管理用の窓口（アップロード・公開）は、トークンが必要です。窓口は HTTPS（Caddy）だけで、サーバー自身は、この機械の中からしか見えません。
 - 古い更新は、10 件まで残し、使われない資産は自動で消します。
+
+
+## 更新の説明（ポップアップに出る文章）
+公開の画面（Actions → Publish an over-the-air update）に、「更新の説明」の欄があります。ここに書いた文章は、更新に署名つきで入り、アプリの「新しい版を取得しました」と、反映したあとの「更新しました」のポップアップに出ます。改行できます。400文字までで、空でも構いません。文章は、コマンドの文字列には入れず、環境変数（`OTA_NOTE`）で渡すので、記号が入っていても、安全です。

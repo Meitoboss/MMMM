@@ -9,7 +9,9 @@ import { describe, it } from 'node:test';
 import { applyOtaToApp, channelOf } from '../scripts/apply-ota.mjs';
 import { isUuid, parseSignatureHeader, verifyRsaSha256 } from '../ota/lib.mjs';
 import { computeNativeHash, listNativePackages, normalizedConfig } from '../ota/native-hash.mjs';
-import { buildRollback, buildUpdate, send } from '../ota/publish.mjs';
+import { cleanReleaseNote } from '../ota/lib.mjs';
+import { buildRollback, buildUpdate, describeNetworkError, send } from '../ota/publish.mjs';
+import { cleanNote } from '../src/core/updater';
 
 const tmp = (p: string) => mkdtempSync(path.join(tmpdir(), p));
 const rsa = generateKeyPairSync('rsa', { modulusLength: 2048, privateKeyEncoding: { type: 'pkcs8', format: 'pem' }, publicKeyEncoding: { type: 'spki', format: 'pem' } });
@@ -94,14 +96,22 @@ describe('building an update from the files `expo export` made', () => {
 
 describe('sending', () => {
   const built = () => buildUpdate({ channel: 'trial', runtimeVersion: '1', nativeHash: '0123456789abcdef', baseUrl: 'https://example.com', distDir: dist(), privateKeyPem: null });
+  const NOW = [0, 0, 0]; // no waiting in tests
 
-  function fakeServer(missingCount: number, failOn?: string, failMethod?: string) {
+  /** a server that answers; `failOn` / `failMethod` make one door answer 500; `drop(n)` makes the first n requests fail like a dead network */
+  function fakeServer(missingCount: number, failOn?: string, failMethod?: string, drop = 0, dropWith: () => Error = () => Object.assign(new TypeError('fetch failed'), { cause: Object.assign(new Error('connect ECONNREFUSED 1.2.3.4:443'), { code: 'ECONNREFUSED' }) })) {
     const calls: string[] = [];
+    let dropped = 0;
     const impl = async (url: string, init: RequestInit) => {
       const u = new URL(url);
       calls.push(`${init.method} ${u.pathname.replace(/\/[A-Za-z0-9_-]{43}$/, '/<hash>')}`);
+      if (dropped < drop) {
+        dropped++;
+        throw dropWith();
+      }
       const json = (s: number, o: unknown) => new Response(JSON.stringify(o), { status: s });
       if (failOn && u.pathname.includes(failOn) && (!failMethod || init.method === failMethod)) return json(500, { error: 'boom' });
+      if (u.pathname.endsWith('/health')) return json(200, { ok: true });
       if (u.pathname.endsWith('/missing')) {
         const hashes = JSON.parse(String(init.body)).hashes as string[];
         return json(200, { missing: hashes.slice(0, missingCount) });
@@ -111,33 +121,125 @@ describe('sending', () => {
     };
     return { calls, impl: impl as unknown as typeof fetch };
   }
+  const run = (srv: { impl: typeof fetch }, b = built(), logs: string[] = []) => send({ server: 'https://s/', token: 't', publish: b.publish, files: b.files, fetchImpl: srv.impl, log: (l: string) => logs.push(l), retryDelays: NOW });
 
-  it('uploads only what the server lacks, with the token, then publishes', async () => {
-    const b = built();
+  it('first asks whether the server is alive; uploads only what it lacks, with the token, then publishes', async () => {
     const srv = fakeServer(2);
     const logs: string[] = [];
-    const r = await send({ server: 'https://s/', token: 't', publish: b.publish, files: b.files, fetchImpl: srv.impl, log: (l: string) => logs.push(l) });
-    assert.deepEqual(r, { ok: true });
-    assert.deepEqual(srv.calls, ['POST /ota/admin/assets/missing', 'PUT /ota/admin/assets/<hash>', 'PUT /ota/admin/assets/<hash>', 'POST /ota/admin/publish']);
-    assert.match(logs[0], /4 個のうち.*2 個/);
+    assert.deepEqual(await run(srv, built(), logs), { ok: true });
+    assert.deepEqual(srv.calls, ['GET /ota/health', 'POST /ota/admin/assets/missing', 'PUT /ota/admin/assets/<hash>', 'PUT /ota/admin/assets/<hash>', 'POST /ota/admin/publish']);
+    assert.ok(logs.some((l) => /4 個のうち.*2 個/.test(l)));
+    assert.ok(logs.includes('サーバーは動いています'));
   });
 
-  it('everything already stored: only the question and the publish', async () => {
-    const b = built();
+  it('everything already stored: only the questions and the publish', async () => {
     const srv = fakeServer(0);
-    await send({ server: 'https://s', token: 't', publish: b.publish, files: b.files, fetchImpl: srv.impl });
-    assert.deepEqual(srv.calls, ['POST /ota/admin/assets/missing', 'POST /ota/admin/publish']);
+    await run(srv);
+    assert.deepEqual(srv.calls, ['GET /ota/health', 'POST /ota/admin/assets/missing', 'POST /ota/admin/publish']);
   });
 
   it('a failing step stops everything, with the server\'s reason; nothing is published', async () => {
-    const b = built();
     const s1 = fakeServer(1, '/assets/', 'PUT');
-    await assert.rejects(() => send({ server: 'https://s', token: 't', publish: b.publish, files: b.files, fetchImpl: s1.impl }), /アップロードに失敗.*500.*boom/);
+    await assert.rejects(() => run(s1), /アップロードに失敗.*500.*boom/);
     assert.ok(!s1.calls.some((c) => c.includes('publish')));
-    const s2 = fakeServer(0, '/publish');
-    await assert.rejects(() => send({ server: 'https://s', token: 't', publish: b.publish, files: b.files, fetchImpl: s2.impl }), /公開できませんでした.*500.*boom/);
-    const s3 = fakeServer(0, '/missing');
-    await assert.rejects(() => send({ server: 'https://s', token: 't', publish: b.publish, files: b.files, fetchImpl: s3.impl }), /問い合わせ/);
+    await assert.rejects(() => run(fakeServer(0, '/publish')), /公開できませんでした.*500.*boom/);
+    await assert.rejects(() => run(fakeServer(0, '/missing')), /問い合わせ/);
+    await assert.rejects(() => run(fakeServer(0, '/health')), /サーバーが正常に答えません/);
+  });
+
+  it('a network that fails now and then is tried again (and says so)', async () => {
+    const srv = fakeServer(0, undefined, undefined, 2); // the first two requests are lost
+    const logs: string[] = [];
+    assert.deepEqual(await run(srv, built(), logs), { ok: true });
+    assert.equal(srv.calls.filter((c) => c === 'GET /ota/health').length, 3, 'the health check was tried three times');
+    assert.ok(logs.some((l) => /接続を断られました.*もう一度試します/.test(l)));
+  });
+
+  it('a network that stays down: gives up after the retries, saying WHY and where – and never gets to uploading', async () => {
+    const srv = fakeServer(0, undefined, undefined, 99);
+    await assert.rejects(
+      () => run(srv),
+      (e: Error) => {
+        assert.match(e.message, /サーバーの確認: s につながりません: 接続を断られました（サーバーか Caddy が止まっているようです）/);
+        assert.match(e.message, /ECONNREFUSED/);
+        return true;
+      },
+    );
+    assert.equal(srv.calls.length, 4, 'one try and three retries – then it stops');
+  });
+
+  it('a busy server (502 / 503) is tried again; a real refusal (401 / 422 / 409) is not', async () => {
+    let n = 0;
+    const flaky = async (url: string) => {
+      if (String(url).endsWith('/health') && n++ < 2) return new Response('bad gateway', { status: 502 });
+      return new Response(JSON.stringify({ ok: true, missing: [] }), { status: 200 });
+    };
+    const logs: string[] = [];
+    await send({ server: 'https://s', token: 't', publish: built().publish, files: new Map(), fetchImpl: flaky as unknown as typeof fetch, log: (l: string) => logs.push(l), retryDelays: NOW });
+    assert.equal(n, 3);
+    assert.ok(logs.some((l) => l.includes('502')));
+
+    for (const status of [401, 409, 422]) {
+      let calls = 0;
+      const refuse = async (url: string) => {
+        if (String(url).endsWith('/publish')) {
+          calls++;
+          return new Response(JSON.stringify({ error: `no ${status}` }), { status });
+        }
+        return new Response(JSON.stringify({ ok: true, missing: [] }), { status: 200 });
+      };
+      await assert.rejects(() => send({ server: 'https://s', token: 't', publish: built().publish, files: new Map(), fetchImpl: refuse as unknown as typeof fetch, retryDelays: NOW }), new RegExp(`公開できませんでした \\(${status}\\) no ${status}`));
+      assert.equal(calls, 1, `${status} is not retried`);
+    }
+  });
+
+  it('a time-out is reported as one', async () => {
+    const srv = fakeServer(0, undefined, undefined, 99, () => Object.assign(new Error('The operation was aborted due to timeout'), { name: 'TimeoutError' }));
+    await assert.rejects(() => run(srv), /時間切れです（サーバーが応答しません）/);
+  });
+
+  it('against a really closed port: the reason Node hides is shown', async () => {
+    // a port that was free a moment ago and is closed now
+    const { createServer } = await import('node:net');
+    const port: number = await new Promise((resolve) => {
+      const s = createServer();
+      s.listen(0, '127.0.0.1', () => {
+        const p = (s.address() as { port: number }).port;
+        s.close(() => resolve(p));
+      });
+    });
+    const b = built();
+    await assert.rejects(
+      () => send({ server: `http://127.0.0.1:${port}`, token: 't', publish: b.publish, files: b.files, retryDelays: [0] }),
+      (e: Error) => {
+        assert.match(e.message, new RegExp(`127\\.0\\.0\\.1:${port} につながりません: 接続を断られました`));
+        assert.match(e.message, /ECONNREFUSED/);
+        assert.doesNotMatch(e.message, /^fetch failed$/);
+        return true;
+      },
+    );
+  });
+});
+
+describe('describing a network failure', () => {
+  const err = (code: string, message = '') => Object.assign(new TypeError('fetch failed'), { cause: Object.assign(new Error(message || code), { code }) });
+  it('each cause has its own words', () => {
+    const url = 'https://130-210-45-154.sslip.io/ota/health';
+    assert.match(describeNetworkError(err('ECONNREFUSED'), url), /接続を断られました/);
+    assert.match(describeNetworkError(err('ETIMEDOUT'), url), /応答がありません/);
+    assert.match(describeNetworkError(err('UND_ERR_CONNECT_TIMEOUT'), url), /応答がありません/);
+    assert.match(describeNetworkError(err('ENOTFOUND'), url), /名前の解決/);
+    assert.match(describeNetworkError(err('EAI_AGAIN'), url), /名前の解決/);
+    assert.match(describeNetworkError(err('ECONNRESET'), url), /途中で切られました/);
+    assert.match(describeNetworkError(err('CERT_HAS_EXPIRED'), url), /証明書/);
+    assert.match(describeNetworkError(err('DEPTH_ZERO_SELF_SIGNED_CERT'), url), /証明書/);
+    assert.match(describeNetworkError(Object.assign(new Error('x'), { name: 'TimeoutError' }), url), /時間切れ/);
+    assert.ok(describeNetworkError(err('ECONNREFUSED'), url).startsWith('130-210-45-154.sslip.io につながりません'));
+  });
+  it('an unknown cause still shows what there is', () => {
+    assert.match(describeNetworkError(err('EWEIRD', 'something odd'), 'https://h/x'), /EWEIRD.*something odd/);
+    assert.match(describeNetworkError(new Error('plain'), 'https://h/x'), /h につながりません: plain/);
+    assert.match(describeNetworkError('just text', 'not an address'), /not an address/);
   });
 });
 
@@ -349,9 +451,9 @@ describe('the repository\'s own OTA settings', () => {
     assert.match(c.runtimeVersion, /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/);
     assert.ok(Array.isArray(c.enabledFor) && c.enabledFor.every((v: string) => v === 'prod' || v === 'trial'));
   });
-  it('production stays off until you turn it on; the committed app.json has updates OFF', () => {
+  it('both the trial app and the real app take updates (the trial app worked); the committed app.json itself has updates OFF – a build switches them on for its variant', () => {
     const c = JSON.parse(readFileSync('ota/config.json', 'utf8'));
-    assert.ok(!c.enabledFor.includes('prod'), 'prod is not enabled (change this only after the trial app worked)');
+    assert.deepEqual([...c.enabledFor].sort(), ['prod', 'trial'], 'if "prod" is missing the real app gets no automatic updates at all');
     assert.deepEqual(JSON.parse(readFileSync('app.json', 'utf8')).expo.updates, { enabled: false });
   });
   it('expo-updates is a dependency, on the version of SDK 54', () => {
@@ -367,5 +469,35 @@ describe('the repository\'s own OTA settings', () => {
     if (!existsSync('ota/certificate.pem')) return; // not added yet
     const x = new X509Certificate(readFileSync('ota/certificate.pem'));
     assert.ok(x.validTo && new Date(x.validTo) > new Date(), 'not expired');
+  });
+});
+
+describe('the note of an update', () => {
+  const built = (note?: string, over: Record<string, unknown> = {}) => buildUpdate({ channel: 'trial', runtimeVersion: '1', nativeHash: '0123456789abcdef', baseUrl: 'https://example.com', distDir: dist(), privateKeyPem: null, note, ...over } as never);
+  const bodyOf = (b: ReturnType<typeof built>) => JSON.parse(b.publish.platforms.ios.body) as { extra: { expoClient: unknown; releaseNote?: string } };
+
+  it('goes into the manifest (inside what is signed), cleaned; the app settings stay beside it', () => {
+    const b = bodyOf(built('  検索が速くなりました\u0000\n\n\n\nBPMを追加  ', { expoClient: { name: 'x' } }));
+    assert.equal(b.extra.releaseNote, '検索が速くなりました\n\nBPMを追加');
+    assert.deepEqual(b.extra.expoClient, { name: 'x' });
+  });
+  it('is the same on both platforms', () => {
+    const b = built('同じ説明');
+    assert.equal(JSON.parse(b.publish.platforms.ios.body).extra.releaseNote, JSON.parse(b.publish.platforms.android.body).extra.releaseNote);
+  });
+  it('nothing written, or only blanks: no note at all (and no empty field)', () => {
+    for (const note of [undefined, '', '   ', '\n\n', '\u0000']) assert.ok(!('releaseNote' in bodyOf(built(note)).extra), JSON.stringify(note));
+  });
+  it('is cut at 400 letters', () => {
+    assert.equal(Array.from(bodyOf(built('あ'.repeat(900))).extra.releaseNote!).length, 400);
+  });
+  it('is cleaned in exactly the same way as the app cleans it (so what is signed is what is shown)', () => {
+    for (const v of ['  x  ', 'a\u0000b', '一\r\n\r\n\r\n\r\n二', 'x'.repeat(1000), '😀'.repeat(500), '', '   ', null, undefined, 5]) assert.equal(cleanReleaseNote(v), cleanNote(v), JSON.stringify(v)?.slice(0, 20));
+  });
+  it('the workflow takes it from an input, through the environment (never pasted into the command)', () => {
+    const w = readFileSync('.github/workflows/ota-publish.yml', 'utf8');
+    assert.match(w, /note:\n\s+description:[^\n]*\n\s+type: string/);
+    assert.match(w, /OTA_NOTE: \$\{\{ inputs\.note \}\}/);
+    assert.doesNotMatch(w, /run:[^\n]*inputs\.note/, 'the text of an input must never be part of a shell command');
   });
 });

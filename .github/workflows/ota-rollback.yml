@@ -20,6 +20,15 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version: 22 }
+      # Fails early and in words when the update server cannot be reached (instead of after a long build)
+      - name: Check that the update server answers
+        run: |
+          URL="$(node -p "require('./ota/config.json').serverBase")/ota/health"
+          echo "checking $URL"
+          if ! curl -fsS --retry 5 --retry-delay 6 --retry-all-errors --max-time 15 "$URL"; then
+            echo "::error::更新サーバーに届きません。サーバー（OCI）と Caddy が動いているかを確認してください（ota/README.md の「うまくいかないとき」）"
+            exit 1
+          fi
       - run: npm install
       - name: Check that every imported file exists
         run: npx tsx --test tests/lint.test.ts

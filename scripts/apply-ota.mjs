@@ -1,7 +1,7 @@
 // Sets the "over-the-air update" part of app.json for one build, just before the native project is generated.
 //   node scripts/apply-ota.mjs --variant prod|trial
 // - trial: a separate app next to the real one (own id and name) that takes updates from the "trial" channel
-// - prod:  the real app; updates stay OFF until "prod" is listed under "enabledFor" in ota/config.json
+// - prod:  the real app; it takes updates (channel "main") only while "prod" is listed under "enabledFor" in ota/config.json
 // The fingerprint of the native part is written into the app (sent with every update request), so an update only
 // ever reaches an app it fits.
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';

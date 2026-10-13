@@ -4,7 +4,7 @@
 set -eu
 here=$(cd "$(dirname "$0")" && pwd)
 BASE="${OTA_HOME:-$HOME/musicspace-ota}"
-PUBLIC_BASE="${OTA_PUBLIC_BASE:-https://144-24-127-172.sslip.io}"
+PUBLIC_BASE="${OTA_PUBLIC_BASE:-https://130-210-45-154.sslip.io}"
 
 for f in server.mjs lib.mjs musicspace-ota.container; do
   [ -f "$here/$f" ] || { echo "$f が見つかりません（zip を展開したフォルダで実行してください）"; exit 1; }
