@@ -1,4 +1,5 @@
-import { ActionSheetIOS, Alert, Modal, Platform, Pressable, Text, TextInput, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { ActionSheetIOS, Alert, Modal, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useState } from 'react';
 import { create } from 'zustand';
 
@@ -30,7 +31,32 @@ interface PromptState {
   onSubmit: (value: string) => void;
 }
 
-const useDialogs = create<{ sheet: SheetState | null; prompt: PromptState | null }>(() => ({ sheet: null, prompt: null }));
+export interface AppAlertButton {
+  text: string;
+  style?: 'default' | 'cancel' | 'destructive';
+  onPress?: () => void;
+}
+
+export interface AppAlertOptions {
+  title: string;
+  message?: string;
+  /** a small icon above the title */
+  icon?: React.ComponentProps<typeof Ionicons>['name'];
+  /** default: one "OK" button */
+  buttons?: AppAlertButton[];
+  /** may the card be closed by tapping outside it or with the back button? default: yes */
+  dismissable?: boolean;
+}
+
+const useDialogs = create<{ sheet: SheetState | null; prompt: PromptState | null; alert: AppAlertOptions | null }>(() => ({ sheet: null, prompt: null, alert: null }));
+
+/**
+ * A message card in the app's own look, the same on both platforms (instead of the system Alert).
+ * The last button is the main one unless it is marked "cancel".
+ */
+export function showAppAlert(opts: AppAlertOptions): void {
+  useDialogs.setState({ alert: opts });
+}
 
 export function showActionSheet(opts: SheetOptions, onSelect: (index: number) => void): void {
   if (Platform.OS === 'ios') {
@@ -139,14 +165,58 @@ function PromptDialog({ prompt }: { prompt: PromptState }) {
   );
 }
 
-/** Mount once, near the root. Renders nothing until a dialog is requested (Android only). */
+function AppAlert({ alert }: { alert: AppAlertOptions }) {
+  useScheme();
+  const buttons = alert.buttons ?? [{ text: 'OK' }];
+  const dismissable = alert.dismissable ?? true;
+  const close = () => useDialogs.setState({ alert: null });
+  const press = (b: AppAlertButton) => {
+    close();
+    b.onPress?.();
+  };
+  return (
+    <Modal transparent animationType="fade" onRequestClose={dismissable ? close : undefined} statusBarTranslucent>
+      <Pressable onPress={dismissable ? close : undefined} style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center', paddingHorizontal: 24 }}>
+        <Pressable onPress={() => undefined} style={{ backgroundColor: colors.surface, borderRadius: 22, padding: 22, borderWidth: 1, borderColor: colors.border, gap: 12 }}>
+          {!!alert.icon && (
+            <View style={{ alignSelf: 'center', width: 52, height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface2 }}>
+              <Ionicons name={alert.icon} size={26} color={colors.accentText} />
+            </View>
+          )}
+          <Text style={{ color: colors.text, fontWeight: '800', fontSize: 18, textAlign: 'center' }}>{alert.title}</Text>
+          {!!alert.message && (
+            <ScrollView style={{ maxHeight: 360 }} showsVerticalScrollIndicator={false}>
+              <Text selectable style={{ color: colors.sub, fontSize: 14, lineHeight: 21, textAlign: 'center' }}>{alert.message}</Text>
+            </ScrollView>
+          )}
+          <View style={{ flexDirection: 'row', gap: 10, marginTop: 6 }}>
+            {buttons.map((b, i) => {
+              const main = b.style !== 'cancel' && (b.style === 'destructive' || i === buttons.length - 1);
+              const bg = main && b.style !== 'destructive' ? colors.accent : colors.surface2;
+              const fg = main && b.style !== 'destructive' ? colors.onAccent : b.style === 'destructive' ? colors.danger : colors.text;
+              return (
+                <Pressable key={`${i}-${b.text}`} onPress={() => press(b)} style={({ pressed }) => ({ flex: 1, alignItems: 'center', paddingVertical: 13, borderRadius: 16, backgroundColor: pressed ? colors.border : bg })}>
+                  <Text style={{ color: fg, fontWeight: '800', fontSize: 15 }}>{b.text}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
+/** Mount once, near the root. Renders nothing until a dialog is requested. */
 export function DialogHost() {
   const sheet = useDialogs((s) => s.sheet);
   const prompt = useDialogs((s) => s.prompt);
+  const alert = useDialogs((s) => s.alert);
   return (
     <>
       {sheet && <Sheet sheet={sheet} />}
       {prompt && <PromptDialog prompt={prompt} />}
+      {alert && <AppAlert alert={alert} />}
     </>
   );
 }

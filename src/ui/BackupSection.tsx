@@ -12,7 +12,7 @@ import { colors, useScheme } from './theme';
 const message = (e: unknown): string => (e instanceof Error ? e.message : String(e));
 
 /** Settings → バックアップ: write the library into a file, and put a file back (it only ever ADDS – nothing is deleted). */
-export function BackupSection() {
+export function BackupSection({ collapsible }: { collapsible?: boolean }) {
   useScheme();
   const [events, setEvents] = useState(true);
   const [withSettings, setWithSettings] = useState(true);
@@ -99,20 +99,20 @@ export function BackupSection() {
   };
 
   return (
-    <Section title="バックアップ">
-      <Row title="再生履歴も含める" sub="統計や、よく聴く曲のもとになります（ファイルが大きくなります）">
+    <Section title="バックアップ" collapsible={collapsible}>
+      <Row title="再生履歴も含める" info="統計や、よく聴く曲のもとになります（ファイルが大きくなります）">
         <Switch testID="backup-events" value={events} onValueChange={setEvents} trackColor={{ true: colors.accent }} />
       </Row>
-      <Row title="設定とテーマも含める" sub="音質、フェードなどの好みと、色です。キーやサーバーの設定は、含めません">
+      <Row title="設定とテーマも含める" info="音質、フェードなどの好みと、色です。キーやサーバーの設定は、含めません">
         <Switch testID="backup-settings" value={withSettings} onValueChange={setWithSettings} trackColor={{ true: colors.accent }} />
       </Row>
       <Pressable testID="backup-create" onPress={() => void create()} disabled={busy}>
-        <Row title="バックアップを作る" sub={`お気に入り、プレイリスト、スマートプレイリスト、タグ、キュー、BPM など。端末に保存した曲のファイルは含みません。\n保存先: ${whereBackups()}`}>
+        <Row title="バックアップを作る" info={`お気に入り、プレイリスト、スマートプレイリスト、タグ、キュー、BPM など。端末に保存した曲のファイルは含みません。\n保存先: ${whereBackups()}`}>
           {busy ? <ActivityIndicator color={colors.accentText} /> : <Text style={{ color: colors.accentText, fontWeight: '700' }}>作る</Text>}
         </Row>
       </Pressable>
       <Pressable testID="backup-restore" onPress={() => void restore()} disabled={busy}>
-        <Row title="バックアップから戻す" sub="取り込む前に、何が増えるかを確認できます。いまのデータは消えません" last>
+        <Row title="バックアップから戻す" info="取り込む前に、何が増えるかを確認できます。いまのデータは消えません" last>
           <Text style={{ color: colors.accentText, fontWeight: '700' }}>選ぶ</Text>
         </Row>
       </Pressable>
