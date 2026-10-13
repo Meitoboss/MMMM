@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { ActionSheetIOS, Alert, Modal, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Alert, Modal, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useState } from 'react';
 import { create } from 'zustand';
 
@@ -58,11 +58,8 @@ export function showAppAlert(opts: AppAlertOptions): void {
   useDialogs.setState({ alert: opts });
 }
 
+/** the menu that slides up from the bottom – the app's own card on both platforms (not the system sheet) */
 export function showActionSheet(opts: SheetOptions, onSelect: (index: number) => void): void {
-  if (Platform.OS === 'ios') {
-    ActionSheetIOS.showActionSheetWithOptions(opts, onSelect);
-    return;
-  }
   useDialogs.setState({ sheet: { ...opts, onSelect } });
 }
 
@@ -87,36 +84,44 @@ function Sheet({ sheet }: { sheet: SheetState }) {
   useScheme();
   const close = () => useDialogs.setState({ sheet: null });
   const cancel = sheet.cancelButtonIndex;
+  const options = sheet.options.map((label, i) => ({ label, i })).filter(({ i }) => i !== cancel);
   return (
-    <Modal transparent animationType="fade" onRequestClose={close} statusBarTranslucent navigationBarTranslucent>
+    <Modal transparent animationType="slide" onRequestClose={close} statusBarTranslucent navigationBarTranslucent>
       <Pressable onPress={close} style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' }}>
         <Pressable
           onPress={() => undefined}
-          style={{ backgroundColor: colors.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingTop: 8, paddingBottom: 24, borderWidth: 1, borderColor: colors.border }}
+          style={{ backgroundColor: colors.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingTop: 10, paddingBottom: 30, borderWidth: 1, borderBottomWidth: 0, borderColor: colors.border }}
         >
+          <View style={{ alignSelf: 'center', width: 40, height: 4, borderRadius: 2, backgroundColor: colors.border, marginBottom: 12 }} />
           {(sheet.title || sheet.message) && (
-            <View style={{ paddingHorizontal: 20, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.border }}>
-              {!!sheet.title && <Text style={{ color: colors.text, fontWeight: '800', fontSize: 16 }} numberOfLines={1}>{sheet.title}</Text>}
-              {!!sheet.message && <Text style={{ color: colors.sub, marginTop: 2 }} numberOfLines={1}>{sheet.message}</Text>}
+            <View style={{ paddingHorizontal: 22, paddingBottom: 12, gap: 3 }}>
+              {!!sheet.title && <Text style={{ color: colors.text, fontWeight: '800', fontSize: 17 }} numberOfLines={1}>{sheet.title}</Text>}
+              {!!sheet.message && <Text style={{ color: colors.sub, fontSize: 13, lineHeight: 18 }} numberOfLines={2}>{sheet.message}</Text>}
             </View>
           )}
-          {sheet.options.map((label, i) =>
-            i === cancel ? null : (
+          <View style={{ marginHorizontal: 12, borderRadius: 16, backgroundColor: colors.bg, overflow: 'hidden' }}>
+            {options.map(({ label, i }, n) => (
               <Pressable
                 key={`${i}-${label}`}
                 onPress={() => {
                   close();
                   sheet.onSelect(i);
                 }}
-                style={({ pressed }) => ({ paddingHorizontal: 20, paddingVertical: 15, backgroundColor: pressed ? colors.surface2 : 'transparent' })}
+                style={({ pressed }) => ({
+                  paddingHorizontal: 18,
+                  paddingVertical: 16,
+                  backgroundColor: pressed ? colors.surface2 : 'transparent',
+                  borderTopWidth: n === 0 ? 0 : 1,
+                  borderTopColor: colors.border,
+                })}
               >
-                <Text style={{ color: i === sheet.destructiveButtonIndex ? colors.danger : colors.text, fontSize: 16 }}>{label}</Text>
+                <Text style={{ color: i === sheet.destructiveButtonIndex ? colors.danger : colors.text, fontSize: 16, fontWeight: '600' }}>{label}</Text>
               </Pressable>
-            ),
-          )}
+            ))}
+          </View>
           {cancel !== undefined && (
-            <Pressable onPress={close} style={{ marginHorizontal: 16, marginTop: 8, paddingVertical: 14, borderRadius: 14, backgroundColor: colors.surface2, alignItems: 'center' }}>
-              <Text style={{ color: colors.text, fontWeight: '700', fontSize: 16 }}>{sheet.options[cancel]}</Text>
+            <Pressable onPress={close} style={({ pressed }) => ({ marginHorizontal: 12, marginTop: 10, paddingVertical: 15, borderRadius: 16, backgroundColor: pressed ? colors.border : colors.bg, alignItems: 'center' })}>
+              <Text style={{ color: colors.text, fontWeight: '800', fontSize: 16 }}>{sheet.options[cancel]}</Text>
             </Pressable>
           )}
         </Pressable>

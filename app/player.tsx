@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useProgress } from 'react-native-track-player';
 
 import { activeLineIndex, findLyrics, parseLrc } from '../src/core';
+import { onThisPhone } from '../src/core/dj';
 import { LOCAL_ARTIST, isLocalId } from '../src/core/localMeta';
 import { lineRegion } from '../src/core/loop';
 import { type Drag, HOLD_MS, type SeekBand, dragMoved, holdReached, isEcho, shownPosition, sliderValue } from '../src/core/seekDrag';
@@ -79,7 +80,8 @@ export default function PlayerScreen() {
   const song = p.current;
   const liked = useIsLiked(song?.id);
   // the DJ tab is for songs saved on this phone only
-  const djAllowed = !!song && isLocalId(song.id);
+  const savedIds = useOffline((st) => st.ids);
+  const djAllowed = !!song && onThisPhone(song.id, savedIds);
   const tabs: View_[] = djAllowed ? ['cover', 'lyrics', 'queue', 'dj'] : ['cover', 'lyrics', 'queue'];
   useEffect(() => {
     if (!djAllowed && view === 'dj') setView('cover');
@@ -162,11 +164,12 @@ export default function PlayerScreen() {
 
   const menu = () => {
     const local = isLocalId(song.id);
+    const onPhone = djAllowed;
     const saved = !!useOffline.getState().ids[song.id];
     const opts = [
       'プレイリストに追加',
       'タグを編集',
-      ...(local ? ['DJ（テンポ・ループ・キュー）を開く'] : []),
+      ...(onPhone ? ['DJ（テンポ・ループ・キュー）を開く'] : []),
       `再生速度（${p.rate}×）`,
       p.sleepAt ? 'スリープタイマーを解除' : 'スリープタイマー',
       'この曲のラジオを開始',

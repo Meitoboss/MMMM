@@ -4,13 +4,13 @@ import { Pressable, Text, View } from 'react-native';
 import { useProgress } from 'react-native-track-player';
 
 import { BEAT_CHOICES, MIN_TAPS, addTap, beatLoopRegion, beatSeconds, clampBpm, doubleBpm, effectiveBpm, estimateBpm, formatBpm, halveBpm, matchRate, parseBpmText } from '../core/beat';
-import { HOT_CUE_SLOTS, type HotCue } from '../core/dj';
-import { isLocalId } from '../core/localMeta';
+import { HOT_CUE_SLOTS, type HotCue, onThisPhone } from '../core/dj';
 import type { SongItem } from '../core/types';
 import { openDb } from '../db/expo';
 import * as repo from '../db/repo';
 import { useBpmOf, useSongBpm } from '../state/bpm';
 import { usePlayer } from '../state/player';
+import { useOffline } from '../state/offline';
 import { useSettings } from '../state/settings';
 import { s } from './components';
 import { promptText, showActionSheet } from './dialogs';
@@ -57,6 +57,7 @@ export function DjPanel({ song }: { song: SongItem }) {
   const playing = usePlayer((p) => p.status === 'playing');
   const next = usePlayer((p) => p.queue[p.index + 1]);
   const fadeSeconds = useSettings((st) => st.fadeSeconds);
+  const savedIds = useOffline((st) => st.ids);
   const progress = useProgress(150);
   const duration = progress.duration > 0 ? progress.duration : song.durationSec ?? 0;
   const { info, save } = useSongBpm(song);
@@ -155,7 +156,7 @@ export function DjPanel({ song }: { song: SongItem }) {
   };
 
   // ---------------------------------------------------------------- matching the next song (both on the phone)
-  const nextIsLocal = !!next && isLocalId(next.id);
+  const nextIsLocal = !!next && onThisPhone(next.id, savedIds);
   const match = info && nextIsLocal && nextBpm ? matchRate(info.bpm, nextBpm.bpm) : null;
   const heard = info ? effectiveBpm(info.bpm, tempo ?? rate) : null;
 

@@ -7,8 +7,15 @@ import { isLocalId } from './localMeta';
  */
 export const HOT_CUE_SLOTS = 8;
 
-/** may the two songs be joined with a fade? Only when both are on this phone (ids of the two songs; undefined = no song) */
-export const fadeBetween = (fromId: string | undefined, toId: string | undefined): boolean => !!fromId && !!toId && isLocalId(fromId) && isLocalId(toId);
+/**
+ * Is the song on this phone? A file of its own, or a saved (offline) copy of a YouTube song.
+ * `savedIds` is the set of saved songs (offline store).
+ */
+export const onThisPhone = (id: string, savedIds: Record<string, unknown>): boolean => isLocalId(id) || savedIds[id] !== undefined;
+
+/** may the two songs be joined with a fade? Only when both are on this phone (undefined = no song) */
+export const fadeBetween = (fromId: string | undefined, toId: string | undefined, savedIds: Record<string, unknown>): boolean =>
+  !!fromId && !!toId && onThisPhone(fromId, savedIds) && onThisPhone(toId, savedIds);
 
 export interface HotCue {
   /** 0 … HOT_CUE_SLOTS-1 */

@@ -3,7 +3,7 @@ import { create } from 'zustand';
 
 import { getConfig } from '../core/config';
 import { MAX_RATE, MIN_RATE, scaleLoopRegion } from '../core/beat';
-import { FADE_STEP_MS, type Trim, fadeBetween, fadeGain, planFadeOut } from '../core/dj';
+import { FADE_STEP_MS, type Trim, fadeBetween, fadeGain, onThisPhone, planFadeOut } from '../core/dj';
 import { type LoopRegion, loopJumpTarget, makeLoop } from '../core/loop';
 import { isDoubledDuration, songEnd } from '../core/songLength';
 import { normalizedVolume } from '../core/loudness';
@@ -16,6 +16,7 @@ import * as repo from '../db/repo';
 import { resolveLocal } from '../player/localFiles';
 import { resolveOffline } from '../player/offline';
 import { LOOP_INTERVAL, NORMAL_INTERVAL, ensurePlayer, setProgressInterval } from '../player/setup';
+import { useOffline } from './offline';
 import { resolverOptions, useSettings } from './settings';
 
 export type RepeatMode = 'off' | 'all' | 'one';
@@ -148,7 +149,7 @@ function ramp(kind: 'in' | 'out', durationMs: number, done?: () => void): void {
 
 const fadeMs = (): number => Math.max(0, useSettings.getState().fadeSeconds) * 1000;
 /** fades are for songs on this phone only (see fadeBetween) */
-const fadeMsBetween = (from: SongItem | undefined, to: SongItem | undefined): number => (fadeBetween(from?.id, to?.id) ? fadeMs() : 0);
+const fadeMsBetween = (from: SongItem | undefined, to: SongItem | undefined): number => (fadeBetween(from?.id, to?.id, useOffline.getState().ids) ? fadeMs() : 0);
 
 let sleepTimeout: ReturnType<typeof setTimeout> | undefined;
 
@@ -217,7 +218,7 @@ export const usePlayer = create<PlayerState>((set, get) => {
         : (await resolveOffline(song.id)) ?? (await resolveAudio(song.id, resolverOptions())); // a saved copy plays without the network
       if (token !== loadToken) return; // user skipped again while resolving
       // start / end trim of this song (best effort)
-      const trim = isLocalId(song.id) ? await openDb().then((db) => repo.trimOf(db, song.id)).catch(() => null) : null;
+      const trim = onThisPhone(song.id, useOffline.getState().ids) ? await openDb().then((db) => repo.trimOf(db, song.id)).catch(() => null) : null;
       if (token !== loadToken) return;
       trimEndSec = trim?.endSec ?? null;
       set({ trim });
@@ -430,7 +431,7 @@ export const usePlayer = create<PlayerState>((set, get) => {
 
     markTrimStart: async (position) => {
       const song = get().current;
-      if (!song || !isLocalId(song.id)) return null;
+      if (!song || !onThisPhone(song.id, useOffline.getState().ids)) return null;
       const kept = await repo.setTrim(await openDb(), song, { startSec: position, endSec: get().trim?.endSec });
       set({ trim: kept });
       trimEndSec = kept?.endSec ?? null;
@@ -440,7 +441,7 @@ export const usePlayer = create<PlayerState>((set, get) => {
 
     markTrimEnd: async (position) => {
       const song = get().current;
-      if (!song || !isLocalId(song.id)) return null;
+      if (!song || !onThisPhone(song.id, useOffline.getState().ids)) return null;
       const kept = await repo.setTrim(await openDb(), song, { startSec: get().trim?.startSec, endSec: position });
       set({ trim: kept });
       trimEndSec = kept?.endSec ?? null;
