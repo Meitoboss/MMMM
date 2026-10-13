@@ -13,6 +13,7 @@ import { lineRegion } from '../src/core/loop';
 import { type Drag, HOLD_MS, type SeekBand, dragMoved, holdReached, isEcho, shownPosition, sliderValue } from '../src/core/seekDrag';
 import { seekLength } from '../src/core/songLength';
 import { swipeGate } from '../src/core/swipe';
+import { hiResCover } from '../src/core/taste';
 import { encodeSong } from '../src/core/songParam';
 import { toggleLikeSong, useIsLiked } from '../src/state/likes';
 import type { Lyrics } from '../src/core/types';
@@ -224,7 +225,7 @@ export default function PlayerScreen() {
             {!showLog && <Aurora testID="aurora" playing={p.status === 'playing'} rate={p.tempo ?? p.rate} style={StyleSheet.absoluteFill} />}
             <View style={showLog ? { alignItems: 'center' } : { flex: 1, alignItems: 'center', justifyContent: 'center' }}>
               <View style={{ borderRadius: 14, shadowColor: '#000', shadowOpacity: 0.5, shadowRadius: 22, shadowOffset: { width: 0, height: 12 }, elevation: 14 }}>
-                <Cover uri={song.thumbnail} size={cover} />
+                <Cover uri={hiResCover(song.thumbnail, 900)} size={cover} />
               </View>
             </View>
             {showLog && (
