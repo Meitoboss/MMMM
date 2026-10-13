@@ -151,3 +151,15 @@ describe('hot cues and trim in the database', () => {
     assert.equal((await repo.hotCues(db, 'a')).length, 1);
   });
 });
+
+describe('fades only between songs on this phone', () => {
+  it('needs both songs to be local', async () => {
+    const { fadeBetween } = await import('../src/core/dj');
+    assert.equal(fadeBetween('local:abc', 'local:def'), true);
+    assert.equal(fadeBetween('local:abc', 'dQw4w9WgXcQ'), false);
+    assert.equal(fadeBetween('dQw4w9WgXcQ', 'local:def'), false);
+    assert.equal(fadeBetween('dQw4w9WgXcQ', 'dQw4w9WgXcR'), false);
+    assert.equal(fadeBetween('local:abc', undefined), false, 'no next song: nothing to fade into');
+    assert.equal(fadeBetween(undefined, 'local:def'), false);
+  });
+});

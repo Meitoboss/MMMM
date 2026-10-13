@@ -2,12 +2,11 @@ import { Ionicons } from '@expo/vector-icons';
 import Slider from '@react-native-community/slider';
 import { useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { Alert, Animated, FlatList, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Animated, FlatList, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useProgress } from 'react-native-track-player';
 
 import { activeLineIndex, findLyrics, parseLrc } from '../src/core';
-import { HOT_CUE_SLOTS, type HotCue } from '../src/core/dj';
 import { LOCAL_ARTIST, isLocalId } from '../src/core/localMeta';
 import { lineRegion } from '../src/core/loop';
 import { type Drag, HOLD_MS, type SeekBand, dragMoved, holdReached, isEcho, shownPosition, sliderValue } from '../src/core/seekDrag';
@@ -15,7 +14,6 @@ import { seekLength } from '../src/core/songLength';
 import { swipeGate } from '../src/core/swipe';
 import { encodeSong } from '../src/core/songParam';
 import { toggleLikeSong, useIsLiked } from '../src/state/likes';
-import { showDjBetaOnce } from '../src/ui/betaNotice';
 import type { Lyrics } from '../src/core/types';
 import { openDb } from '../src/db/expo';
 import * as repo from '../src/db/repo';
@@ -24,8 +22,8 @@ import { useSettings } from '../src/state/settings';
 import { Cover, SongRow } from '../src/ui/components';
 import { useAddToPlaylist } from '../src/ui/actions';
 import { Aurora } from '../src/ui/Aurora';
-import { BpmPanel } from '../src/ui/BpmPanel';
-import { promptText, showActionSheet } from '../src/ui/dialogs';
+import { DjPanel } from '../src/ui/DjPanel';
+import { showActionSheet } from '../src/ui/dialogs';
 import { SeekBar } from '../src/ui/SeekBar';
 import { useSwipeDown } from '../src/ui/useSwipeDown';
 import { requestOfflineSave } from '../src/ui/offlineActions';
@@ -77,22 +75,16 @@ export default function PlayerScreen() {
   const [hold, setHold] = useState<number | null>(null); // the chosen position, until the player has caught up
   const [lyrics, setLyrics] = useState<Lyrics | null | 'loading'>(null);
   const autoLyrics = useSettings((s) => s.autoLyrics);
-  const fadeSeconds = useSettings((s) => s.fadeSeconds);
   const listRef = useRef<FlatList>(null);
   const song = p.current;
-  const [cues, setCues] = useState<HotCue[]>([]);
   const liked = useIsLiked(song?.id);
-
-  // hot cues of the song that is playing
+  // the DJ tab is for songs saved on this phone only
+  const djAllowed = !!song && isLocalId(song.id);
+  const tabs: View_[] = djAllowed ? ['cover', 'lyrics', 'queue', 'dj'] : ['cover', 'lyrics', 'queue'];
   useEffect(() => {
-    setCues([]);
-    if (!song) return;
-    let on = true;
-    void openDb().then((db) => repo.hotCues(db, song.id)).then((c) => on && setCues(c));
-    return () => {
-      on = false;
-    };
-  }, [song?.id]);
+    if (!djAllowed && view === 'dj') setView('cover');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [djAllowed]);
 
   // lyrics: cache → LRCLIB → KuGou
   useEffect(() => {
@@ -168,60 +160,13 @@ export default function PlayerScreen() {
   const sidePad = Math.max(20, insets.left + 12, insets.right + 12);
   const cover = Math.min(width - 90, 300); // the aurora glows around and behind it
 
-  const reloadCues = async () => {
-    if (song) setCues(await repo.hotCues(await openDb(), song.id));
-  };
-  const cueFail = (e: unknown) => Alert.alert('キューを保存できません', e instanceof Error ? e.message : String(e));
-  const setCue = async (slot: number) => {
-    try {
-      await repo.setHotCue(await openDb(), song, slot, await p.getPosition());
-      await reloadCues();
-    } catch (e) {
-      cueFail(e);
-    }
-  };
-  /** jump to a cue and play from there (a paused or restored song starts) */
-  const jumpCue = async (c: HotCue) => {
-    await p.seekTo(c.position);
-    if (usePlayer.getState().status === 'paused') await usePlayer.getState().togglePlay();
-  };
-  const cueMenu = (slot: number, cue: HotCue) =>
-    showActionSheet(
-      { title: `キュー ${slot + 1}`, message: `${fmt(cue.position)}${cue.label ? `・${cue.label}` : ''}`, options: ['ここ（いまの位置）に更新', '名前を付ける', '削除', 'キャンセル'], destructiveButtonIndex: 2, cancelButtonIndex: 3 },
-      (i) => {
-        if (i === 0) void setCue(slot);
-        else if (i === 1) {
-          promptText('キューの名前', undefined, cue.label ?? '', async (v) => {
-            try {
-              await repo.setHotCue(await openDb(), song, slot, cue.position, v);
-              await reloadCues();
-            } catch (e) {
-              cueFail(e);
-            }
-          });
-        } else if (i === 2) {
-          void openDb().then((db) => repo.deleteHotCue(db, song.id, slot)).then(reloadCues);
-        }
-      },
-    );
-
-  const trimSorry = () => Alert.alert('設定できません', 'スタートは曲の始めの0.5秒より後、エンドは曲の終わりより前にして、2つの間は1秒以上あけてください。');
-  const trimStart = async () => {
-    const kept = await p.markTrimStart(await p.getPosition());
-    if (kept?.startSec === undefined) trimSorry();
-  };
-  const trimEnd = async () => {
-    const kept = await p.markTrimEnd(await p.getPosition());
-    if (kept?.endSec === undefined) trimSorry();
-  };
-
   const menu = () => {
     const local = isLocalId(song.id);
     const saved = !!useOffline.getState().ids[song.id];
     const opts = [
       'プレイリストに追加',
       'タグを編集',
-      'スタート／エンド位置…',
+      ...(local ? ['DJ（テンポ・ループ・キュー）を開く'] : []),
       `再生速度（${p.rate}×）`,
       p.sleepAt ? 'スリープタイマーを解除' : 'スリープタイマー',
       'この曲のラジオを開始',
@@ -235,15 +180,8 @@ export default function PlayerScreen() {
         router.push('/add-to-playlist');
       } else if (label === 'タグを編集') {
         router.push({ pathname: '/song-tags', params: { song: encodeSong(song) } });
-      } else if (label === 'スタート／エンド位置…') {
-        const t = p.trim;
-        const state = t ? `${t.startSec !== undefined ? `スタート ${fmt(t.startSec)}` : ''}${t.startSec !== undefined && t.endSec !== undefined ? ' / ' : ''}${t.endSec !== undefined ? `エンド ${fmt(t.endSec)}` : ''}` : 'まだ設定していません';
-        const o = ['スタートを、いまの位置にする', 'エンドを、いまの位置にする', 'スタート／エンドを解除', 'キャンセル'];
-        showActionSheet({ title: 'スタート／エンド位置', message: state, options: o, destructiveButtonIndex: 2, cancelButtonIndex: 3 }, async (j) => {
-          if (j === 0) await trimStart();
-          else if (j === 1) await trimEnd();
-          else if (j === 2) await p.clearTrim();
-        });
+      } else if (label === 'DJ（テンポ・ループ・キュー）を開く') {
+        setView('dj');
       } else if (label.startsWith('再生速度')) {
         const r = [...RATES.map((x) => `${x}×`), 'キャンセル'];
         showActionSheet({ options: r, cancelButtonIndex: r.length - 1 }, (j) => { if (j < RATES.length) void p.setRate(RATES[j]); });
@@ -267,8 +205,8 @@ export default function PlayerScreen() {
       <View testID="player-header" style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: sidePad }}>
         <Pressable hitSlop={16} onPress={() => router.back()}><Ionicons name="chevron-down" size={28} color={colors.text} /></Pressable>
         <View style={{ flexDirection: 'row', gap: 8 }}>
-          {(['cover', 'lyrics', 'queue', 'dj'] as const).map((v) => (
-            <Pressable key={v} hitSlop={{ top: 12, bottom: 12 }} style={{ paddingHorizontal: 8, paddingVertical: 6 }} onPress={() => { setView(v); if (v === 'dj') showDjBetaOnce(); }}>
+          {tabs.map((v) => (
+            <Pressable key={v} hitSlop={{ top: 12, bottom: 12 }} style={{ paddingHorizontal: 8, paddingVertical: 6 }} onPress={() => setView(v)}>
               <Text style={{ color: view === v ? colors.accentText : colors.sub, fontWeight: view === v ? '800' : '600' }}>{{ cover: 'ジャケット', lyrics: '歌詞', queue: 'キュー', dj: 'DJ' }[v]}</Text>
             </Pressable>
           ))}
@@ -312,83 +250,9 @@ export default function PlayerScreen() {
                 </Pressable>
               )} />
         )}
-        {view === 'dj' && (
-          <ScrollView testID="player-dj" onScroll={onList} scrollEventThrottle={16} bounces={false} overScrollMode="never" contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 24, gap: 20 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <Text style={{ color: colors.text, fontSize: 20, fontWeight: '800' }}>DJ</Text>
-              <View style={{ paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8, backgroundColor: colors.accent }}>
-                <Text style={{ color: colors.onAccent, fontSize: 11, fontWeight: '800' }}>ベータ版</Text>
-              </View>
-            </View>
-
-            <View style={{ gap: 8 }}>
-              <Text style={{ color: colors.text, fontWeight: '800', fontSize: 15 }}>区間ループ</Text>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <Pressable testID="loop-a" onPress={async () => p.markLoopA(await p.getPosition())} style={{ paddingHorizontal: 18, paddingVertical: 8, borderRadius: 16, backgroundColor: p.loopA !== undefined || p.loop ? colors.accent : colors.surface2 }}>
-                  <Text style={{ color: p.loopA !== undefined || p.loop ? colors.onAccent : colors.text, fontWeight: '800' }}>A</Text>
-                </Pressable>
-                <Pressable testID="loop-b" disabled={p.loopA === undefined} onPress={async () => p.markLoopB(await p.getPosition())} style={{ paddingHorizontal: 18, paddingVertical: 8, borderRadius: 16, opacity: p.loopA === undefined ? 0.4 : 1, backgroundColor: p.loop ? colors.accent : colors.surface2 }}>
-                  <Text style={{ color: p.loop ? colors.onAccent : colors.text, fontWeight: '800' }}>B</Text>
-                </Pressable>
-                <Text style={{ flex: 1, color: p.loop || p.loopA !== undefined ? colors.accentText : colors.sub, fontSize: 12 }} numberOfLines={2}>
-                  {p.loop ? `ループ中 ${fmt(p.loop.start)} – ${fmt(p.loop.end)}` : p.loopA !== undefined ? `A ${fmt(p.loopA)} → 終わりの位置で B を押す` : '始めの位置で A、終わりの位置で B を押します'}
-                </Text>
-                {(p.loop || p.loopA !== undefined) && (
-                  <Pressable hitSlop={10} onPress={p.clearLoop}><Ionicons name="close-circle" size={24} color={colors.sub} /></Pressable>
-                )}
-              </View>
-              <Text style={{ color: colors.sub, fontSize: 11 }}>歌詞の画面では、行を長押しすると、その行をループします。</Text>
-            </View>
-
-            <BpmPanel song={song} />
-
-            <View style={{ gap: 8 }}>
-              <Text style={{ color: colors.text, fontWeight: '800', fontSize: 15 }}>ホットキュー</Text>
-              <View style={{ flexDirection: 'row', gap: 6 }}>
-                {Array.from({ length: HOT_CUE_SLOTS }, (_, slot) => {
-                  const cue = cues.find((c) => c.slot === slot);
-                  return (
-                    <Pressable
-                      key={slot}
-                      testID={`cue-${slot}`}
-                      onPress={() => (cue ? void jumpCue(cue) : void setCue(slot))}
-                      onLongPress={() => cue && cueMenu(slot, cue)}
-                      style={{ flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center', backgroundColor: cue ? colors.accent : colors.surface2 }}
-                    >
-                      <Text style={{ fontWeight: '800', fontSize: 16, color: cue ? colors.onAccent : colors.text }}>{slot + 1}</Text>
-                      <Text style={{ fontSize: 9, color: cue ? colors.onAccent : colors.sub }} numberOfLines={1}>{cue ? (cue.label ?? fmt(cue.position)) : '—'}</Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-              <Text style={{ color: colors.sub, fontSize: 11 }}>空のパッドを押すと、いまの位置を保存します。押すとジャンプ、長押しで、更新・名前・削除ができます。</Text>
-            </View>
-
-            <View style={{ gap: 8 }}>
-              <Text style={{ color: colors.text, fontWeight: '800', fontSize: 15 }}>スタート／エンド位置</Text>
-              <Text style={{ color: p.trim ? colors.accentText : colors.sub, fontSize: 13 }}>
-                {p.trim ? `再生範囲: ${p.trim.startSec !== undefined ? fmt(p.trim.startSec) : '最初'} 〜 ${p.trim.endSec !== undefined ? fmt(p.trim.endSec) : '最後'}` : 'まだ設定していません（曲の全体を再生します）'}
-              </Text>
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-                {([['スタートを、いまの位置に', trimStart], ['エンドを、いまの位置に', trimEnd]] as const).map(([label, fn]) => (
-                  <Pressable key={label} onPress={() => void fn()} style={{ paddingHorizontal: 14, paddingVertical: 8, borderRadius: 16, backgroundColor: colors.surface2 }}>
-                    <Text style={{ color: colors.text, fontSize: 13 }}>{label}</Text>
-                  </Pressable>
-                ))}
-                {p.trim && (
-                  <Pressable onPress={() => void p.clearTrim()} style={{ paddingHorizontal: 14, paddingVertical: 8, borderRadius: 16, backgroundColor: colors.surface2 }}>
-                    <Text style={{ color: colors.danger, fontSize: 13 }}>解除</Text>
-                  </Pressable>
-                )}
-              </View>
-            </View>
-
-            <View style={{ gap: 4 }}>
-              <Text style={{ color: colors.text, fontWeight: '800', fontSize: 15 }}>フェードつなぎ</Text>
-              <Text style={{ color: colors.sub, fontSize: 13 }}>
-                いまの設定: {fadeSeconds > 0 ? `${fadeSeconds}秒` : 'オフ'}（設定 → 再生 で変更）
-              </Text>
-            </View>
+        {view === 'dj' && djAllowed && (
+          <ScrollView testID="player-dj" onScroll={onList} scrollEventThrottle={16} bounces={false} overScrollMode="never" contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 24 }}>
+            <DjPanel song={song} />
           </ScrollView>
         )}
         {view === 'queue' && (
@@ -455,7 +319,7 @@ export default function PlayerScreen() {
         </View>
 
         {(p.loop || p.loopA !== undefined) && (
-          <Pressable onPress={() => setView('dj')} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 }}>
+          <Pressable onPress={() => djAllowed && setView('dj')} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 }}>
             <Ionicons name="repeat" size={16} color={colors.accentText} />
             <Text style={{ flex: 1, color: colors.accentText, fontSize: 12 }} numberOfLines={1}>
               {p.loop ? `ループ中 ${fmt(p.loop.start)} – ${fmt(p.loop.end)}` : `A ${fmt(p.loopA ?? 0)} → 終わりの位置で B を押してください`}
