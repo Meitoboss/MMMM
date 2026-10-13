@@ -10,6 +10,7 @@ import { openDb } from '../db/expo';
 import * as repo from '../db/repo';
 import { useBpmOf, useSongBpm } from '../state/bpm';
 import { usePlayer } from '../state/player';
+import { useSettings } from '../state/settings';
 import { s } from './components';
 import { promptText, showActionSheet } from './dialogs';
 import { colors, useScheme } from './theme';
@@ -51,6 +52,7 @@ export function DjPanel({ song }: { song: SongItem }) {
   const trim = usePlayer((p) => p.trim);
   const rate = usePlayer((p) => p.rate);
   const tempo = usePlayer((p) => p.tempo);
+  const fadeSeconds = useSettings((st) => st.fadeSeconds);
   const next = usePlayer((p) => p.queue[p.index + 1]);
   const { info, save } = useSongBpm(song);
   const nextBpm = useBpmOf(next);
@@ -160,7 +162,7 @@ export function DjPanel({ song }: { song: SongItem }) {
       )}
 
       {/* ------------------------------------------------------------ tempo */}
-      <Block title="テンポ（BPM）" hint="曲に合わせて拍のたびにタップすると、テンポが出ます。出ないときは、数字で入れてください。">
+      <Block title="テンポ（BPM）" hint="拍のたびにタップするか、数字で入れます。テンポは、下の拍ループと、次の曲へのテンポ合わせに使われます。">
         <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
           <Text testID="bpm-value" style={{ color: info ? colors.accentText : colors.sub, fontSize: 34, fontWeight: '800' }}>{info ? formatBpm(info.bpm) : '未設定'}</Text>
           {!!info && <Text style={{ color: colors.sub, fontSize: 13 }}>BPM</Text>}
@@ -258,15 +260,23 @@ export function DjPanel({ song }: { song: SongItem }) {
       </Block>
 
       {/* ------------------------------------------------------------ start / end */}
-      <Block title="再生する範囲" hint="イントロや、終わりの無音を飛ばします。スタートは、その位置から再生が始まります。">
+      <Block title="再生する範囲" hint="イントロや終わりの無音を飛ばします。スタートから始まり、エンドを過ぎると次の曲へ進みます。">
         <Text testID="trim-status" style={{ color: trim ? colors.accentText : colors.sub, fontSize: 13 }}>
           {trim ? `${trim.startSec !== undefined ? fmt(trim.startSec) : '曲の始め'} 〜 ${trim.endSec !== undefined ? fmt(trim.endSec) : '曲の終わり'}` : '曲の全体を再生します'}
         </Text>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
           <Pill testID="trim-start" label="スタートをここに" onPress={() => void trimStart()} />
           <Pill testID="trim-end" label="エンドをここに" onPress={() => void trimEnd()} />
+          {trim?.startSec !== undefined && <Pill testID="trim-go-start" label="スタートへ戻る" onPress={() => void player().seekTo(trim.startSec!)} />}
           {trim && <Pill label="元に戻す" danger onPress={() => void player().clearTrim()} />}
         </View>
+      </Block>
+
+      {/* ------------------------------------------------------------ fade */}
+      <Block title="フェードつなぎ" hint="端末内の曲どうしを、自動で次へ進むとき、フェードアウトとフェードインでつなぎます。変更は、設定の「再生」で行います。">
+        <Text testID="fade-status" style={{ color: fadeSeconds > 0 ? colors.accentText : colors.sub, fontSize: 13 }}>
+          {fadeSeconds > 0 ? `いまの設定: ${fadeSeconds}秒` : 'いまの設定: オフ'}
+        </Text>
       </Block>
 
       {/* ------------------------------------------------------------ next song */}
