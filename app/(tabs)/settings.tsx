@@ -169,7 +169,7 @@ export default function Settings() {
             clearStreamCache(); // already resolved songs would keep the old stream
           }}
         />
-        <Row title="フェードつなぎ" sub="端末内の曲どうしを、フェードアウトとフェードインでつなぎます。曲は重ならないので、わずかな間ができます。自動で次の曲へ進むときだけ働きます。YouTube の曲には使いません" last />
+        <Row title="フェードつなぎ" sub="曲の終わりをフェードアウトして、次の曲をフェードインでつなぎます。曲は重ならないので、わずかな間ができます。自動で次の曲へ進むときだけ働きます" last />
         <Chips options={FADE_CHOICES} value={st.fadeSeconds} onChange={(v) => st.update({ fadeSeconds: v })} />
         <Row title="前回の続きから再生" sub="アプリを閉じても、キューと再生位置を覚えています。起動しても、自動では再生しません">
           <Switch value={st.resumeOnLaunch} onValueChange={(v) => st.update({ resumeOnLaunch: v })} trackColor={{ true: colors.accent }} />
