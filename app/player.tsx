@@ -24,7 +24,7 @@ import { Cover, SongRow } from '../src/ui/components';
 import { useAddToPlaylist } from '../src/ui/actions';
 import { Aurora } from '../src/ui/Aurora';
 import { DjPanel } from '../src/ui/DjPanel';
-import { showActionSheet } from '../src/ui/dialogs';
+import { InlineSheetLayer, showActionSheet } from '../src/ui/dialogs';
 import { SeekBar } from '../src/ui/SeekBar';
 import { useSwipeDown } from '../src/ui/useSwipeDown';
 import { requestOfflineSave } from '../src/ui/offlineActions';
@@ -344,6 +344,7 @@ export default function PlayerScreen() {
           </Pressable>
         </View>
       </View>
+      <InlineSheetLayer />
     </Animated.View>
   );
 }

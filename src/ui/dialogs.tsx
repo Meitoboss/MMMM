@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Alert, Modal, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
-import { useState } from 'react';
+import { Alert, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { create } from 'zustand';
 
 import { colors, useScheme } from './theme';
@@ -48,7 +49,8 @@ export interface AppAlertOptions {
   dismissable?: boolean;
 }
 
-const useDialogs = create<{ sheet: SheetState | null; prompt: PromptState | null; alert: AppAlertOptions | null }>(() => ({ sheet: null, prompt: null, alert: null }));
+/** `inline`: a screen has mounted its own menu layer (see InlineSheetLayer), so DialogHost must not draw the menu as well */
+const useDialogs = create<{ sheet: SheetState | null; prompt: PromptState | null; alert: AppAlertOptions | null; inline: boolean }>(() => ({ sheet: null, prompt: null, alert: null, inline: false }));
 
 /**
  * A message card in the app's own look, the same on both platforms (instead of the system Alert).
@@ -80,54 +82,74 @@ export function promptSecret(title: string, message: string | undefined, onSubmi
   useDialogs.setState({ prompt: { title, message, defaultValue: '', secure: true, onSubmit } });
 }
 
-function Sheet({ sheet }: { sheet: SheetState }) {
+/** the menu card: a grabber, the title, the options and the cancel button. Inline it is drawn inside the screen (no window of its own). */
+function SheetCard({ sheet, inline }: { sheet: SheetState; inline: boolean }) {
   useScheme();
+  const insets = useSafeAreaInsets();
   const close = () => useDialogs.setState({ sheet: null });
   const cancel = sheet.cancelButtonIndex;
   const options = sheet.options.map((label, i) => ({ label, i })).filter(({ i }) => i !== cancel);
-  return (
-    <Modal transparent animationType="slide" onRequestClose={close} statusBarTranslucent navigationBarTranslucent>
-      <Pressable onPress={close} style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' }}>
-        <Pressable
-          onPress={() => undefined}
-          style={{ backgroundColor: colors.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingTop: 10, paddingBottom: 30, borderWidth: 1, borderBottomWidth: 0, borderColor: colors.border }}
-        >
-          <View style={{ alignSelf: 'center', width: 40, height: 4, borderRadius: 2, backgroundColor: colors.border, marginBottom: 12 }} />
-          {(sheet.title || sheet.message) && (
-            <View style={{ paddingHorizontal: 22, paddingBottom: 12, gap: 3 }}>
-              {!!sheet.title && <Text style={{ color: colors.text, fontWeight: '800', fontSize: 17 }} numberOfLines={1}>{sheet.title}</Text>}
-              {!!sheet.message && <Text style={{ color: colors.sub, fontSize: 13, lineHeight: 18 }} numberOfLines={2}>{sheet.message}</Text>}
-            </View>
-          )}
-          <View style={{ marginHorizontal: 12, borderRadius: 16, backgroundColor: colors.bg, overflow: 'hidden' }}>
-            {options.map(({ label, i }, n) => (
-              <Pressable
-                key={`${i}-${label}`}
-                onPress={() => {
-                  close();
-                  sheet.onSelect(i);
-                }}
-                style={({ pressed }) => ({
-                  paddingHorizontal: 18,
-                  paddingVertical: 16,
-                  backgroundColor: pressed ? colors.surface2 : 'transparent',
-                  borderTopWidth: n === 0 ? 0 : 1,
-                  borderTopColor: colors.border,
-                })}
-              >
-                <Text style={{ color: i === sheet.destructiveButtonIndex ? colors.danger : colors.text, fontSize: 16, fontWeight: '600' }}>{label}</Text>
-              </Pressable>
-            ))}
+  const body = (
+    <Pressable onPress={close} style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' }}>
+      <Pressable
+        onPress={() => undefined}
+        style={{ backgroundColor: colors.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingTop: 10, paddingBottom: inline ? insets.bottom + 16 : 28, borderWidth: 1, borderBottomWidth: 0, borderColor: colors.border }}
+      >
+        <View style={{ alignSelf: 'center', width: 40, height: 4, borderRadius: 2, backgroundColor: colors.border, marginBottom: 12 }} />
+        {(sheet.title || sheet.message) && (
+          <View style={{ paddingHorizontal: 22, paddingBottom: 12, gap: 3 }}>
+            {!!sheet.title && <Text style={{ color: colors.text, fontWeight: '800', fontSize: 17 }} numberOfLines={1}>{sheet.title}</Text>}
+            {!!sheet.message && <Text style={{ color: colors.sub, fontSize: 13, lineHeight: 18 }} numberOfLines={2}>{sheet.message}</Text>}
           </View>
-          {cancel !== undefined && (
-            <Pressable onPress={close} style={({ pressed }) => ({ marginHorizontal: 12, marginTop: 10, paddingVertical: 15, borderRadius: 16, backgroundColor: pressed ? colors.border : colors.bg, alignItems: 'center' })}>
-              <Text style={{ color: colors.text, fontWeight: '800', fontSize: 16 }}>{sheet.options[cancel]}</Text>
+        )}
+        <View style={{ marginHorizontal: 12, borderRadius: 16, backgroundColor: colors.bg, overflow: 'hidden' }}>
+          {options.map(({ label, i }, n) => (
+            <Pressable
+              key={`${i}-${label}`}
+              onPress={() => {
+                close();
+                sheet.onSelect(i);
+              }}
+              style={({ pressed }) => ({
+                paddingHorizontal: 18,
+                paddingVertical: 16,
+                backgroundColor: pressed ? colors.surface2 : 'transparent',
+                borderTopWidth: n === 0 ? 0 : 1,
+                borderTopColor: colors.border,
+              })}
+            >
+              <Text style={{ color: i === sheet.destructiveButtonIndex ? colors.danger : colors.text, fontSize: 16, fontWeight: '600' }}>{label}</Text>
             </Pressable>
-          )}
-        </Pressable>
+          ))}
+        </View>
+        {cancel !== undefined && (
+          <Pressable onPress={close} style={({ pressed }) => ({ marginHorizontal: 12, marginTop: 10, paddingVertical: 15, borderRadius: 16, backgroundColor: pressed ? colors.border : colors.bg, alignItems: 'center' })}>
+            <Text style={{ color: colors.text, fontWeight: '800', fontSize: 16 }}>{sheet.options[cancel]}</Text>
+          </Pressable>
+        )}
       </Pressable>
+    </Pressable>
+  );
+  if (inline) return <View style={[StyleSheet.absoluteFill, { zIndex: 100, elevation: 100 }]}>{body}</View>;
+  // a window of its own: the navigation bar is NOT translucent here, so the card sits above it (it was cut off before)
+  return (
+    <Modal transparent animationType="slide" onRequestClose={close} statusBarTranslucent>
+      {body}
     </Modal>
   );
+}
+
+/**
+ * Mount inside a screen that is shown as a native modal (the player): the "…" menu is then drawn inside that screen.
+ * A Modal from the root would sit behind the screen on iPhone.
+ */
+export function InlineSheetLayer() {
+  const sheet = useDialogs((st) => st.sheet);
+  useEffect(() => {
+    useDialogs.setState({ inline: true });
+    return () => useDialogs.setState({ inline: false });
+  }, []);
+  return sheet ? <SheetCard sheet={sheet} inline /> : null;
 }
 
 function PromptDialog({ prompt }: { prompt: PromptState }) {
@@ -217,9 +239,10 @@ export function DialogHost() {
   const sheet = useDialogs((s) => s.sheet);
   const prompt = useDialogs((s) => s.prompt);
   const alert = useDialogs((s) => s.alert);
+  const inline = useDialogs((s) => s.inline);
   return (
     <>
-      {sheet && <Sheet sheet={sheet} />}
+      {sheet && !inline && <SheetCard sheet={sheet} inline={false} />}
       {prompt && <PromptDialog prompt={prompt} />}
       {alert && <AppAlert alert={alert} />}
     </>
