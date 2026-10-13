@@ -1,9 +1,10 @@
 import * as Updates from 'expo-updates';
 import { useEffect, useRef } from 'react';
-import { ActivityIndicator, Alert, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 
 import { appliedContent, emergencyContent, noteFromManifest, promptContent, shouldShowApplied } from '../core/updater';
 import { lastSeenUpdateId, rememberSeenUpdateId, startUpdater, updaterActions, useUpdater } from '../state/updater';
+import { showAppAlert } from './dialogs';
 import { colors, useScheme } from './theme';
 
 type DownloadedInfo = { updateId?: string; manifest?: unknown } | undefined;
@@ -37,15 +38,16 @@ export function UpdatePromptHost() {
     if (!prompt || asked.current === prompt.id) return;
     asked.current = prompt.id;
     const c = promptContent(prompt.note, { playing: prompt.playing, working: false });
-    Alert.alert(
-      c.title,
-      c.message,
-      [
-        { text: 'いま反映', onPress: () => updaterActions.accept() },
+    showAppAlert({
+      icon: 'cloud-download-outline',
+      title: c.title,
+      message: c.message,
+      dismissable: false,
+      buttons: [
         { text: 'あとで', style: 'cancel', onPress: () => updaterActions.later() },
+        { text: 'いま反映', onPress: () => updaterActions.accept() },
       ],
-      { cancelable: false },
-    );
+    });
   }, [prompt]);
 
   // once at the start: "what changed" (the first time this version runs), or "this version could not start"
@@ -53,14 +55,14 @@ export function UpdatePromptHost() {
     if (!Updates.isEnabled) return;
     if (Updates.isEmergencyLaunch) {
       const c = emergencyContent(Updates.emergencyLaunchReason ?? null);
-      Alert.alert(c.title, c.message, [{ text: 'OK' }]);
+      showAppAlert({ icon: 'alert-circle-outline', title: c.title, message: c.message });
       return;
     }
     const id = Updates.updateId ?? null;
     if (shouldShowApplied(lastSeenUpdateId(), id, Updates.isEmbeddedLaunch)) {
       const running = (u.currentlyRunning?.manifest ?? (Updates as unknown as { manifest?: unknown }).manifest) as unknown;
       const c = appliedContent(noteFromManifest(running));
-      Alert.alert(c.title, c.message, [{ text: 'OK' }]);
+      showAppAlert({ icon: 'checkmark-circle-outline', title: c.title, message: c.message });
       if (id) rememberSeenUpdateId(id);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

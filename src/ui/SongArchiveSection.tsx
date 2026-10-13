@@ -43,7 +43,7 @@ function Progress() {
 }
 
 /** Settings → 保存した曲のバックアップ: the saved songs in one file – fast without encryption, or protected by a secret key */
-export function SongArchiveSection() {
+export function SongArchiveSection({ collapsible }: { collapsible?: boolean }) {
   useScheme();
   const router = useRouter();
   const [withLibrary, setWithLibrary] = useState(true);
@@ -285,23 +285,23 @@ export function SongArchiveSection() {
   };
 
   return (
-    <Section title="保存した曲のバックアップ">
+    <Section title="保存した曲のバックアップ" collapsible={collapsible}>
       <Progress />
-      <Row title="プレイリストなども入れる" sub="お気に入り、プレイリスト、スマートプレイリスト、タグ、キューなど">
+      <Row title="プレイリストなども入れる" info="お気に入り、プレイリスト、スマートプレイリスト、タグ、キューなど">
         <Switch testID="archive-library" value={withLibrary} onValueChange={setWithLibrary} trackColor={{ true: colors.accent }} />
       </Row>
       <Pressable testID="archive-create" onPress={() => void create()} disabled={busy}>
-        <Row title="保存した曲を、ファイルに入れる" sub={`オフライン用に保存した曲を、元の音のまま、1つのファイルに入れます。「暗号化なし」なら、すぐに終わります。「暗号化あり」は、あなたが決める秘密のキーで守ります（時間がかかります）。機種の変更や、バックアップに使えます。\n保存先: ${whereArchives()}`}>
+        <Row title="保存した曲を、ファイルに入れる" info={`オフライン用に保存した曲を、元の音のまま、1つのファイルに入れます。「暗号化なし」なら、すぐに終わります。「暗号化あり」は、あなたが決める秘密のキーで守ります（時間がかかります）。機種の変更や、バックアップに使えます。\n保存先: ${whereArchives()}`}>
           <Text style={{ color: busy ? colors.sub : colors.accentText, fontWeight: '700' }}>入れる</Text>
         </Row>
       </Pressable>
       <Pressable testID="audio-export" onPress={() => void exportAudio()} disabled={busy}>
-        <Row title="保存した曲を、音声ファイルで書き出す" sub={`曲ごとに1つずつの音声ファイル（m4a など）で書き出します。変換はしないので速く、保存した音のままです。ほかのプレーヤーや、ほかの機器でも使えます（mp3 には、変換しません）。\n書き出し先: ${whereAudio()}`}>
+        <Row title="保存した曲を、音声ファイルで書き出す" info={`曲ごとに1つずつの音声ファイル（m4a など）で書き出します。変換はしないので速く、保存した音のままです。ほかのプレーヤーや、ほかの機器でも使えます（mp3 には、変換しません）。\n書き出し先: ${whereAudio()}`}>
           <Text style={{ color: busy ? colors.sub : colors.accentText, fontWeight: '700' }}>書き出す</Text>
         </Row>
       </Pressable>
       <Pressable testID="archive-restore" onPress={() => void restore()} disabled={busy}>
-        <Row title="ファイルから、保存した曲を戻す" sub="暗号化したファイルは、秘密のキーで開きます。すでにある曲は、そのままで、足りないものだけを戻します" last>
+        <Row title="ファイルから、保存した曲を戻す" info="暗号化したファイルは、秘密のキーで開きます。すでにある曲は、そのままで、足りないものだけを戻します" last>
           <Text style={{ color: busy ? colors.sub : colors.accentText, fontWeight: '700' }}>選ぶ</Text>
         </Row>
       </Pressable>
