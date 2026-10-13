@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
+import { useProgress } from 'react-native-track-player';
 
 import { BEAT_CHOICES, MIN_TAPS, addTap, beatLoopRegion, beatSeconds, clampBpm, doubleBpm, effectiveBpm, estimateBpm, formatBpm, halveBpm, matchRate, parseBpmText } from '../core/beat';
 import { HOT_CUE_SLOTS, type HotCue } from '../core/dj';
@@ -13,6 +14,7 @@ import { usePlayer } from '../state/player';
 import { useSettings } from '../state/settings';
 import { s } from './components';
 import { promptText, showActionSheet } from './dialogs';
+import { BeatLight, DjTimeline } from './DjTimeline';
 import { colors, useScheme } from './theme';
 
 const fmt = (sec: number): string => `${Math.floor(sec / 60)}:${(sec % 60).toFixed(2).padStart(5, '0')}`;
@@ -31,7 +33,7 @@ function Block({ title, hint, children }: { title: string; hint: string; childre
   useScheme();
   return (
     <View style={[s.card, { padding: 16, gap: 12 }]}>
-      <View style={{ gap: 2 }}>
+      <View style={{ gap: 3 }}>
         <Text style={{ color: colors.text, fontWeight: '800', fontSize: 16 }}>{title}</Text>
         <Text style={{ color: colors.sub, fontSize: 12, lineHeight: 17 }}>{hint}</Text>
       </View>
@@ -41,9 +43,9 @@ function Block({ title, hint, children }: { title: string; hint: string; childre
 }
 
 /**
- * The DJ tab of a song saved on this phone. Four blocks: tempo (BPM), loops, cue points and the start / end of the song.
- * The tempo block also matches the speed to the next song (when that one is on the phone too).
- * Messages stay inside the panel as a line of text – no pop-ups.
+ * The DJ tab of a song saved on this phone. The bar at the top shows the song; below it, five blocks:
+ * tempo, loops, cue points, the start / end, and the fade. The last block matches the speed to the next song.
+ * Every hint says exactly what its controls do. Messages stay inside the panel as a line of text – no pop-ups.
  */
 export function DjPanel({ song }: { song: SongItem }) {
   useScheme();
@@ -52,8 +54,11 @@ export function DjPanel({ song }: { song: SongItem }) {
   const trim = usePlayer((p) => p.trim);
   const rate = usePlayer((p) => p.rate);
   const tempo = usePlayer((p) => p.tempo);
-  const fadeSeconds = useSettings((st) => st.fadeSeconds);
+  const playing = usePlayer((p) => p.status === 'playing');
   const next = usePlayer((p) => p.queue[p.index + 1]);
+  const fadeSeconds = useSettings((st) => st.fadeSeconds);
+  const progress = useProgress(150);
+  const duration = progress.duration > 0 ? progress.duration : song.durationSec ?? 0;
   const { info, save } = useSongBpm(song);
   const nextBpm = useBpmOf(next);
   const [taps, setTaps] = useState<number[]>([]);
@@ -84,6 +89,7 @@ export function DjPanel({ song }: { song: SongItem }) {
   const fail = (e: unknown) => setNote(`うまくいきませんでした。${e instanceof Error ? e.message : String(e)}`);
   const saveBpm = (bpm: number, anchor = info?.anchor) => save({ bpm, ...(anchor !== undefined ? { anchor } : {}) }).then(() => setNote(null)).catch(fail);
   const needBpm = () => setNote('先に、この曲のテンポ（BPM）を決めてください。タップか、数字で入れられます。');
+  const seekTo = (sec: number) => void player().seekTo(sec);
 
   // ---------------------------------------------------------------- tempo
   const setAnchor = async () => {
@@ -94,7 +100,7 @@ export function DjPanel({ song }: { song: SongItem }) {
   // ---------------------------------------------------------------- loops
   const startBeatLoop = async (beats: number) => {
     if (!info) return needBpm();
-    const region = beatLoopRegion(await player().getPosition(), info, beats, song.durationSec);
+    const region = beatLoopRegion(await player().getPosition(), info, beats, duration || song.durationSec);
     if (!region) return setNote('ここからは、ループにできません。曲の終わりに近すぎます。');
     setNote(null);
     await player().loopRegion(region, { seek: false }); // the song keeps playing; at the end of the loop it goes back to the start
@@ -112,7 +118,7 @@ export function DjPanel({ song }: { song: SongItem }) {
       fail(e);
     }
   };
-  /** jump to a cue and play from there (a paused song starts) */
+  /** go to a cue; a paused song starts playing */
   const jumpCue = async (c: HotCue) => {
     await player().seekTo(c.position);
     if (usePlayer.getState().status === 'paused') await usePlayer.getState().togglePlay();
@@ -155,6 +161,13 @@ export function DjPanel({ song }: { song: SongItem }) {
 
   return (
     <View style={{ gap: 14 }}>
+      {/* ------------------------------------------------------------ the song as a bar */}
+      <View style={[s.card, { padding: 16, gap: 10 }]}>
+        <DjTimeline duration={duration} position={progress.position} loop={loop} loopA={loopA} trim={trim} cues={cues} onSeek={seekTo} />
+        <Text style={{ color: colors.sub, fontSize: 11 }}>バーをタップすると、その位置へ移動します。上の数字はキューです。</Text>
+        <BeatLight info={info} position={progress.position} playing={playing} />
+      </View>
+
       {!!note && (
         <View testID="dj-note" style={{ padding: 12, borderRadius: 12, backgroundColor: colors.surface2 }}>
           <Text style={{ color: colors.text, fontSize: 13, lineHeight: 18 }}>{note}</Text>
@@ -162,7 +175,7 @@ export function DjPanel({ song }: { song: SongItem }) {
       )}
 
       {/* ------------------------------------------------------------ tempo */}
-      <Block title="テンポ（BPM）" hint="拍のたびにタップするか、数字で入れます。テンポは、下の拍ループと、次の曲へのテンポ合わせに使われます。">
+      <Block title="テンポ（BPM）" hint="曲に合わせて拍のたびにタップすると、テンポが出ます。数字で入れることもできます。テンポは、拍ループと、次の曲へのテンポ合わせに使われます。">
         <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
           <Text testID="bpm-value" style={{ color: info ? colors.accentText : colors.sub, fontSize: 34, fontWeight: '800' }}>{info ? formatBpm(info.bpm) : '未設定'}</Text>
           {!!info && <Text style={{ color: colors.sub, fontSize: 13 }}>BPM</Text>}
@@ -198,23 +211,23 @@ export function DjPanel({ song }: { song: SongItem }) {
               })
             }
           />
-          {!!info && <Pill label="消す" danger onPress={() => void save(null).then(() => setNote(null)).catch(fail)} />}
+          {!!info && <Pill testID="bpm-clear" label="テンポを消す" danger onPress={() => void save(null).then(() => setNote(null)).catch(fail)} />}
         </View>
         <Text style={{ color: colors.sub, fontSize: 12 }}>テンポが半分や倍に出たときは、÷2 と ×2 で直せます。</Text>
 
-        <Pill testID="bpm-anchor" label="いまの位置を、拍の位置にする" onPress={() => void setAnchor()} />
+        <Pill testID="bpm-anchor" label="いまの位置を拍の位置にする" onPress={() => void setAnchor()} />
         <Text testID="bpm-anchor-status" style={{ color: info?.anchor !== undefined ? colors.accentText : colors.sub, fontSize: 12 }}>
-          {info?.anchor !== undefined ? `拍の位置: ${fmt(info.anchor)}。拍ループは、この拍に合わせて始まります。` : '拍の位置は未設定です。拍ループは、押した位置から始まります。'}
+          {info?.anchor !== undefined ? `拍の位置: ${fmt(info.anchor)}。拍ループと光る拍は、この位置を基準にします。` : '拍の位置が未設定です。拍ループは、押した位置から始まります。'}
         </Text>
       </Block>
 
       {/* ------------------------------------------------------------ loops */}
-      <Block title="ループ" hint="A と B で好きな区間を繰り返します。拍ループは、テンポを決めると、拍の数だけ繰り返します。">
+      <Block title="ループ" hint="Aで区間の始め、Bで終わりを押すと、その区間を繰り返します。拍ループは、いまの位置に近い拍から、選んだ拍数の長さを繰り返します（テンポが必要です）。">
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           <Pill testID="loop-a" label="A" on={loopA !== undefined || !!loop} onPress={async () => player().markLoopA(await player().getPosition())} />
           <Pill testID="loop-b" label="B" disabled={loopA === undefined} on={!!loop} onPress={async () => player().markLoopB(await player().getPosition())} />
           <Text style={{ flex: 1, color: loop || loopA !== undefined ? colors.accentText : colors.sub, fontSize: 12 }} numberOfLines={2}>
-            {loop ? `ループ中 ${fmt(loop.start)} – ${fmt(loop.end)}` : loopA !== undefined ? `A ${fmt(loopA)}。終わりの位置で B を押してください` : '始めの位置で A、終わりの位置で B'}
+            {loop ? `ループ中 ${fmt(loop.start)} – ${fmt(loop.end)}` : loopA !== undefined ? `A ${fmt(loopA)}。終わりの位置で B を押してください` : 'まだ区間はありません'}
           </Text>
           {(loop || loopA !== undefined) && (
             <Pressable hitSlop={10} onPress={() => player().clearLoop()}>
@@ -231,15 +244,14 @@ export function DjPanel({ song }: { song: SongItem }) {
         </View>
         {loop && (
           <View style={{ flexDirection: 'row', gap: 8 }}>
-            <Pill testID="loop-half" label="半分" onPress={() => player().scaleLoop(0.5)} />
-            <Pill testID="loop-double" label="2倍" onPress={() => player().scaleLoop(2)} />
+            <Pill testID="loop-half" label="半分の長さ" onPress={() => player().scaleLoop(0.5)} />
+            <Pill testID="loop-double" label="2倍の長さ" onPress={() => player().scaleLoop(2)} />
           </View>
         )}
-        {!info && <Text style={{ color: colors.sub, fontSize: 12 }}>拍ループは、テンポを決めると使えます。</Text>}
       </Block>
 
       {/* ------------------------------------------------------------ cue points */}
-      <Block title="キュー" hint="空きを押すと、いまの位置を登録します。登録済みを押すと、そこへ飛びます。長押しで、更新・名前・削除ができます。">
+      <Block title="キュー" hint="空きを押すと、いまの位置を登録します。登録済みを押すと、そこへ移動します（止まっていれば再生します）。長押しで、位置の更新・名前の変更・削除ができます。">
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
           {Array.from({ length: HOT_CUE_SLOTS }, (_, slot) => {
             const cue = cues.find((c) => c.slot === slot);
@@ -260,36 +272,36 @@ export function DjPanel({ song }: { song: SongItem }) {
       </Block>
 
       {/* ------------------------------------------------------------ start / end */}
-      <Block title="再生する範囲" hint="イントロや終わりの無音を飛ばします。スタートから始まり、エンドを過ぎると次の曲へ進みます。">
+      <Block title="スタートとエンド" hint="スタートの位置から再生し、エンドを過ぎると次の曲へ進みます（次の曲がなければ止まります）。スタートを変えたときは、次に曲を読み込んだときに効きます。">
         <Text testID="trim-status" style={{ color: trim ? colors.accentText : colors.sub, fontSize: 13 }}>
           {trim ? `${trim.startSec !== undefined ? fmt(trim.startSec) : '曲の始め'} 〜 ${trim.endSec !== undefined ? fmt(trim.endSec) : '曲の終わり'}` : '曲の全体を再生します'}
         </Text>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
           <Pill testID="trim-start" label="スタートをここに" onPress={() => void trimStart()} />
           <Pill testID="trim-end" label="エンドをここに" onPress={() => void trimEnd()} />
-          {trim?.startSec !== undefined && <Pill testID="trim-go-start" label="スタートへ戻る" onPress={() => void player().seekTo(trim.startSec!)} />}
-          {trim && <Pill label="元に戻す" danger onPress={() => void player().clearTrim()} />}
+          {trim?.startSec !== undefined && <Pill testID="trim-go-start" label="スタートへ移動" onPress={() => seekTo(trim.startSec ?? 0)} />}
+          {trim && <Pill testID="trim-clear" label="元に戻す" danger onPress={() => void player().clearTrim()} />}
         </View>
       </Block>
 
       {/* ------------------------------------------------------------ fade */}
-      <Block title="フェードつなぎ" hint="端末内の曲どうしを、自動で次へ進むとき、フェードアウトとフェードインでつなぎます。変更は、設定の「再生」で行います。">
+      <Block title="フェードつなぎ" hint="端末内の曲どうしを、自動で次へ進むとき、フェードアウトとフェードインでつなぎます。手動で次の曲に進んだときは、つなぎません。変更は、設定の「再生」で行います。">
         <Text testID="fade-status" style={{ color: fadeSeconds > 0 ? colors.accentText : colors.sub, fontSize: 13 }}>
           {fadeSeconds > 0 ? `いまの設定: ${fadeSeconds}秒` : 'いまの設定: オフ'}
         </Text>
       </Block>
 
       {/* ------------------------------------------------------------ next song */}
-      <Block title="次の曲にテンポを合わせる" hint="次の曲も端末内にあるときだけ使えます。速さを少し変えて、テンポをそろえます。">
+      <Block title="次の曲にテンポを合わせる" hint="次の曲も端末内にあるときに使えます。この曲の速さを変えて、次の曲のテンポに合わせます。速さは、この曲だけに効き、次の曲では元の速さに戻ります。">
         {!next ? (
           <Text style={{ color: colors.sub, fontSize: 12 }}>キューに次の曲がありません。</Text>
         ) : !nextIsLocal ? (
-          <Text style={{ color: colors.sub, fontSize: 12 }}>次の曲は、端末内にない曲なので、テンポは合わせられません。</Text>
+          <Text style={{ color: colors.sub, fontSize: 12 }}>次の曲は端末内にないので、テンポは合わせられません。</Text>
         ) : (
           <>
             <Text style={{ color: colors.text, fontSize: 13 }} numberOfLines={1}>次の曲: {next.title}</Text>
             <Text testID="next-bpm" style={{ color: nextBpm ? colors.accentText : colors.sub, fontSize: 12 }}>
-              {nextBpm ? `${formatBpm(nextBpm.bpm)} BPM` : 'テンポが未設定です（次の曲を一度再生して、テンポを決めてください）'}
+              {nextBpm ? `${formatBpm(nextBpm.bpm)} BPM` : 'テンポが未設定です（次の曲のテンポを決めてください）'}
             </Text>
             {!!info && !!nextBpm && !match && <Text style={{ color: colors.sub, fontSize: 12 }}>テンポが離れすぎていて、速さを変えても合いません。</Text>}
             {match && (
