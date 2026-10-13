@@ -3,7 +3,7 @@ import { create } from 'zustand';
 
 import { getConfig } from '../core/config';
 import { MAX_RATE, MIN_RATE, scaleLoopRegion } from '../core/beat';
-import { FADE_STEP_MS, type Trim, fadeBetween, fadeGain, planFadeOut } from '../core/dj';
+import { FADE_STEP_MS, type Trim, fadeGain, planFadeOut } from '../core/dj';
 import { type LoopRegion, loopJumpTarget, makeLoop } from '../core/loop';
 import { isDoubledDuration, songEnd } from '../core/songLength';
 import { normalizedVolume } from '../core/loudness';
@@ -147,8 +147,6 @@ function ramp(kind: 'in' | 'out', durationMs: number, done?: () => void): void {
 }
 
 const fadeMs = (): number => Math.max(0, useSettings.getState().fadeSeconds) * 1000;
-/** fades are for songs on this phone only (see fadeBetween) */
-const fadeMsBetween = (from: SongItem | undefined, to: SongItem | undefined): number => (fadeBetween(from?.id, to?.id) ? fadeMs() : 0);
 
 let sleepTimeout: ReturnType<typeof setTimeout> | undefined;
 
@@ -217,7 +215,7 @@ export const usePlayer = create<PlayerState>((set, get) => {
         : (await resolveOffline(song.id)) ?? (await resolveAudio(song.id, resolverOptions())); // a saved copy plays without the network
       if (token !== loadToken) return; // user skipped again while resolving
       // start / end trim of this song (best effort)
-      const trim = isLocalId(song.id) ? await openDb().then((db) => repo.trimOf(db, song.id)).catch(() => null) : null;
+      const trim = await openDb().then((db) => repo.trimOf(db, song.id)).catch(() => null);
       if (token !== loadToken) return;
       trimEndSec = trim?.endSec ?? null;
       set({ trim });
@@ -264,8 +262,7 @@ export const usePlayer = create<PlayerState>((set, get) => {
   /** to the next song. `auto`: the previous one ended by itself – then the next one fades in (when a fade is set) */
   async function advance(auto: boolean): Promise<void> {
     const { queue, index, repeat, current } = get();
-    const upcoming = index + 1 < queue.length ? queue[index + 1] : repeat === 'all' ? queue[0] : undefined;
-    const fadeIn = auto && fadeMsBetween(current, upcoming) > 0;
+    const fadeIn = auto && fadeMs() > 0;
     if (index + 1 < queue.length) return loadAt(index + 1, 0, fadeIn);
     if (repeat === 'all' && queue.length) return loadAt(0, 0, fadeIn);
     if (useSettings.getState().autoRadio && current && (await appendRadio(current)) > 0) return loadAt(index + 1, 0, fadeIn);
@@ -430,7 +427,7 @@ export const usePlayer = create<PlayerState>((set, get) => {
 
     markTrimStart: async (position) => {
       const song = get().current;
-      if (!song || !isLocalId(song.id)) return null;
+      if (!song) return null;
       const kept = await repo.setTrim(await openDb(), song, { startSec: position, endSec: get().trim?.endSec });
       set({ trim: kept });
       trimEndSec = kept?.endSec ?? null;
@@ -440,7 +437,7 @@ export const usePlayer = create<PlayerState>((set, get) => {
 
     markTrimEnd: async (position) => {
       const song = get().current;
-      if (!song || !isLocalId(song.id)) return null;
+      if (!song) return null;
       const kept = await repo.setTrim(await openDb(), song, { startSec: get().trim?.startSec, endSec: position });
       set({ trim: kept });
       trimEndSec = kept?.endSec ?? null;
@@ -468,9 +465,7 @@ export const usePlayer = create<PlayerState>((set, get) => {
         doubledLogged = loadToken;
         get().log(`length: the file says ${Math.round(duration)}s, the song is ${Math.round(known ?? 0)}s – it ends at ${Math.round(known ?? 0)}s${lastSource ? ` [${lastSource}]` : ''}`);
       }
-      const queue = get().queue;
-      const upcoming = get().index + 1 < queue.length ? queue[get().index + 1] : get().repeat === 'all' ? queue[0] : undefined;
-      const fadeSec = fadeMsBetween(get().current, upcoming) / 1000;
+      const fadeSec = fadeMs() / 1000;
       const end = trimEndSec ?? songEnd(duration, known);
       if (end === null) return;
 
