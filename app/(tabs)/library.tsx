@@ -19,7 +19,7 @@ import { promptText, showActionSheet } from '../../src/ui/dialogs';
 import { SortBar } from '../../src/ui/SortBar';
 import { LIST_BOTTOM, colors, useScheme } from '../../src/ui/theme';
 
-type Tab = 'songs' | 'local' | 'offline' | 'liked' | 'tags' | 'playlists' | 'albums' | 'artists' | 'history' | 'stats';
+type Tab = 'songs' | 'offline' | 'liked' | 'tags' | 'playlists' | 'albums' | 'artists' | 'history' | 'stats';
 /** the list at the top of the library: each row opens one list (the bottom half shows the history and what was added) */
 const MENU: { key: Tab; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
   { key: 'offline', label: 'オフライン', icon: 'arrow-down-circle-outline' },
@@ -27,7 +27,6 @@ const MENU: { key: Tab; label: string; icon: keyof typeof Ionicons.glyphMap }[] 
   { key: 'artists', label: 'アーティスト', icon: 'mic-outline' },
   { key: 'albums', label: 'アルバム', icon: 'albums-outline' },
   { key: 'liked', label: 'お気に入り', icon: 'heart-outline' },
-  { key: 'local', label: 'ローカル', icon: 'folder-outline' },
 ];
 const RANGES: { key: repo.StatsRange; label: string }[] = [
   { key: 'today', label: '今日' }, { key: 'week', label: '週' }, { key: 'month', label: '月' },
@@ -65,7 +64,7 @@ export default function Library() {
   const yearsVersion = useReleaseYears((st) => st.version);
   const [missingYears, setMissingYears] = useState(0);
   // the lists that can be ordered (and the order chosen for the one that is open)
-  const sortTab: SortTab | null = tab === 'songs' || tab === 'local' || tab === 'offline' || tab === 'liked' || tab === 'tags' || tab === 'history' ? tab : null;
+  const sortTab: SortTab | null = tab === 'songs' || tab === 'offline' || tab === 'liked' || tab === 'tags' || tab === 'history' ? tab : null;
   const sort = sortTab ? sortFor(prefs, sortTab) : null;
 
   const load = useCallback(async () => {
@@ -77,12 +76,11 @@ export default function Library() {
     }
     const order = sortTab ? sortFor(prefs, sortTab) : 'title';
     if (tab === 'songs') setSongs(await repo.libraryList(db, 'songs', order));
-    if (tab === 'local') {
-      setSongs(await repo.libraryList(db, 'local', order));
-      setWaiting((await listInbox()).length);
-    }
     if (tab === 'offline') {
-      setSongs(await repo.libraryList(db, 'offline', order));
+      // saved copies and the files taken in from the phone are one list
+      const [saved, local] = await Promise.all([repo.libraryList(db, 'offline', order), repo.libraryList(db, 'local', order)]);
+      setSongs([...saved, ...local]);
+      setWaiting((await listInbox()).length);
       setOfflineBytes(await repo.offlineTotalSize(db));
     }
     if (tab === 'liked') setSongs(await repo.libraryList(db, 'liked', order));
@@ -195,15 +193,15 @@ export default function Library() {
         </ScrollView>
       )}
 
-      {(tab === 'songs' || tab === 'local' || tab === 'offline' || tab === 'liked' || tab === 'tags' || tab === 'history') && (
+      {(tab === 'songs' || tab === 'offline' || tab === 'liked' || tab === 'tags' || tab === 'history') && (
         <FlatList
           data={songs}
           keyExtractor={(x) => x.id}
           contentContainerStyle={pad}
-          ListHeaderComponent={tab === 'local' || tab === 'offline' || tab === 'tags' || songs.length ? (
+          ListHeaderComponent={tab === 'offline' || tab === 'tags' || songs.length ? (
             <View>
               {sortTab && sort && songs.length > 1 && <SortBar tab={sortTab} value={sort} onChange={(k) => setSort(sortTab, k)} missingYears={missingYears} />}
-              {tab === 'local' && (
+              {tab === 'offline' && (
                 <View style={{ paddingHorizontal: 16, marginBottom: 6, gap: 6 }}>
                   <Text style={s.sub}>
                     {isAndroid
@@ -306,7 +304,7 @@ export default function Library() {
               )}
             </View>
           ) : null}
-          ListEmptyComponent={empty(tab === 'tags' ? (selectedTags.length ? 'このタグの曲は、まだありません' : 'タグを選ぶと、その曲が並びます') : tab === 'offline' ? 'まだ保存した曲がありません。曲の「…」から「オフラインに保存」を選ぶと、ここに並びます' : tab === 'local' ? (isAndroid ? 'まだ曲がありません。「フォルダを選ぶ」で音楽のフォルダを選んで、「取り込む」を押してください' : 'まだ曲がありません。Music フォルダに音楽ファイルを入れて、「取り込む」を押してください') : tab === 'liked' ? 'お気に入りはまだありません。曲を長押しして追加できます' : tab === 'history' ? 'まだ再生した曲がありません' : '再生した曲、お気に入り、プレイリストの曲がここに並びます')}
+          ListEmptyComponent={empty(tab === 'tags' ? (selectedTags.length ? 'このタグの曲は、まだありません' : 'タグを選ぶと、その曲が並びます') : tab === 'offline' ? 'まだ保存した曲や取り込んだ曲がありません。曲の「…」から「オフラインに保存」を選ぶか、音楽ファイルを取り込むと、ここに並びます' : tab === 'liked' ? 'お気に入りはまだありません。曲を長押しして追加できます' : tab === 'history' ? 'まだ再生した曲がありません' : '再生した曲、お気に入り、プレイリストの曲がここに並びます')}
           renderItem={({ item, index }) => <SongRow song={item} onChanged={load} onPress={() => void play(songs, index)} />}
         />
       )}
