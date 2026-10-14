@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { TASTE_LIMIT, TASTE_MAX_AGE_MS, hiResCover, isFresh, mixRadios } from '../src/core/taste';
+import { TASTE_LIMIT, TASTE_MAX_AGE_MS, hiResCover, isFresh, mixRadios, topArtists } from '../src/core/taste';
 import type { SongItem } from '../src/core/types';
 
 const song = (id: string): SongItem => ({ kind: 'song', id, title: `T ${id}`, artists: [{ name: 'A' }], explicit: false });
+const withArtists = (id: string, artists: { id?: string; name: string }[]): SongItem => ({ ...song(id), artists });
 
 describe('taste mix', () => {
   it('takes one song from each radio in turn, without repeats, seeds or songs on the phone', () => {
@@ -43,5 +44,28 @@ describe('saved mix age', () => {
     assert.equal(isFresh(now - 1000, now), true);
     assert.equal(isFresh(now - TASTE_MAX_AGE_MS, now), false);
     assert.equal(isFresh(now + 1000, now), false);
+  });
+});
+
+describe('recommended artists', () => {
+  it('counts how often each artist comes up, most frequent first', () => {
+    const songs = [
+      withArtists('1', [{ id: 'UCa', name: 'A' }]),
+      withArtists('2', [{ id: 'UCb', name: 'B' }, { id: 'UCa', name: 'A' }]),
+      withArtists('3', [{ id: 'UCb', name: 'B' }]),
+      withArtists('4', [{ id: 'UCb', name: 'B' }]),
+    ];
+    assert.deepEqual(topArtists(songs), [
+      { id: 'UCb', name: 'B' },
+      { id: 'UCa', name: 'A' },
+    ]);
+  });
+
+  it('skips artists without an id and breaks ties by who came first', () => {
+    const songs = [
+      withArtists('1', [{ name: 'plain text' }, { id: 'UCc', name: 'C' }]),
+      withArtists('2', [{ id: 'UCd', name: 'D' }]),
+    ];
+    assert.deepEqual(topArtists(songs).map((a) => a.id), ['UCc', 'UCd']);
   });
 });

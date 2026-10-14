@@ -10,6 +10,28 @@ export const TASTE_SEEDS = 5;
 export const TASTE_LIMIT = 30;
 /** the saved mix is used for this long, then it is made again */
 export const TASTE_MAX_AGE_MS = 24 * 3_600_000;
+/** how many recommended artists are kept, and how many of them the home screen shows */
+export const TASTE_ARTISTS = 12;
+export const TASTE_ARTISTS_SHOWN = 8;
+
+/**
+ * The artists that come up most often in the songs, most frequent first (ties: the one met first). Songs without an artist id are skipped.
+ */
+export function topArtists(songs: SongItem[], limit = TASTE_ARTISTS): { id: string; name: string }[] {
+  const count = new Map<string, { id: string; name: string; n: number; first: number }>();
+  songs.forEach((song, i) => {
+    for (const a of song.artists) {
+      if (!a.id) continue;
+      const seen = count.get(a.id);
+      if (seen) seen.n++;
+      else count.set(a.id, { id: a.id, name: a.name, n: 1, first: i });
+    }
+  });
+  return [...count.values()]
+    .sort((x, y) => y.n - x.n || x.first - y.first)
+    .slice(0, limit)
+    .map(({ id, name }) => ({ id, name }));
+}
 
 /**
  * The radios of the seed songs, mixed: one song from each radio in turn. No song twice, no seed song, no song on the phone.
