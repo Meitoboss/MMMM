@@ -17,6 +17,7 @@ import { mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/p
 import http from 'node:http';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { createGunzip } from 'node:zlib';
 
 import {
   isAssetHash, isChannel, isIsoDate, isMime, isNativeHash, isPlatform, isRuntimeVersion, isUuid,
@@ -199,6 +200,9 @@ export function createOtaServer(cfg) {
     const contentType = single(req.headers['x-asset-content-type']);
     if (!isMime(contentType)) throw new HttpError(400, 'x-asset-content-type が正しくありません');
     if (Number(req.headers['content-length'] ?? 0) > c.maxAssetBytes) throw new HttpError(413, 'too large');
+    // the publisher may compress the file for the trip (much smaller on a slow link); what is kept and checked is the original
+    const encoding = single(req.headers['content-encoding']) ?? 'identity';
+    if (encoding !== 'identity' && encoding !== 'gzip') throw new HttpError(415, 'content-encoding は gzip か無しです');
     await mkdir(dir.tmp, { recursive: true });
     await mkdir(dir.assets, { recursive: true });
     const tmp = path.join(dir.tmp, `${randomBytes(8).toString('hex')}.part`);
@@ -206,11 +210,17 @@ export function createOtaServer(cfg) {
     const out = createWriteStream(tmp);
     let size = 0;
     try {
-      for await (const chunk of req) {
-        size += chunk.length;
-        if (size > c.maxAssetBytes) throw new HttpError(413, 'too large');
-        sha.update(chunk);
-        if (!out.write(chunk)) await new Promise((r) => out.once('drain', r));
+      const body = encoding === 'gzip' ? req.pipe(createGunzip()) : req;
+      try {
+        for await (const chunk of body) {
+          size += chunk.length;
+          if (size > c.maxAssetBytes) throw new HttpError(413, 'too large');
+          sha.update(chunk);
+          if (!out.write(chunk)) await new Promise((r) => out.once('drain', r));
+        }
+      } catch (e) {
+        if (e instanceof HttpError) throw e;
+        throw new HttpError(400, '圧縮された中身が正しくありません');
       }
       await new Promise((resolve, reject) => out.end((e) => (e ? reject(e) : resolve())));
       if (sha.digest('base64url') !== hash) throw new HttpError(400, '中身のハッシュが一致しません（壊れたアップロード）');
