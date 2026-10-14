@@ -1,6 +1,7 @@
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Alert, FlatList, Pressable, Text, TextInput, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { openDb } from '../src/db/expo';
 import * as repo from '../src/db/repo';
@@ -9,6 +10,7 @@ import { Button, s } from '../src/ui/components';
 import { colors, useScheme } from '../src/ui/theme';
 
 export default function AddToPlaylist() {
+  const insets = useSafeAreaInsets();
   useScheme();
   const router = useRouter();
   const song = useAddToPlaylist((x) => x.song);
@@ -34,6 +36,7 @@ export default function AddToPlaylist() {
       </View>
       <FlatList
         data={lists}
+        contentContainerStyle={{ paddingBottom: insets.bottom + 16 }}
         keyExtractor={(x) => String(x.id)}
         renderItem={({ item }) => (
           <Pressable style={s.row} onPress={() => void add(item.id)}>
