@@ -3,12 +3,12 @@ import { useCallback, useMemo, useState } from 'react';
 import { RefreshControl, ScrollView, Text, View } from 'react-native';
 
 import { yt } from '../../src/core';
-import { recentInsertIndex } from '../../src/core/homeLayout';
 import type { Section, SongItem } from '../../src/core/types';
 import { openDb } from '../../src/db/expo';
 import * as repo from '../../src/db/repo';
 import { Button, ErrorView, Loading, SectionCarousel, s } from '../../src/ui/components';
 import { ArtistShelf } from '../../src/ui/ArtistShelf';
+import { HomeQuickGrid } from '../../src/ui/HomeQuickGrid';
 import { ForgottenShelf, OnThisDayShelf, TimeMoodShelf } from '../../src/ui/HomeShelves';
 import { TasteShelf } from '../../src/ui/TasteShelf';
 import { TrendingShelf } from '../../src/ui/TrendingShelf';
@@ -45,7 +45,6 @@ export default function Home() {
 
   const sections: Section[] = data?.sections ?? [];
   const recentSection: Section = useMemo(() => ({ title: '最近聞いた曲', items: recent }), [recent]);
-  const at = recentInsertIndex(sections.map((x) => x.title));
 
   if (loading && !data && !recent.length) return <Loading />;
 
@@ -56,14 +55,9 @@ export default function Home() {
     >
       <OtaBanner />
       <UpdateBanner />
+      <HomeQuickGrid />
       <TrendingShelf />
-      <ArtistShelf />
-      <TasteShelf />
-      <OnThisDayShelf />
-      <ForgottenShelf />
-      <TimeMoodShelf />
-      {sections.slice(0, at).map((x, i) => <SectionCarousel key={`${x.title}-${i}`} section={x} />)}
-      {/* directly below "Today's hits" / "Trending" */}
+      {/* directly below the trending shelf */}
       {recent.length ? (
         <SectionCarousel section={recentSection} />
       ) : (
@@ -72,7 +66,12 @@ export default function Home() {
           <Text style={[s.sub, { paddingHorizontal: 16 }]}>まだ再生した曲がありません。曲を再生すると、ここに並びます。</Text>
         </View>
       )}
-      {sections.slice(at).map((x, i) => <SectionCarousel key={`${x.title}-${at + i}`} section={x} />)}
+      <ArtistShelf />
+      <TasteShelf />
+      <OnThisDayShelf />
+      <ForgottenShelf />
+      <TimeMoodShelf />
+      {sections.map((x, i) => <SectionCarousel key={`${x.title}-${i}`} section={x} />)}
       {error && !data && (
         <View style={{ alignItems: 'center', padding: 24 }}>
           <ErrorView message={error} />
