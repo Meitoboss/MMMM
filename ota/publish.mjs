@@ -5,6 +5,7 @@
 import { randomUUID } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
+import { gzipSync } from 'node:zlib';
 import { pathToFileURL } from 'node:url';
 
 import { buildPlatformManifest, buildRollbackDirective, signRsaSha256, signatureHeader } from './lib.mjs';
@@ -117,7 +118,8 @@ export async function send({ server, token, publish, files, fetchImpl = fetch, l
   let done = 0;
   for (const hash of missing) {
     const f = files.get(hash);
-    const r = await ask(`${base}/ota/admin/assets/${hash}`, { method: 'PUT', headers: { ...auth, 'x-asset-content-type': f.contentType, 'content-type': 'application/octet-stream' }, body: f.buffer }, `資産のアップロード (${hash.slice(0, 8)}…)`, 120_000);
+    // compressed for the trip: the server checks and keeps the original (the hash is the original's)
+    const r = await ask(`${base}/ota/admin/assets/${hash}`, { method: 'PUT', headers: { ...auth, 'x-asset-content-type': f.contentType, 'content-type': 'application/octet-stream', 'content-encoding': 'gzip' }, body: gzipSync(f.buffer) }, `資産のアップロード (${hash.slice(0, 8)}…)`, 120_000);
     if (!r.ok) await fail(`資産のアップロードに失敗しました (${hash.slice(0, 8)}…)`, r);
     done++;
     if (done % 10 === 0 || done === missing.length) log(`アップロード ${done} / ${missing.length}`);

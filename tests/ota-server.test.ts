@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
+import { gzipSync } from 'node:zlib';
 import { X509Certificate, generateKeyPairSync } from 'node:crypto';
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -211,6 +212,30 @@ describe('the update server (with signatures checked)', () => {
     const r = await ask(base, { expectSignature: false });
     assert.equal(r.status, 200);
     assert.equal(r.parts[0].headers['expo-signature'], undefined);
+  });
+
+  it('an upload may come gzip-compressed: the original is what is kept and served', async () => {
+    const content = Buffer.from('compressed content '.repeat(300));
+    const hash = sha256b64u(content);
+    const r = await fetch(`${base}/ota/admin/assets/${hash}`, { method: 'PUT', headers: { authorization: `Bearer ${TOKEN}`, 'x-asset-content-type': 'image/png', 'content-encoding': 'gzip' }, body: gzipSync(content) });
+    assert.equal(r.status, 201);
+    const back = Buffer.from(await (await fetch(`${base}/ota/assets/${hash}`)).arrayBuffer());
+    assert.ok(back.equals(content));
+  });
+
+  it('a gzip upload with broken data, or with the hash of other content, is refused', async () => {
+    const hash = sha256b64u(Buffer.from('gzip check'));
+    const broken = await fetch(`${base}/ota/admin/assets/${hash}`, { method: 'PUT', headers: { authorization: `Bearer ${TOKEN}`, 'x-asset-content-type': 'image/png', 'content-encoding': 'gzip' }, body: Buffer.from('not gzip at all') });
+    assert.equal(broken.status, 400);
+    const other = await fetch(`${base}/ota/admin/assets/${hash}`, { method: 'PUT', headers: { authorization: `Bearer ${TOKEN}`, 'x-asset-content-type': 'image/png', 'content-encoding': 'gzip' }, body: gzipSync(Buffer.from('something else')) });
+    assert.equal(other.status, 400);
+    assert.equal((await fetch(`${base}/ota/assets/${hash}`)).status, 404);
+  });
+
+  it('an upload with another encoding is refused', async () => {
+    const hash = sha256b64u(Buffer.from('br'));
+    const r = await fetch(`${base}/ota/admin/assets/${hash}`, { method: 'PUT', headers: { authorization: `Bearer ${TOKEN}`, 'x-asset-content-type': 'image/png', 'content-encoding': 'br' }, body: Buffer.from('br') });
+    assert.equal(r.status, 415);
   });
 
   it('an upload whose content does not match its hash is refused and nothing is kept', async () => {
