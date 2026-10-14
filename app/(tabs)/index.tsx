@@ -10,6 +10,7 @@ import { openDb } from '../../src/db/expo';
 import * as repo from '../../src/db/repo';
 import { Button, ErrorView, Loading, SectionCarousel, s } from '../../src/ui/components';
 import { ArtistShelf } from '../../src/ui/ArtistShelf';
+import { ForgottenShelf, NewReleasesShelf, OnThisDayShelf, TimeMoodShelf } from '../../src/ui/HomeShelves';
 import { TasteShelf } from '../../src/ui/TasteShelf';
 import { TrendingShelf } from '../../src/ui/TrendingShelf';
 import { OtaBanner } from '../../src/ui/OtaBanner';
@@ -72,7 +73,11 @@ export default function Home() {
       <UpdateBanner />
       <TrendingShelf />
       <ArtistShelf />
+      <NewReleasesShelf />
       <TasteShelf />
+      <OnThisDayShelf />
+      <ForgottenShelf />
+      <TimeMoodShelf />
       {sections.slice(0, at).map((x, i) => <SectionCarousel key={`${x.title}-${i}`} section={x} />)}
       {/* directly below "Today's hits" / "Trending" */}
       {recent.length ? (
