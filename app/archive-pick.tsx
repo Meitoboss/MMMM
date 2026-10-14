@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { FlatList, Pressable, Text, TextInput, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { formatBytes } from '../src/core/songArchive';
 import { filterItems, summary } from '../src/core/songPick';
@@ -12,6 +13,8 @@ import { colors, useScheme } from '../src/ui/theme';
 export default function ArchivePick() {
   useScheme();
   const router = useRouter();
+  // the bottom buttons sit above the navigation bar (a modal screen reaches under it on Android)
+  const insets = useSafeAreaInsets();
   const items = useArchivePick((s) => s.items);
   const selected = useArchivePick((s) => s.selected);
   const [query, setQuery] = useState('');
@@ -65,7 +68,7 @@ export default function ArchivePick() {
           );
         }}
       />
-      <View style={{ flexDirection: 'row', gap: 12, padding: 16 }}>
+      <View style={{ flexDirection: 'row', gap: 12, paddingHorizontal: 16, paddingTop: 16, paddingBottom: insets.bottom + 16 }}>
         {button('やめる', () => { archivePick.cancel(); router.back(); }, 'pick-cancel')}
         {button(`決定（${sum.count}曲）`, () => { archivePick.confirm(); router.back(); }, 'pick-confirm', true)}
       </View>
