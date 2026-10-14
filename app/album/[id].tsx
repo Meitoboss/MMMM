@@ -10,7 +10,7 @@ import { usePlayer } from '../../src/state/player';
 import { Button, Cover, ErrorView, Loading, SongRow, s } from '../../src/ui/components';
 import { useAsync } from '../../src/ui/hooks';
 import { requestOfflineSave } from '../../src/ui/offlineActions';
-import { MINI_HEIGHT, colors, useScheme } from '../../src/ui/theme';
+import { LIST_BOTTOM, colors, useScheme } from '../../src/ui/theme';
 
 export default function Album() {
   useScheme();
@@ -31,7 +31,7 @@ export default function Album() {
     <FlatList
       data={data.songs}
       keyExtractor={(x, i) => `${x.id}-${i}`}
-      contentContainerStyle={{ paddingBottom: MINI_HEIGHT + 24 }}
+      contentContainerStyle={{ paddingBottom: LIST_BOTTOM }}
       ListHeaderComponent={
         <View style={{ alignItems: 'center', padding: 16, gap: 6 }}>
           <Stack.Screen options={{ title: '' }} />

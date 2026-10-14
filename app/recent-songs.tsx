@@ -5,7 +5,7 @@ import { openDb } from '../src/db/expo';
 import * as repo from '../src/db/repo';
 import type { SongItem } from '../src/core/types';
 import { ItemRow } from '../src/ui/components';
-import { MINI_HEIGHT, colors, useScheme } from '../src/ui/theme';
+import { LIST_BOTTOM, colors, useScheme } from '../src/ui/theme';
 
 export default function RecentSongsScreen() {
   useScheme();
@@ -28,7 +28,7 @@ export default function RecentSongsScreen() {
         data={songs}
         keyExtractor={(it, i) => `${it.id}-${i}`}
         renderItem={({ item }) => <ItemRow item={item} context={songs} />}
-        contentContainerStyle={{ paddingBottom: MINI_HEIGHT + 24 }}
+        contentContainerStyle={{ paddingBottom: LIST_BOTTOM }}
       />
     </View>
   );

@@ -11,7 +11,7 @@ import { usePlayer } from '../../src/state/player';
 import { Button, Cover, s } from '../../src/ui/components';
 import { DraggableList } from '../../src/ui/DraggableList';
 import { promptText } from '../../src/ui/dialogs';
-import { MINI_HEIGHT, colors, useScheme } from '../../src/ui/theme';
+import { LIST_BOTTOM, colors, useScheme } from '../../src/ui/theme';
 
 const ROW_HEIGHT = 64;
 
@@ -44,7 +44,7 @@ export default function LocalPlaylist() {
   return (
     <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: name }} />
-      <ScrollView scrollEnabled={!dragging} contentContainerStyle={{ paddingBottom: MINI_HEIGHT + 24 }}>
+      <ScrollView scrollEnabled={!dragging} contentContainerStyle={{ paddingBottom: LIST_BOTTOM }}>
         {songs.length ? (
           <View>
             <View style={{ flexDirection: 'row', gap: 8, paddingHorizontal: 16 }}>

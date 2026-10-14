@@ -10,7 +10,7 @@ import { usePlayer } from '../../src/state/player';
 import { Button, Cover, ErrorView, Loading, SongRow, s } from '../../src/ui/components';
 import { useAsync } from '../../src/ui/hooks';
 import { requestOfflineSave } from '../../src/ui/offlineActions';
-import { MINI_HEIGHT, colors, useScheme } from '../../src/ui/theme';
+import { LIST_BOTTOM, colors, useScheme } from '../../src/ui/theme';
 
 export default function RemotePlaylist() {
   useScheme();
@@ -42,7 +42,7 @@ export default function RemotePlaylist() {
       keyExtractor={(x, i) => `${x.id}-${i}`}
       onEndReached={more}
       onEndReachedThreshold={0.6}
-      contentContainerStyle={{ paddingBottom: MINI_HEIGHT + 24 }}
+      contentContainerStyle={{ paddingBottom: LIST_BOTTOM }}
       ListFooterComponent={busy ? <ActivityIndicator color={colors.accentText} style={{ margin: 16 }} /> : null}
       ListHeaderComponent={
         <View style={{ alignItems: 'center', padding: 16, gap: 6 }}>

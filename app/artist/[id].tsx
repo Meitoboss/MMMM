@@ -10,7 +10,7 @@ import * as repo from '../../src/db/repo';
 import { usePlayer } from '../../src/state/player';
 import { Button, Cover, ErrorView, Loading, SectionCarousel, s } from '../../src/ui/components';
 import { useAsync } from '../../src/ui/hooks';
-import { MINI_HEIGHT, colors, useScheme } from '../../src/ui/theme';
+import { LIST_BOTTOM, colors, useScheme } from '../../src/ui/theme';
 
 export default function Artist() {
   useScheme();
@@ -25,7 +25,7 @@ export default function Artist() {
   const topSongs = data.sections.flatMap((x) => x.items).filter((i): i is SongItem => i.kind === 'song');
 
   return (
-    <ScrollView contentContainerStyle={{ paddingBottom: MINI_HEIGHT + 24 }}>
+    <ScrollView contentContainerStyle={{ paddingBottom: LIST_BOTTOM }}>
       <Stack.Screen options={{ title: data.name }} />
       <View style={{ alignItems: 'center', padding: 16, gap: 6 }}>
         <Cover uri={data.thumbnail} size={180} round />

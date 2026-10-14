@@ -15,7 +15,7 @@ import { TrendingShelf } from '../../src/ui/TrendingShelf';
 import { OtaBanner } from '../../src/ui/OtaBanner';
 import { UpdateBanner } from '../../src/ui/UpdateBanner';
 import { useAsync } from '../../src/ui/hooks';
-import { MINI_HEIGHT, colors, useScheme } from '../../src/ui/theme';
+import { LIST_BOTTOM, colors, useScheme } from '../../src/ui/theme';
 
 /** "Music space" wordmark with the three-U mark, like the sidebar of the web version */
 function BrandHeader() {
@@ -64,7 +64,7 @@ export default function Home() {
 
   return (
     <ScrollView
-      contentContainerStyle={{ paddingTop: 12, paddingBottom: MINI_HEIGHT + 24 }}
+      contentContainerStyle={{ paddingTop: 12, paddingBottom: LIST_BOTTOM }}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accentText} />}
     >
       <BrandHeader />
