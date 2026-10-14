@@ -1,26 +1,26 @@
 import { useState } from 'react';
 import { ActivityIndicator, Alert, Platform, Pressable, ScrollView, Switch, Text, TextInput, View } from 'react-native';
 
-import { clearStreamCache } from '../../src/core';
-import { runSelfTest, runTokenServerTest, StepResult } from '../../src/core/diagnostics';
-import type { StreamBackend } from '../../src/core/streams/resolver';
-import { runCurrentSongProbe, runFormatMatrix, runPlaybackProbe, runRealPathTest, runTokenExperiment } from '../../src/player/probe';
-import { usePlayer } from '../../src/state/player';
-import { useUpdate } from '../../src/state/update';
-import { DEFAULT_SETTINGS, useSettings } from '../../src/state/settings';
-import { s } from '../../src/ui/components';
-import { APP_VERSION } from '../../src/appVersion';
-import { FADE_OPTIONS } from '../../src/core/dj';
-import { type AudioQuality } from '../../src/core/config';
-import { type NormalizeMode } from '../../src/core/loudness';
-import { QUALITY_LABELS, qualitiesFor } from '../../src/core/streams/quality';
-import { LIST_BOTTOM, colors, useScheme } from '../../src/ui/theme';
-import { Chips, Row, Section } from '../../src/ui/SettingsParts';
-import { BackupSection } from '../../src/ui/BackupSection';
-import { SongArchiveSection } from '../../src/ui/SongArchiveSection';
-import { NetLogRow } from '../../src/ui/NetLogRow';
-import { OtaSection } from '../../src/ui/OtaSection';
-import { ThemeEditor } from '../../src/ui/ThemeEditor';
+import { clearStreamCache } from '../src/core';
+import { runSelfTest, runTokenServerTest, StepResult } from '../src/core/diagnostics';
+import type { StreamBackend } from '../src/core/streams/resolver';
+import { runCurrentSongProbe, runFormatMatrix, runPlaybackProbe, runRealPathTest, runTokenExperiment } from '../src/player/probe';
+import { usePlayer } from '../src/state/player';
+import { useUpdate } from '../src/state/update';
+import { DEFAULT_SETTINGS, useSettings } from '../src/state/settings';
+import { s } from '../src/ui/components';
+import { APP_VERSION } from '../src/appVersion';
+import { FADE_OPTIONS } from '../src/core/dj';
+import { type AudioQuality } from '../src/core/config';
+import { type NormalizeMode } from '../src/core/loudness';
+import { QUALITY_LABELS, qualitiesFor } from '../src/core/streams/quality';
+import { LIST_BOTTOM, colors, useScheme } from '../src/ui/theme';
+import { Chips, Row, Section } from '../src/ui/SettingsParts';
+import { BackupSection } from '../src/ui/BackupSection';
+import { SongArchiveSection } from '../src/ui/SongArchiveSection';
+import { NetLogRow } from '../src/ui/NetLogRow';
+import { OtaSection } from '../src/ui/OtaSection';
+import { ThemeEditor } from '../src/ui/ThemeEditor';
 
 const ORDERS: { label: string; value: StreamBackend[] }[] = [
   { label: 'YouTube（トークン）→ Piped → Invidious', value: ['webpot', 'piped', 'invidious'] },

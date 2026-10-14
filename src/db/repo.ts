@@ -800,3 +800,43 @@ export async function deleteLocalFile(db: Db, songId: string): Promise<string | 
   await db.run('DELETE FROM Song WHERE id = ?', [songId]);
   return name;
 }
+
+/* ------------------------------------------------------------------ home screen memories ------------------------------------------------------------------ */
+
+/** the songs played in the given time ranges ([start, end) in ms), most played first, each song once */
+export async function playedBetween(db: Db, ranges: { start: number; end: number }[], limit = 20): Promise<SongItem[]> {
+  const out: SongItem[] = [];
+  const seen = new Set<string>();
+  for (const r of ranges) {
+    const rows = await db.all<SongRow>(
+      'SELECT Song.* FROM Event JOIN Song ON Song.id = Event.songId WHERE Event.timestamp >= ? AND Event.timestamp < ? GROUP BY Song.id ORDER BY COUNT(*) DESC LIMIT ?',
+      [r.start, r.end, limit],
+    );
+    for (const song of rows.map(songFromRow)) {
+      if (seen.has(song.id)) continue;
+      seen.add(song.id);
+      out.push(song);
+    }
+  }
+  return out.slice(0, limit);
+}
+
+/** the songs played at these hours of the day (0–23, local time), most played first */
+export async function playedInHours(db: Db, hours: number[], limit = 20): Promise<SongItem[]> {
+  if (!hours.length) return [];
+  const marks = hours.map(() => '?').join(',');
+  const rows = await db.all<SongRow>(
+    `SELECT Song.* FROM Event JOIN Song ON Song.id = Event.songId WHERE CAST(strftime('%H', Event.timestamp / 1000, 'unixepoch', 'localtime') AS INTEGER) IN (${marks}) GROUP BY Song.id ORDER BY COUNT(*) DESC LIMIT ?`,
+    [...hours, limit],
+  );
+  return rows.map(songFromRow);
+}
+
+/** liked songs that were played at some time before, but not since `since` (ms) */
+export async function forgottenLikes(db: Db, since: number, limit = 20): Promise<SongItem[]> {
+  const rows = await db.all<SongRow>(
+    'SELECT Song.* FROM Song WHERE Song.likedAt IS NOT NULL AND Song.id IN (SELECT songId FROM Event) AND Song.id NOT IN (SELECT songId FROM Event WHERE timestamp >= ?) ORDER BY Song.likedAt DESC LIMIT ?',
+    [since, limit],
+  );
+  return rows.map(songFromRow);
+}

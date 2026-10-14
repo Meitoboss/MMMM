@@ -115,6 +115,6 @@ describe('version', () => {
     assert.equal(JSON.parse(readFileSync('package.json', 'utf8')).version, APP_VERSION);
     assert.ok(app.expo.android.versionCode >= 3, 'a higher build number than the earlier releases, so Android installs it as an update');
     assert.equal(String(app.expo.ios.buildNumber), String(app.expo.android.versionCode));
-    assert.ok(readFileSync('app/(tabs)/settings.tsx', 'utf8').includes('APP_VERSION'), 'the Settings screen shows it');
+    assert.ok(readFileSync('app/settings.tsx', 'utf8').includes('APP_VERSION'), 'the Settings screen shows it');
   });
 });
