@@ -263,7 +263,7 @@ export default function SmartPlaylistScreen() {
           いまの結果: {songs.length}曲　<Text style={s.sub}>（{describeRules(rules, (tid) => tags.find((t) => t.id === tid)?.name ?? '？')}）</Text>
         </Text>
         {!!songs.length && (
-          <View style={{ flexDirection: 'row', gap: 8 }}>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', alignItems: 'center', gap: 8 }}>
             <Button label="再生" icon="play" onPress={() => void play(songs, 0)} />
             <Button label="シャッフル" icon="shuffle" secondary onPress={() => { usePlayer.setState({ shuffle: true }); void play(songs, 0); }} />
           </View>

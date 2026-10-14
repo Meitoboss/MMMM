@@ -47,7 +47,7 @@ export default function LocalPlaylist() {
       <ScrollView scrollEnabled={!dragging} contentContainerStyle={{ paddingBottom: LIST_BOTTOM }}>
         {songs.length ? (
           <View>
-            <View style={{ flexDirection: 'row', gap: 8, paddingHorizontal: 16 }}>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 8, paddingHorizontal: 16 }}>
               <Button label="再生" icon="play" onPress={() => void play(songs, 0)} />
               <Button label="名前を変更" secondary onPress={() => promptText('プレイリスト名を変更', undefined, name, async (t) => { if (t.trim()) { await repo.renamePlaylist(await openDb(), pid, t.trim()); void load(); } })} />
             </View>

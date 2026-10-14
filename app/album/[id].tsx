@@ -38,7 +38,7 @@ export default function Album() {
           <Cover uri={data.thumbnail} size={220} />
           <Text style={[s.h1, { textAlign: 'center', marginTop: 8 }]}>{data.title}</Text>
           <Text style={s.sub}>{[data.author?.name, data.year].filter(Boolean).join(' • ')}</Text>
-          <View style={{ flexDirection: 'row', gap: 8 }}>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', alignItems: 'center', gap: 8 }}>
             <Button label="再生" icon="play" onPress={() => void play(data.songs, 0)} />
             <Button label="シャッフル" icon="shuffle" secondary onPress={() => { usePlayer.setState({ shuffle: true }); void play(data.songs, 0); }} />
             <Button label="オフライン" icon="arrow-down-circle-outline" secondary onPress={() => void requestOfflineSave(data.songs)} />

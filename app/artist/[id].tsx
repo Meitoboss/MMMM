@@ -31,7 +31,7 @@ export default function Artist() {
         <Cover uri={data.thumbnail} size={180} round />
         <Text style={[s.h1, { textAlign: 'center' }]}>{data.name}</Text>
         {!!data.subscribersText && <Text style={s.sub}>{data.subscribersText}</Text>}
-        <View style={{ flexDirection: 'row', gap: 8 }}>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', alignItems: 'center', gap: 8 }}>
           {!!topSongs.length && <Button label="再生" icon="play" onPress={() => void playSongs(topSongs, 0)} />}
           {!!data.radioPlaylistId && topSongs[0] && <Button label="ラジオ" icon="radio" secondary onPress={() => void usePlayer.getState().playRadio(topSongs[0])} />}
           <Pressable
