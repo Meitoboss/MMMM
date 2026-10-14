@@ -71,6 +71,7 @@ export default function Home() {
       <OtaBanner />
       <UpdateBanner />
       <TrendingShelf />
+      <ArtistShelf />
       <TasteShelf />
       {sections.slice(0, at).map((x, i) => <SectionCarousel key={`${x.title}-${i}`} section={x} />)}
       {/* directly below "Today's hits" / "Trending" */}
@@ -82,7 +83,6 @@ export default function Home() {
           <Text style={[s.sub, { paddingHorizontal: 16 }]}>まだ再生した曲がありません。曲を再生すると、ここに並びます。</Text>
         </View>
       )}
-      <ArtistShelf />
       {sections.slice(at).map((x, i) => <SectionCarousel key={`${x.title}-${at + i}`} section={x} />)}
       {error && !data && (
         <View style={{ alignItems: 'center', padding: 24 }}>
