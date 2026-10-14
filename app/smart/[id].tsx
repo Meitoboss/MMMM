@@ -10,7 +10,7 @@ import * as repo from '../../src/db/repo';
 import { usePlayer } from '../../src/state/player';
 import { Button, SongRow, s } from '../../src/ui/components';
 import { showActionSheet } from '../../src/ui/dialogs';
-import { MINI_HEIGHT, colors, useScheme } from '../../src/ui/theme';
+import { LIST_BOTTOM, colors, useScheme } from '../../src/ui/theme';
 
 const digits = (text: string): number => Number(text.split('').filter((c) => c >= '0' && c <= '9').join('') || '0');
 
@@ -278,7 +278,7 @@ export default function SmartPlaylistScreen() {
       keyExtractor={(x, i) => `${x.id}-${i}`}
       keyboardShouldPersistTaps="handled"
       ListHeaderComponent={header}
-      contentContainerStyle={{ paddingBottom: MINI_HEIGHT + 24 }}
+      contentContainerStyle={{ paddingBottom: LIST_BOTTOM }}
       renderItem={({ item, index }) => <SongRow song={item} onPress={() => void play(songs, index)} />}
     />
   );

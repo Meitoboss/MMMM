@@ -173,3 +173,5 @@ export function dynamicStyles<T extends Record<string, object>>(factory: (c: Pal
 
 export const TAB_HEIGHT = 56;
 export const MINI_HEIGHT = 64;
+/** the space at the bottom of a list: above the mini player, the tab bar and (on Android) the navigation bar */
+export const LIST_BOTTOM = MINI_HEIGHT + TAB_HEIGHT + 56;

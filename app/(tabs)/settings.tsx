@@ -14,7 +14,7 @@ import { FADE_OPTIONS } from '../../src/core/dj';
 import { type AudioQuality } from '../../src/core/config';
 import { type NormalizeMode } from '../../src/core/loudness';
 import { QUALITY_LABELS, qualitiesFor } from '../../src/core/streams/quality';
-import { MINI_HEIGHT, colors, useScheme } from '../../src/ui/theme';
+import { LIST_BOTTOM, colors, useScheme } from '../../src/ui/theme';
 import { Chips, Row, Section } from '../../src/ui/SettingsParts';
 import { BackupSection } from '../../src/ui/BackupSection';
 import { SongArchiveSection } from '../../src/ui/SongArchiveSection';
@@ -137,7 +137,7 @@ export default function Settings() {
           : `いまの版は ${APP_VERSION} です`;
 
   return (
-    <ScrollView contentContainerStyle={{ paddingTop: 4, paddingBottom: MINI_HEIGHT + 40 }}>
+    <ScrollView contentContainerStyle={{ paddingTop: 4, paddingBottom: LIST_BOTTOM + 16 }}>
       <View style={{ flexDirection: 'row', marginHorizontal: 16, marginTop: 8, padding: 4, borderRadius: 14, backgroundColor: colors.surface2 }}>
         {([['general', '一般'], ['theme', 'テーマ']] as const).map(([key, label]) => (
           <Pressable key={key} onPress={() => setTab(key)} style={{ flex: 1, alignItems: 'center', paddingVertical: 9, borderRadius: 11, backgroundColor: tab === key ? colors.surface : 'transparent' }}>

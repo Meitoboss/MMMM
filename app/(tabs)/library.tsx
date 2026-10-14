@@ -17,7 +17,7 @@ import { usePlayer } from '../../src/state/player';
 import { Button, Cover, ItemRow, SongRow, s } from '../../src/ui/components';
 import { promptText, showActionSheet } from '../../src/ui/dialogs';
 import { SortBar } from '../../src/ui/SortBar';
-import { MINI_HEIGHT, colors, useScheme } from '../../src/ui/theme';
+import { LIST_BOTTOM, colors, useScheme } from '../../src/ui/theme';
 
 type Tab = 'songs' | 'local' | 'offline' | 'liked' | 'tags' | 'playlists' | 'albums' | 'artists' | 'history' | 'stats';
 const TABS: { key: Tab; label: string }[] = [
@@ -166,7 +166,7 @@ export default function Library() {
   };
 
   const empty = (t: string) => <Text style={{ color: colors.sub, textAlign: 'center', marginTop: 40 }}>{t}</Text>;
-  const pad = { paddingBottom: MINI_HEIGHT + 24 };
+  const pad = { paddingBottom: LIST_BOTTOM };
 
   return (
     <View style={{ flex: 1 }}>

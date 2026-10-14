@@ -93,7 +93,7 @@ function SheetCard({ sheet, inline }: { sheet: SheetState; inline: boolean }) {
     <Pressable onPress={close} style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' }}>
       <Pressable
         onPress={() => undefined}
-        style={{ backgroundColor: colors.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingTop: 10, paddingBottom: inline ? insets.bottom + 16 : 28, borderWidth: 1, borderBottomWidth: 0, borderColor: colors.border }}
+        style={{ backgroundColor: colors.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingTop: 10, paddingBottom: insets.bottom + 20, borderWidth: 1, borderBottomWidth: 0, borderColor: colors.border }}
       >
         <View style={{ alignSelf: 'center', width: 40, height: 4, borderRadius: 2, backgroundColor: colors.border, marginBottom: 12 }} />
         {(sheet.title || sheet.message) && (
@@ -131,7 +131,7 @@ function SheetCard({ sheet, inline }: { sheet: SheetState; inline: boolean }) {
     </Pressable>
   );
   if (inline) return <View style={[StyleSheet.absoluteFill, { zIndex: 100, elevation: 100 }]}>{body}</View>;
-  // a window of its own: the navigation bar is NOT translucent here, so the card sits above it (it was cut off before)
+  // a window of its own: the card keeps clear of the navigation bar (its bottom padding comes from the insets)
   return (
     <Modal transparent animationType="slide" onRequestClose={close} statusBarTranslucent>
       {body}

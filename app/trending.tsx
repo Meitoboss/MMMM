@@ -9,7 +9,7 @@ import { usePlayer } from '../src/state/player';
 import { useSettings } from '../src/state/settings';
 import { useTrending } from '../src/state/trending';
 import { Button, Cover, ErrorView, s } from '../src/ui/components';
-import { MINI_HEIGHT, colors, useScheme } from '../src/ui/theme';
+import { LIST_BOTTOM, colors, useScheme } from '../src/ui/theme';
 
 /** The chart of a country (Apple Music), as songs of YouTube Music – play, shuffle, or keep it as a playlist. */
 export default function Trending() {
@@ -91,7 +91,7 @@ export default function Trending() {
       data={entries}
       keyExtractor={(e) => `${e.rank}-${e.title}`}
       ListHeaderComponent={header}
-      contentContainerStyle={{ paddingBottom: MINI_HEIGHT + 24 }}
+      contentContainerStyle={{ paddingBottom: LIST_BOTTOM }}
       ListFooterComponent={
         <Text style={[s.sub, { textAlign: 'center', padding: 16 }]}>ランキング: Apple Music（{countryLabel(country)}）。再生は、YouTube Music の曲で行います。</Text>
       }

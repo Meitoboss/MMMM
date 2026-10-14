@@ -10,7 +10,7 @@ import * as repo from '../../src/db/repo';
 import { useOffline } from '../../src/state/offline';
 import { ErrorView, ItemRow } from '../../src/ui/components';
 import { useDb } from '../../src/ui/hooks';
-import { MINI_HEIGHT, colors, dynamicStyles, useScheme } from '../../src/ui/theme';
+import { LIST_BOTTOM, colors, dynamicStyles, useScheme } from '../../src/ui/theme';
 
 const FILTERS: { label: string; value?: SearchFilter }[] = [
   { label: 'すべて' },
@@ -205,7 +205,7 @@ export default function Search() {
         data={offItems}
         keyExtractor={(it, i) => `${it.id}-${i}`}
         renderItem={({ item }) => <ItemRow item={item} context={offItems} />}
-        contentContainerStyle={{ paddingBottom: MINI_HEIGHT + 24 }}
+        contentContainerStyle={{ paddingBottom: LIST_BOTTOM }}
         keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" onTouchEnd={dismiss}
         ListHeaderComponent={<Text style={[st.count]}>{offItems.length}曲</Text>}
         ListEmptyComponent={
@@ -269,7 +269,7 @@ export default function Search() {
               <ItemRow item={r.item} context={songs} />
             )
           }
-          contentContainerStyle={{ paddingBottom: MINI_HEIGHT + 24 }}
+          contentContainerStyle={{ paddingBottom: LIST_BOTTOM }}
           ListHeaderComponent={progress}
           ListFooterComponent={loading && !items.length ? <ActivityIndicator color={colors.accentText} style={{ margin: 16 }} /> : null}
           ListEmptyComponent={noResults ? <Text style={{ color: colors.sub, textAlign: 'center', marginTop: 40 }}>見つかりませんでした</Text> : null}
@@ -287,7 +287,7 @@ export default function Search() {
           renderItem={({ item }) => <ItemRow item={item} context={songs} />}
           onEndReached={more}
           onEndReachedThreshold={0.6}
-          contentContainerStyle={{ paddingBottom: MINI_HEIGHT + 24 }}
+          contentContainerStyle={{ paddingBottom: LIST_BOTTOM }}
           ListHeaderComponent={progress}
           ListFooterComponent={loading && !items.length ? <ActivityIndicator color={colors.accentText} style={{ margin: 16 }} /> : null}
           ListEmptyComponent={noResults ? <Text style={{ color: colors.sub, textAlign: 'center', marginTop: 40 }}>見つかりませんでした</Text> : null}
