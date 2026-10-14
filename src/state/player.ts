@@ -71,6 +71,9 @@ interface PlayerState {
   scaleLoop: (factor: number) => void;
   /** a playback speed for THIS song only (tempo matching); null = the usual speed again. A new song always starts at the usual speed. */
   tempo: number | null;
+  /** the full player screen is open (the mini bar is hidden then) */
+  playerScreenOpen: boolean;
+  setPlayerScreenOpen: (open: boolean) => void;
   setTempo: (rate: number | null) => Promise<void>;
   /** the exact position now, in seconds (the position on screen is only refreshed twice a second) */
   getPosition: () => Promise<number>;
@@ -297,6 +300,8 @@ export const usePlayer = create<PlayerState>((set, get) => {
     loop: null,
     trim: null,
     tempo: null,
+    playerScreenOpen: false,
+    setPlayerScreenOpen: (open) => set({ playerScreenOpen: open }),
     debug: [],
     log: (line) => {
       const t = new Date();

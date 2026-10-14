@@ -9,16 +9,19 @@ import { usePlayer } from '../state/player';
 import { Cover } from './components';
 import { MINI_HEIGHT, TAB_HEIGHT, colors, dynamicStyles, useScheme } from './theme';
 
+/** screens that cover the whole screen (or have their own bottom buttons): the mini bar is not shown on them */
+const FULL_SCREENS = ['player', 'archive-pick', 'add-to-playlist', 'song-tags'];
+
 export function MiniPlayer() {
   const router = useRouter();
   const segments = useSegments();
   const insets = useSafeAreaInsets();
-  const { current, status, togglePlay, next, needsLoad, resumePosition } = usePlayer();
+  const { current, status, togglePlay, next, needsLoad, resumePosition, playerScreenOpen } = usePlayer();
   const { position, duration } = useProgress(1000);
   useScheme();
   const liked = useIsLiked(current?.id);
 
-  if (!current || segments[0] === 'player') return null;
+  if (!current || playerScreenOpen || FULL_SCREENS.includes(String(segments[0]))) return null;
   const inTabs = segments[0] === '(tabs)';
   const bottom = insets.bottom + (inTabs ? TAB_HEIGHT : 0);
   const pct = needsLoad
