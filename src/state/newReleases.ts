@@ -2,17 +2,27 @@ import Storage from 'expo-sqlite/kv-store';
 
 import { yt } from '../core';
 import { RELEASE_ARTISTS, RELEASES_PER_ARTIST } from '../core/homeMemory';
-import { isFresh } from '../core/taste';
+import { isLocalId } from '../core/localMeta';
+import { isFresh, topArtists } from '../core/taste';
 import type { AlbumItem } from '../core/types';
 import { openDb } from '../db/expo';
 import * as repo from '../db/repo';
+import { getTaste } from './taste';
 
-const KEY = 'home.newReleases.v1';
-const MAX = 12;
+const KEY = 'home.newReleases.v2';
 /** the sections of an artist's page that hold albums and singles */
 const RELEASE_SECTION = /アルバム|シングル|Album|Single|EP/i;
 
-type Saved = { at: number; albums: AlbumItem[] };
+export interface ReleaseGroups {
+  /** the artists you bookmarked */
+  bookmarked: AlbumItem[];
+  /** artists of the songs you play most */
+  listened: AlbumItem[];
+  /** the artists recommended from your taste */
+  recommended: AlbumItem[];
+}
+
+type Saved = ReleaseGroups & { at: number };
 
 function readSaved(): Saved | null {
   try {
@@ -31,32 +41,47 @@ function writeSaved(v: Saved): void {
   }
 }
 
-/** albums and singles of the bookmarked artists (their own pages), newest sections first as YouTube lists them; kept for a day */
-export async function getNewReleases(force = false): Promise<AlbumItem[]> {
-  const saved = readSaved();
-  if (!force && saved && isFresh(saved.at, Date.now())) return saved.albums;
-  try {
-    const db = await openDb();
-    const artists = (await repo.bookmarkedArtists(db)).slice(0, RELEASE_ARTISTS);
-    const pages = await Promise.allSettled(artists.map((a) => yt.artist(a.id)));
-    const seen = new Set<string>();
-    const albums: AlbumItem[] = [];
-    for (const page of pages) {
-      if (page.status !== 'fulfilled') continue;
-      const found = page.value.sections
+/** the albums and singles of these artists' own pages (a few per artist) */
+async function releasesOf(artists: { id: string }[]): Promise<AlbumItem[]> {
+  const pages = await Promise.allSettled(artists.map((a) => yt.artist(a.id)));
+  const out: AlbumItem[] = [];
+  for (const page of pages) {
+    if (page.status !== 'fulfilled') continue;
+    out.push(
+      ...page.value.sections
         .filter((sec) => RELEASE_SECTION.test(sec.title))
         .flatMap((sec) => sec.items.filter((i): i is AlbumItem => i.kind === 'album'))
-        .slice(0, RELEASES_PER_ARTIST);
-      for (const a of found) {
-        if (seen.has(a.id)) continue;
-        seen.add(a.id);
-        albums.push(a);
-      }
-    }
-    const result = albums.slice(0, MAX);
-    writeSaved({ at: Date.now(), albums: result });
-    return result;
+        .slice(0, RELEASES_PER_ARTIST),
+    );
+  }
+  return out;
+}
+
+/**
+ * The 新着 tab: new albums and singles of the artists around your bookmarks. Each group is kept for a day, and an artist
+ * appears in one group only. When the network fails, the last saved groups are kept.
+ */
+export async function getReleaseGroups(force = false): Promise<ReleaseGroups> {
+  const saved = readSaved();
+  const kept: ReleaseGroups = { bookmarked: saved?.bookmarked ?? [], listened: saved?.listened ?? [], recommended: saved?.recommended ?? [] };
+  if (!force && saved && isFresh(saved.at, Date.now())) return kept;
+  try {
+    const db = await openDb();
+    const bookmarked = (await repo.bookmarkedArtists(db)).slice(0, RELEASE_ARTISTS);
+    const taken = new Set(bookmarked.map((a) => a.id));
+    const top = (await repo.topSongs(db, 'all', 30)).map((t) => t.song).filter((s) => !isLocalId(s.id));
+    const listened = topArtists(top).filter((a) => !taken.has(a.id)).slice(0, RELEASE_ARTISTS);
+    listened.forEach((a) => taken.add(a.id));
+    const taste = (await getTaste()).artists.filter((a) => !taken.has(a.id)).slice(0, RELEASE_ARTISTS);
+
+    const mix: ReleaseGroups = {
+      bookmarked: await releasesOf(bookmarked),
+      listened: await releasesOf(listened),
+      recommended: await releasesOf(taste),
+    };
+    writeSaved({ at: Date.now(), ...mix });
+    return mix;
   } catch {
-    return saved?.albums ?? [];
+    return kept;
   }
 }

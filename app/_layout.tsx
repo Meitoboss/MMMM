@@ -65,6 +65,7 @@ export default function RootLayout() {
           <Stack.Screen name="archive-pick" options={{ presentation: 'modal', title: '入れる曲を選ぶ' }} />
           <Stack.Screen name="import-playlist" options={{ title: 'プレイリストを取り込む' }} />
           <Stack.Screen name="trending" options={{ title: '流行' }} />
+          <Stack.Screen name="settings" options={{ title: '設定' }} />
           <Stack.Screen name="song-tags" options={{ presentation: 'modal', title: 'タグ' }} />
           <Stack.Screen name="smart/[id]" options={{ title: 'スマートプレイリスト' }} />
           <Stack.Screen name="album/[id]" options={{ title: '' }} />

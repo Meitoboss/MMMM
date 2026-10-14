@@ -3,10 +3,9 @@ import { useCallback, useEffect, useState } from 'react';
 import { Text, View } from 'react-native';
 
 import { FORGOTTEN_AFTER_MS, PART_OF_DAY_HOURS, PART_OF_DAY_LABEL, partOfDay, sameDayBefore } from '../core/homeMemory';
-import type { AlbumItem, SongItem } from '../core/types';
+import type { SongItem } from '../core/types';
 import { openDb } from '../db/expo';
 import * as repo from '../db/repo';
-import { getNewReleases } from '../state/newReleases';
 import { SectionCarousel, s } from './components';
 import { Chips } from './SettingsParts';
 import { colors, useScheme } from './theme';
@@ -97,19 +96,4 @@ export function TimeMoodShelf() {
       )}
     </View>
   );
-}
-
-/** Home: albums and singles of the artists you bookmarked ("新しいアルバム・シングル"). Hidden when there are none. */
-export function NewReleasesShelf() {
-  useScheme();
-  const [albums, setAlbums] = useState<AlbumItem[]>([]);
-  useEffect(() => {
-    let alive = true;
-    void getNewReleases().then((list) => alive && setAlbums(list));
-    return () => {
-      alive = false;
-    };
-  }, []);
-  if (!albums.length) return null;
-  return <SectionCarousel section={{ title: '新しいアルバム・シングル', items: albums }} />;
 }

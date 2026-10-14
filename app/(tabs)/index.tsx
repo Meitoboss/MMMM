@@ -1,5 +1,4 @@
 import { useFocusEffect } from 'expo-router';
-import { Image } from 'expo-image';
 import { useCallback, useMemo, useState } from 'react';
 import { RefreshControl, ScrollView, Text, View } from 'react-native';
 
@@ -10,26 +9,13 @@ import { openDb } from '../../src/db/expo';
 import * as repo from '../../src/db/repo';
 import { Button, ErrorView, Loading, SectionCarousel, s } from '../../src/ui/components';
 import { ArtistShelf } from '../../src/ui/ArtistShelf';
-import { ForgottenShelf, NewReleasesShelf, OnThisDayShelf, TimeMoodShelf } from '../../src/ui/HomeShelves';
+import { ForgottenShelf, OnThisDayShelf, TimeMoodShelf } from '../../src/ui/HomeShelves';
 import { TasteShelf } from '../../src/ui/TasteShelf';
 import { TrendingShelf } from '../../src/ui/TrendingShelf';
 import { OtaBanner } from '../../src/ui/OtaBanner';
 import { UpdateBanner } from '../../src/ui/UpdateBanner';
 import { useAsync } from '../../src/ui/hooks';
 import { LIST_BOTTOM, colors, useScheme } from '../../src/ui/theme';
-
-/** "Music space" wordmark with the three-U mark, like the sidebar of the web version */
-function BrandHeader() {
-  useScheme();
-  return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingBottom: 16 }}>
-      <Image source={require('../../assets/logo-mark.png')} style={{ width: 30, height: 32 }} contentFit="contain" />
-      <Text style={{ color: colors.text, fontSize: 24, fontWeight: '900', letterSpacing: -0.5 }}>
-        Music <Text style={{ fontWeight: '300' }}>space</Text>
-      </Text>
-    </View>
-  );
-}
 
 export default function Home() {
   useScheme();
@@ -68,12 +54,10 @@ export default function Home() {
       contentContainerStyle={{ paddingTop: 12, paddingBottom: LIST_BOTTOM }}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accentText} />}
     >
-      <BrandHeader />
       <OtaBanner />
       <UpdateBanner />
       <TrendingShelf />
       <ArtistShelf />
-      <NewReleasesShelf />
       <TasteShelf />
       <OnThisDayShelf />
       <ForgottenShelf />
