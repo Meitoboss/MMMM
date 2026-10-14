@@ -9,38 +9,29 @@ import { openDb } from '../db/expo';
 import * as repo from '../db/repo';
 import { getTaste } from './taste';
 
-const KEY = 'home.newReleases.v3';
+const KEY = 'home.newReleases.v4';
 /** the sections of an artist's page that hold albums and singles */
 const RELEASE_SECTION = /アルバム|シングル|Album|Single|EP/i;
-/** new songs: the songs of the newest album of each artist, this many albums and songs at most */
-const SONG_ALBUMS = 6;
-const SONGS_PER_ALBUM = 6;
-const SONGS_MAX = 24;
+/** songs taken from the newest album of each artist */
+const SONGS_PER_ARTIST = 6;
+
+/** the new things of one artist: the songs of its newest album, then its albums and singles */
+export interface ArtistReleases {
+  id: string;
+  name: string;
+  items: (SongItem | AlbumItem)[];
+}
 
 export interface ReleaseGroups {
-  /** albums and singles of the artists you bookmarked */
-  bookmarked: AlbumItem[];
-  /** albums and singles of the artists you listen to most and of the recommended artists */
-  others: AlbumItem[];
-  /** songs of the newest albums of the bookmarked artists */
-  bookmarkedSongs: SongItem[];
-  /** songs of the newest albums of the other artists */
-  otherSongs: SongItem[];
+  /** the artists you bookmarked, in the order you bookmarked them */
+  bookmarked: ArtistReleases[];
+  /** the artists you listen to most and the recommended ones */
+  others: ArtistReleases[];
 }
 
-const EMPTY: ReleaseGroups = { bookmarked: [], others: [], bookmarkedSongs: [], otherSongs: [] };
+const EMPTY: ReleaseGroups = { bookmarked: [], others: [] };
 
 type Saved = ReleaseGroups & { at: number };
-
-export function cachedReleaseGroups(): ReleaseGroups {
-  try {
-    const raw = Storage.getItemSync(KEY);
-    const saved = raw ? (JSON.parse(raw) as Saved) : null;
-    return saved ? { bookmarked: saved.bookmarked, others: saved.others, bookmarkedSongs: saved.bookmarkedSongs, otherSongs: saved.otherSongs } : EMPTY;
-  } catch {
-    return EMPTY;
-  }
-}
 
 function readSaved(): Saved | null {
   try {
@@ -59,76 +50,56 @@ function writeSaved(v: Saved): void {
   }
 }
 
-/** the albums and singles of these artists' own pages (a few per artist) */
-async function releasesOf(artists: { id: string }[]): Promise<AlbumItem[]> {
-  const pages = await Promise.allSettled(artists.map((a) => yt.artist(a.id)));
-  const out: AlbumItem[] = [];
-  for (const page of pages) {
-    if (page.status !== 'fulfilled') continue;
-    out.push(
-      ...page.value.sections
-        .filter((sec) => RELEASE_SECTION.test(sec.title))
-        .flatMap((sec) => sec.items.filter((i): i is AlbumItem => i.kind === 'album'))
-        .slice(0, RELEASES_PER_ARTIST),
-    );
-  }
-  return out;
+/** the saved groups (empty when nothing has been saved yet) */
+export function cachedReleaseGroups(): ReleaseGroups {
+  const saved = readSaved();
+  return saved ? { bookmarked: saved.bookmarked, others: saved.others } : EMPTY;
 }
 
-/** the first (newest, as YouTube lists them) album of each artist, at most `max` */
-function newestPerArtist(albums: AlbumItem[], max: number): AlbumItem[] {
-  const seen = new Set<string>();
-  const out: AlbumItem[] = [];
-  for (const a of albums) {
-    const artist = a.artists[0]?.id ?? a.id;
-    if (seen.has(artist)) continue;
-    seen.add(artist);
-    out.push(a);
-    if (out.length >= max) break;
-  }
-  return out;
-}
-
-/** the songs of these albums, each song once */
-async function songsOf(albums: AlbumItem[]): Promise<SongItem[]> {
-  const pages = await Promise.allSettled(albums.map((a) => yt.album(a.id)));
-  const seen = new Set<string>();
-  const out: SongItem[] = [];
-  for (const page of pages) {
-    if (page.status !== 'fulfilled') continue;
-    for (const song of page.value.songs.slice(0, SONGS_PER_ALBUM)) {
-      if (seen.has(song.id)) continue;
-      seen.add(song.id);
-      out.push(song);
+/** one artist's page: its albums and singles, and the songs of the newest one */
+async function releasesForArtist(a: { id: string; name: string }): Promise<ArtistReleases> {
+  const page = await yt.artist(a.id);
+  const albums = page.sections
+    .filter((sec) => RELEASE_SECTION.test(sec.title))
+    .flatMap((sec) => sec.items.filter((i): i is AlbumItem => i.kind === 'album'))
+    .slice(0, RELEASES_PER_ARTIST);
+  let songs: SongItem[] = [];
+  const newest = albums[0];
+  if (newest) {
+    try {
+      songs = (await yt.album(newest.id)).songs.slice(0, SONGS_PER_ARTIST);
+    } catch {
+      /* the album's songs are optional */
     }
   }
-  return out.slice(0, SONGS_MAX);
+  return { id: a.id, name: a.name, items: [...songs, ...albums] };
+}
+
+async function releasesFor(artists: { id: string; name: string }[]): Promise<ArtistReleases[]> {
+  const results = await Promise.allSettled(artists.map(releasesForArtist));
+  return results.flatMap((r) => (r.status === 'fulfilled' && r.value.items.length ? [r.value] : []));
 }
 
 /**
- * The 新着 tab: new albums, singles and songs of the artists around your bookmarks. The bookmarked artists come first.
- * Kept for a day; when the network fails, the last saved groups are kept.
+ * The 新着 tab, one shelf per artist: the artists you bookmarked first, then the ones you listen to most and the recommended
+ * ones. Kept for a day; when the network fails, the last saved groups are kept.
  */
 export async function getReleaseGroups(force = false): Promise<ReleaseGroups> {
   const saved = readSaved();
   if (!force && saved && isFresh(saved.at, Date.now())) return cachedReleaseGroups();
   try {
     const db = await openDb();
-    const bookmarked = (await repo.bookmarkedArtists(db)).slice(0, RELEASE_ARTISTS);
+    const bookmarked = (await repo.bookmarkedArtists(db)).slice(0, RELEASE_ARTISTS).map((a) => ({ id: a.id, name: a.name }));
     const taken = new Set(bookmarked.map((a) => a.id));
     const top = (await repo.topSongs(db, 'all', 30)).map((t) => t.song).filter((s) => !isLocalId(s.id));
     const listened = topArtists(top).filter((a) => !taken.has(a.id)).slice(0, RELEASE_ARTISTS);
     listened.forEach((a) => taken.add(a.id));
-    const taste = (await getTaste()).artists.filter((a) => !taken.has(a.id)).slice(0, RELEASE_ARTISTS);
+    const taste = (await getTaste()).artists.filter((a) => !taken.has(a.id)).slice(0, RELEASE_ARTISTS).map((a) => ({ id: a.id, name: a.name }));
 
-    const bookmarkedAlbums = await releasesOf(bookmarked);
-    const otherAlbums = [...(await releasesOf(listened)), ...(await releasesOf(taste))];
     const mix: Saved = {
       at: Date.now(),
-      bookmarked: bookmarkedAlbums,
-      others: otherAlbums,
-      bookmarkedSongs: await songsOf(newestPerArtist(bookmarkedAlbums, SONG_ALBUMS)),
-      otherSongs: await songsOf(newestPerArtist(otherAlbums, SONG_ALBUMS)),
+      bookmarked: await releasesFor(bookmarked),
+      others: await releasesFor([...listened, ...taste]),
     };
     writeSaved(mix);
     return cachedReleaseGroups();

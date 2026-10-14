@@ -2,11 +2,11 @@ import { useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { RefreshControl, ScrollView, Text, View } from 'react-native';
 
-import { getReleaseGroups, cachedReleaseGroups, type ReleaseGroups } from '../../src/state/newReleases';
+import { cachedReleaseGroups, getReleaseGroups, type ReleaseGroups } from '../../src/state/newReleases';
 import { SectionCarousel } from '../../src/ui/components';
 import { LIST_BOTTOM, colors, useScheme } from '../../src/ui/theme';
 
-/** 新着: the new songs and albums of the artists you bookmarked come first, then the other artists you may like */
+/** 新着: one shelf per artist – the artists you bookmarked first, then the ones you may like */
 export default function NewTab() {
   useScheme();
   const [groups, setGroups] = useState<ReleaseGroups>(cachedReleaseGroups);
@@ -26,16 +26,14 @@ export default function NewTab() {
   );
 
   const sections = [
-    { title: 'ブックマークしたアーティストの新曲', items: groups.bookmarkedSongs },
-    { title: 'ブックマークしたアーティストの新作', items: groups.bookmarked },
-    { title: 'そのほかの新曲', items: groups.otherSongs },
-    { title: 'そのほかのアーティストの新作', items: groups.others },
-  ].filter((x) => x.items.length > 0);
+    ...groups.bookmarked.map((a) => ({ title: a.name, items: a.items })),
+    ...groups.others.map((a) => ({ title: `${a.name}（おすすめ）`, items: a.items })),
+  ];
 
   return (
     <ScrollView contentContainerStyle={{ paddingTop: 12, paddingBottom: LIST_BOTTOM }} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor={colors.accentText} />}>
-      {sections.map((x) => (
-        <SectionCarousel key={x.title} section={x} />
+      {sections.map((x, i) => (
+        <SectionCarousel key={`${x.title}-${i}`} section={x} />
       ))}
       {!sections.length && (
         <View style={{ padding: 24, gap: 6 }}>
