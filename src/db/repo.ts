@@ -1,5 +1,6 @@
 import { type BpmInfo, validBpm } from '../core/beat';
 import { type HotCue, type Trim, isCueSlot, sanitizeTrim } from '../core/dj';
+import { parseDuration } from '../core/innertube/helpers';
 import { LOCAL_ARTIST } from '../core/localMeta';
 import { buildSmartQuery, likeContains, likePrefix, sanitizeRules, type SmartRules } from '../core/smart';
 import type { AlbumItem, ArtistItem, Lyrics, SongItem } from '../core/types';
@@ -35,6 +36,8 @@ export function songFromRow(r: SongRow): SongItem {
     title: r.title.replace(/^e:/, ''),
     artists: r.artistsText ? r.artistsText.split(', ').map((name) => ({ name })) : [],
     durationText: r.durationText ?? undefined,
+    // the length in seconds too: the player needs it to tell a file that claims double its length (saved songs, library)
+    durationSec: parseDuration(r.durationText ?? undefined),
     thumbnail: r.thumbnailUrl ?? undefined,
     explicit: r.title.startsWith('e:'),
   };
