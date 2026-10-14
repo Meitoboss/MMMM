@@ -73,6 +73,11 @@ export default function PlayerScreen() {
   const { position, duration } = useProgress(500);
   const [view, setView] = useState<View_>('cover');
   useEffect(() => { listTop.current = 0; }, [view]); // a tab starts at its top
+  // while this screen is open the mini bar stays hidden (it would sit on the controls)
+  useEffect(() => {
+    usePlayer.getState().setPlayerScreenOpen(true);
+    return () => usePlayer.getState().setPlayerScreenOpen(false);
+  }, []);
   const [drag, setDrag] = useState<Drag | null>(null); // while a finger is on the seek bar
   const [hold, setHold] = useState<number | null>(null); // the chosen position, until the player has caught up
   const [lyrics, setLyrics] = useState<Lyrics | null | 'loading'>(null);
