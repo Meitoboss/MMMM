@@ -2,18 +2,14 @@ import { useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { RefreshControl, ScrollView, Text, View } from 'react-native';
 
-import type { AlbumItem } from '../../src/core/types';
-import { LIST_BOTTOM } from '../../src/ui/theme';
-import { SectionCarousel, s } from '../../src/ui/components';
-import { colors, useScheme } from '../../src/ui/theme';
-import { getReleaseGroups, type ReleaseGroups } from '../../src/state/newReleases';
+import { getReleaseGroups, cachedReleaseGroups, type ReleaseGroups } from '../../src/state/newReleases';
+import { SectionCarousel } from '../../src/ui/components';
+import { LIST_BOTTOM, colors, useScheme } from '../../src/ui/theme';
 
-const EMPTY: ReleaseGroups = { bookmarked: [], listened: [], recommended: [] };
-
-/** 新着: the new albums and singles of the artists around the ones you bookmarked */
+/** 新着: the new songs and albums of the artists you bookmarked come first, then the other artists you may like */
 export default function NewTab() {
   useScheme();
-  const [groups, setGroups] = useState<ReleaseGroups>(EMPTY);
+  const [groups, setGroups] = useState<ReleaseGroups>(cachedReleaseGroups);
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback((force = false) => {
@@ -29,21 +25,22 @@ export default function NewTab() {
     }, [load]),
   );
 
-  const sections: { title: string; items: AlbumItem[] }[] = [
+  const sections = [
+    { title: 'ブックマークしたアーティストの新曲', items: groups.bookmarkedSongs },
     { title: 'ブックマークしたアーティストの新作', items: groups.bookmarked },
-    { title: 'よく聴くアーティストの新作', items: groups.listened },
-    { title: 'おすすめのアーティストの新作', items: groups.recommended },
+    { title: 'そのほかの新曲', items: groups.otherSongs },
+    { title: 'そのほかのアーティストの新作', items: groups.others },
   ].filter((x) => x.items.length > 0);
 
   return (
     <ScrollView contentContainerStyle={{ paddingTop: 12, paddingBottom: LIST_BOTTOM }} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor={colors.accentText} />}>
       {sections.map((x) => (
-        <SectionCarousel key={x.title} section={{ title: x.title, items: x.items }} />
+        <SectionCarousel key={x.title} section={x} />
       ))}
       {!sections.length && (
         <View style={{ padding: 24, gap: 6 }}>
           <Text style={{ color: colors.text, fontSize: 18, fontWeight: '700' }}>まだ新作がありません</Text>
-          <Text style={s.sub}>アーティストをブックマークすると、その人の新しいアルバムやシングルが、ここに並びます。</Text>
+          <Text style={{ color: colors.sub, fontSize: 13 }}>アーティストをブックマークすると、その人の新しい曲やアルバムが、ここに並びます。</Text>
         </View>
       )}
     </ScrollView>
