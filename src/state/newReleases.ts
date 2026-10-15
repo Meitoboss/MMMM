@@ -9,11 +9,13 @@ import { openDb } from '../db/expo';
 import * as repo from '../db/repo';
 import { getTaste } from './taste';
 
-const KEY = 'home.newReleases.v4';
+const KEY = 'home.newReleases.v5';
 /** the sections of an artist's page that hold albums and singles */
 const RELEASE_SECTION = /アルバム|シングル|Album|Single|EP/i;
 /** songs taken from the newest album of each artist */
 const SONGS_PER_ARTIST = 6;
+/** how many artists that are not bookmarked get a shelf on 新着 */
+const OTHER_ARTISTS = 12;
 
 /** the new things of one artist: the songs of its newest album, then its albums and singles */
 export interface ArtistReleases {
@@ -91,15 +93,17 @@ export async function getReleaseGroups(force = false): Promise<ReleaseGroups> {
     const db = await openDb();
     const bookmarked = (await repo.bookmarkedArtists(db)).slice(0, RELEASE_ARTISTS).map((a) => ({ id: a.id, name: a.name }));
     const taken = new Set(bookmarked.map((a) => a.id));
+    // the artists you listen to and like (not only the bookmarked ones), then the recommended ones
     const top = (await repo.topSongs(db, 'all', 30)).map((t) => t.song).filter((s) => !isLocalId(s.id));
-    const listened = topArtists(top).filter((a) => !taken.has(a.id)).slice(0, RELEASE_ARTISTS);
+    const liked = (await repo.libraryList(db, 'liked', 'title')).slice(0, 60);
+    const listened = topArtists([...top, ...liked]).filter((a) => !taken.has(a.id)).slice(0, OTHER_ARTISTS);
     listened.forEach((a) => taken.add(a.id));
-    const taste = (await getTaste()).artists.filter((a) => !taken.has(a.id)).slice(0, RELEASE_ARTISTS).map((a) => ({ id: a.id, name: a.name }));
+    const taste = (await getTaste()).artists.filter((a) => !taken.has(a.id)).map((a) => ({ id: a.id, name: a.name }));
 
     const mix: Saved = {
       at: Date.now(),
       bookmarked: await releasesFor(bookmarked),
-      others: await releasesFor([...listened, ...taste]),
+      others: await releasesFor([...listened, ...taste].slice(0, OTHER_ARTISTS)),
     };
     writeSaved(mix);
     return cachedReleaseGroups();
