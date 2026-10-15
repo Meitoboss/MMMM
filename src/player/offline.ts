@@ -29,6 +29,19 @@ export async function ensureOfflineDir(): Promise<void> {
 }
 
 const MIN_BYTES = 20_000; // anything smaller is an error page, not a song
+/** no bytes for this long → the download is given up. The message carries "request timed out", so the iPhone fallback is tried too */
+const STALL_MS = 30_000;
+const STALL_MESSAGE = 'request timed out（データが届きません）';
+/** a stream lookup that takes longer than this is given up, so the queue moves on */
+const RESOLVE_MS = 60_000;
+
+function withTimeout<T>(p: Promise<T>, ms: number, message: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const late = new Promise<T>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(message)), ms);
+  });
+  return Promise.race([p, late]).finally(() => clearTimeout(timer));
+}
 
 /**
  * iPhone: expo-file-system downloads in a BACKGROUND session by default (the system's transfer service does it for the app). That
@@ -83,7 +96,9 @@ async function downloadOnce(
   if (src.userAgent) headers['User-Agent'] = src.userAgent;
 
   const options: FileSystem.DownloadOptions = kind === 'foreground' && Platform.OS === 'ios' ? { headers, sessionType: FileSystem.FileSystemSessionType.FOREGROUND } : { headers };
+  let lastBytes = Date.now();
   const dl = FileSystem.createDownloadResumable(src.url, tmp, options, (p) => {
+    lastBytes = Date.now();
     if (isCancelled()) {
       void dl.pauseAsync().catch(() => undefined);
       return;
@@ -91,12 +106,30 @@ async function downloadOnce(
     if (p.totalBytesExpectedToWrite > 0) onProgress(p.totalBytesWritten / p.totalBytesExpectedToWrite);
   });
 
+  // a download that gets no bytes for a while is given up (it would otherwise stay at 0% forever and block the queue);
+  // a cancel is also acted on here, since without bytes the progress callback – where the cancel used to be checked – never runs
+  let stalled = false;
+  const watch = setInterval(() => {
+    const quiet = Date.now() - lastBytes > STALL_MS;
+    if (quiet || isCancelled()) {
+      stalled = quiet && !isCancelled();
+      void dl.cancelAsync().catch(() => undefined);
+    }
+  }, 1000);
+
   let res: Awaited<ReturnType<typeof dl.downloadAsync>>;
   try {
     res = await dl.downloadAsync();
   } catch (e) {
     await FileSystem.deleteAsync(tmp, { idempotent: true });
+    if (stalled) throw new Error(STALL_MESSAGE);
     throw e;
+  } finally {
+    clearInterval(watch);
+  }
+  if (stalled) {
+    await FileSystem.deleteAsync(tmp, { idempotent: true });
+    throw new Error(STALL_MESSAGE);
   }
   if (!res || (res.status !== 200 && res.status !== 206)) {
     await FileSystem.deleteAsync(tmp, { idempotent: true });
@@ -115,7 +148,7 @@ async function downloadOnce(
 }
 
 export const offlineDeps: DownloadDeps = {
-  resolve: (videoId) => resolveAudio(videoId, resolverOptions()),
+  resolve: (videoId) => withTimeout(resolveAudio(videoId, resolverOptions()), RESOLVE_MS, '音源の取得が時間切れです（相手が答えません）'),
   download: downloadFile,
   remove: (fileName) => FileSystem.deleteAsync(`${offlineDir()}${fileName}`, { idempotent: true }),
 };
