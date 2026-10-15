@@ -3,6 +3,7 @@ import { Tabs } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppBarTitle, SettingsButton } from '../../src/ui/AppBar';
+import { MoodTabButton } from '../../src/ui/MoodTabButton';
 import { TAB_HEIGHT, colors, useScheme } from '../../src/ui/theme';
 
 const icon = (name: keyof typeof Ionicons.glyphMap, outline: keyof typeof Ionicons.glyphMap) =>
@@ -33,6 +34,7 @@ export default function TabsLayout() {
     >
       <Tabs.Screen name="index" options={{ title: 'ホーム', tabBarIcon: icon('home', 'home-outline') }} />
       <Tabs.Screen name="search" options={{ title: '検索', tabBarIcon: icon('search', 'search-outline') }} />
+      <Tabs.Screen name="mood" options={{ title: '気分', tabBarIcon: icon('disc', 'disc-outline'), tabBarButton: (props) => <MoodTabButton {...props} /> }} />
       <Tabs.Screen name="new" options={{ title: '新着', tabBarIcon: icon('sparkles', 'sparkles-outline') }} />
       <Tabs.Screen name="library" options={{ title: 'ライブラリ', tabBarIcon: icon('library', 'library-outline') }} />
     </Tabs>
