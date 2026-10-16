@@ -3,9 +3,10 @@ import { type ToneLevel, toneVolume } from '../core/focus';
 
 /**
  * The sine tone beside a 集中 sound. It is made live on the phone (modules/binaural-tone), so it has no end.
- * `beatHz` is 0: the same tone in both ears, as before.
+ * The left ear hears `requested` Hz and the right ear `requested + BEAT_HZ` Hz, so the two make a slow beat (binaural).
+ * This needs headphones.
  */
-const BEAT_HZ = 0;
+const BEAT_HZ = 20;
 
 /** plays the tone at `requested` Hz; a new frequency or loudness takes effect at once */
 export function playTone(requested: number, level: ToneLevel): Promise<void> {
