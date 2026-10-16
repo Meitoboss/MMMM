@@ -6,7 +6,7 @@ import { openDb } from '../../src/db/expo';
 import * as repo from '../../src/db/repo';
 import { type MoodOption, TIME_OPTION, matchTagIds, nowHours, timeLabel } from '../../src/core/mood';
 import type { SongItem } from '../../src/core/types';
-import { focusSongs, isFocusId } from '../../src/player/focus';
+import { focusHzOfSong, focusSongs, isFocusId } from '../../src/player/focus';
 import { pauseTone, playTone } from '../../src/player/tone';
 import { usePlayer } from '../../src/state/player';
 import { useSettings } from '../../src/state/settings';
@@ -48,11 +48,15 @@ export default function MoodTab() {
     let last = '';
     return usePlayer.subscribe((st) => {
       const focus = !!st.current && isFocusId(st.current.id);
-      const key = `${focus}|${st.status}`;
+      const key = `${focus}|${st.status}|${st.current?.id ?? ''}`;
       if (key === last) return;
       last = key;
-      if (focus && st.status === 'playing') void playTone(useSettings.getState().focusHz);
-      else if (!focus || st.status === 'paused' || st.status === 'idle' || st.status === 'error') pauseTone();
+      const { focusToneLevel } = useSettings.getState();
+      if (focus && st.status === 'playing' && st.current && focusToneLevel !== 'off') {
+        void playTone(focusHzOfSong(st.current.id) ?? 432, focusToneLevel);
+      } else if (!focus || st.status === 'paused' || st.status === 'idle' || st.status === 'error' || focusToneLevel === 'off') {
+        pauseTone();
+      }
     });
   }, []);
 

@@ -1,21 +1,46 @@
 /**
- * The 集中 sounds on the server (/audio/<name>.flac). Pure logic, so it can be tested.
- * The list is written here for now; later it can come from the server's list of sounds.
+ * The 集中 sounds on the server (/audio/<name>.flac), and the sine tone that plays under each one.
+ * Pure logic, so it can be tested.
+ *
+ * - The height (Hz) of the tone is fixed per sound (edit `hz` below). The person cannot change it in the app.
+ * - The person chooses only the loudness of the tone (なし / 低 / 普通 / 高), in Settings.
  */
-export const FOCUS_SOUNDS = [
-  'focus_loop',
-  'relax_loop',
-  'meditate_loop',
-  'sleep_loop',
-  'anxiety_loop',
-  'spiritual_loop',
-  'n011_wind_1',
-  'so_852hz',
-  'onboarding',
-  'onboarding_trs_281',
-  'sleep_06',
-  'sleep_06_trs_223',
+export interface FocusSound {
+  /** the name of the sound on the server (without .flac) */
+  key: string;
+  /** the height of the sine tone under this sound, in Hz */
+  hz: number;
+}
+
+export const FOCUS_SOUNDS: FocusSound[] = [
+  { key: 'focus_loop', hz: 432 },
+  { key: 'relax_loop', hz: 432 },
+  { key: 'meditate_loop', hz: 432 },
+  { key: 'sleep_loop', hz: 432 },
+  { key: 'anxiety_loop', hz: 432 },
+  { key: 'spiritual_loop', hz: 432 },
+  { key: 'n011_wind_1', hz: 432 },
+  { key: 'so_852hz', hz: 432 },
+  { key: 'onboarding', hz: 432 },
+  { key: 'onboarding_trs_281', hz: 432 },
+  { key: 'sleep_06', hz: 432 },
+  { key: 'sleep_06_trs_223', hz: 432 },
 ];
+
+/** how loud the sine tone is: none, low, normal, high */
+export type ToneLevel = 'off' | 'low' | 'normal' | 'high';
+
+export const TONE_LEVELS: { value: ToneLevel; label: string; volume: number }[] = [
+  { value: 'off', label: 'なし', volume: 0 },
+  { value: 'low', label: '低', volume: 0.035 },
+  { value: 'normal', label: '普通', volume: 0.07 },
+  { value: 'high', label: '高', volume: 0.12 },
+];
+
+export const toneVolume = (level: ToneLevel): number => TONE_LEVELS.find((l) => l.value === level)?.volume ?? 0;
+
+/** the height of the tone for one sound (undefined when the sound is not in the list) */
+export const focusHzOf = (key: string): number | undefined => FOCUS_SOUNDS.find((s) => s.key === key)?.hz;
 
 /** the file name of one sound, both on the server and on the phone */
 export const focusFileName = (key: string): string => `${key}.flac`;

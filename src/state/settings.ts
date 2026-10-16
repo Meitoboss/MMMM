@@ -1,6 +1,7 @@
 import Storage from 'expo-sqlite/kv-store';
 import { Platform } from 'react-native';
 import { type NormalizeMode } from '../core/loudness';
+import type { ToneLevel } from '../core/focus';
 import { create } from 'zustand';
 
 import { type AudioQuality, DEFAULT_INVIDIOUS_INSTANCES, DEFAULT_PIPED_INSTANCES, IOS, WEB_REMIX, configure } from '../core/config';
@@ -44,7 +45,8 @@ export interface Settings {
   autoLyrics: boolean;
   playbackRate: number;
   /** the sine tone played under the 集中 sounds, in Hz */
-  focusHz: number;
+  /** how loud the sine tone under the 集中 sounds is: off / low / normal / high */
+  focusToneLevel: ToneLevel;
   /** the server that gives out the 集中 sounds, and its app key (typed in by hand, never written into the app) */
   focusServerUrl: string;
   focusServerKey: string;
@@ -75,7 +77,7 @@ export const DEFAULT_SETTINGS: Settings = {
   autoRadio: true,
   autoLyrics: true,
   playbackRate: 1,
-  focusHz: 432,
+  focusToneLevel: 'normal',
   focusServerUrl: 'https://130-210-45-154.sslip.io',
   focusServerKey: '',
   otaApplyMode: DEFAULT_APPLY_MODE,

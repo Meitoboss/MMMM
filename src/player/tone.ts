@@ -1,10 +1,9 @@
 import * as FileSystem from 'expo-file-system/legacy';
 import { type AudioPlayer, createAudioPlayer, setAudioModeAsync } from 'expo-audio';
 
+import { type ToneLevel, toneVolume } from '../core/focus';
 import { TONE_RATE, base64Encode, toneHz, toneSamples, wavBytes } from '../core/tone';
 
-/** how loud the tone is on the phone, under the 集中 sounds (the music keeps its own volume) */
-const TONE_VOLUME = 0.07;
 
 /** the tone is a native player of its own: the music player plays one sound at a time, the tone plays beside it */
 let player: AudioPlayer | null = null;
@@ -22,7 +21,7 @@ async function fileFor(hz: number): Promise<string> {
 }
 
 /** plays the tone at `requested` Hz, looping; a new frequency takes effect now. Calls run one after another. */
-export function playTone(requested: number): Promise<void> {
+export function playTone(requested: number, level: ToneLevel): Promise<void> {
   chain = chain
     .then(async () => {
       const hz = toneHz(requested);
@@ -35,7 +34,7 @@ export function playTone(requested: number): Promise<void> {
         playingHz = hz;
       }
       player.loop = true;
-      player.volume = TONE_VOLUME;
+      player.volume = toneVolume(level);
       player.play();
     })
     .catch(() => undefined);

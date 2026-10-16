@@ -1,7 +1,7 @@
 import * as FileSystem from 'expo-file-system/legacy';
 
 import { LOCAL_ARTIST, LOCAL_PREFIX } from '../core/localMeta';
-import { focusFileName, focusIssueUrl, FOCUS_SOUNDS } from '../core/focus';
+import { focusFileName, focusHzOf, focusIssueUrl, FOCUS_SOUNDS } from '../core/focus';
 import type { AudioSource, SongItem } from '../core/types';
 import { useSettings } from '../state/settings';
 
@@ -15,11 +15,14 @@ const FOCUS_PREFIX = `${LOCAL_PREFIX}focus-`;
 
 export const isFocusId = (id: string): boolean => id.startsWith(FOCUS_PREFIX);
 
+/** the height of the tone for a focus song, from its id (undefined when it is not a focus song) */
+export const focusHzOfSong = (id: string): number | undefined => (isFocusId(id) ? focusHzOf(id.slice(FOCUS_PREFIX.length)) : undefined);
+
 const folder = (): string => `${FileSystem.documentDirectory ?? ''}focus/`;
 
 /** the focus sounds as songs, in the order they are listed */
 export function focusSongs(): SongItem[] {
-  return FOCUS_SOUNDS.map((key) => ({
+  return FOCUS_SOUNDS.map(({ key }) => ({
     kind: 'song',
     id: `${FOCUS_PREFIX}${key}`,
     title: key,
@@ -31,7 +34,7 @@ export function focusSongs(): SongItem[] {
 /** where the player can read one focus sound from: the phone's copy, downloaded first if it is not there yet */
 export async function resolveFocus(songId: string): Promise<AudioSource> {
   const key = songId.slice(FOCUS_PREFIX.length);
-  if (!FOCUS_SOUNDS.includes(key)) throw new Error('集中の音が見つかりません');
+  if (!FOCUS_SOUNDS.some((s) => s.key === key)) throw new Error('集中の音が見つかりません');
   const local = `${folder()}${focusFileName(key)}`;
   const info = await FileSystem.getInfoAsync(local);
   if (!info.exists) await download(key, local);
