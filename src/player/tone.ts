@@ -1,46 +1,25 @@
-import * as FileSystem from 'expo-file-system/legacy';
-import { type AudioPlayer, createAudioPlayer, setAudioModeAsync } from 'expo-audio';
-
+import { native } from '../../modules/binaural-tone';
 import { type ToneLevel, toneVolume } from '../core/focus';
-import { TONE_RATE, base64Encode, toneHz, toneSamples, wavBytes } from '../core/tone';
 
+/**
+ * The sine tone beside a 集中 sound. It is made live on the phone (modules/binaural-tone), so it has no end.
+ * The left ear hears `requested` Hz and the right ear `requested + BEAT_HZ` Hz, so the two make a slow beat (binaural).
+ * This needs headphones.
+ */
+const BEAT_HZ = 20;
 
-/** the tone is a native player of its own: the music player plays one sound at a time, the tone plays beside it */
-let player: AudioPlayer | null = null;
-let playingHz = 0;
-let chain: Promise<void> = Promise.resolve();
-
-/** the tone file for a frequency, written once into the cache folder */
-async function fileFor(hz: number): Promise<string> {
-  const uri = `${FileSystem.cacheDirectory ?? ''}tone-${hz.toFixed(1)}.wav`;
-  const info = await FileSystem.getInfoAsync(uri);
-  if (!info.exists) {
-    await FileSystem.writeAsStringAsync(uri, base64Encode(wavBytes(toneSamples(hz), TONE_RATE)), { encoding: FileSystem.EncodingType.Base64 });
-  }
-  return uri;
-}
-
-/** plays the tone at `requested` Hz, looping; a new frequency takes effect now. Calls run one after another. */
+/** plays the tone at `requested` Hz; a new frequency or loudness takes effect at once */
 export function playTone(requested: number, level: ToneLevel): Promise<void> {
-  chain = chain
-    .then(async () => {
-      const hz = toneHz(requested);
-      if (!player) {
-        await setAudioModeAsync({ playsInSilentMode: true, shouldPlayInBackground: true, interruptionMode: 'mixWithOthers' });
-        player = createAudioPlayer(null);
-      }
-      if (hz !== playingHz) {
-        player.replace({ uri: await fileFor(hz) });
-        playingHz = hz;
-      }
-      player.loop = true;
-      player.volume = toneVolume(level);
-      player.play();
-    })
-    .catch(() => undefined);
-  return chain;
+  const volume = toneVolume(level);
+  if (!native) return Promise.resolve();
+  if (volume === 0) {
+    native.stop();
+    return Promise.resolve();
+  }
+  native.start(requested, BEAT_HZ, volume);
+  return Promise.resolve();
 }
 
 export function pauseTone(): void {
-  player?.pause();
+  native?.stop();
 }

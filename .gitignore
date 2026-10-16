@@ -12,3 +12,7 @@ build/
 private-key*.pem
 *.key
 ota/keys/
+
+# the native code of the local module (the app root ios/ and android/ are generated; this module is written by hand)
+!modules/binaural-tone/ios/
+!modules/binaural-tone/android/
