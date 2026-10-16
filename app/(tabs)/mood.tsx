@@ -1,5 +1,5 @@
 import { useFocusEffect } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Text, View } from 'react-native';
 
 import { openDb } from '../../src/db/expo';
@@ -7,7 +7,9 @@ import * as repo from '../../src/db/repo';
 import { type MoodOption, TIME_OPTION, matchTagIds, nowHours, timeLabel } from '../../src/core/mood';
 import type { SongItem } from '../../src/core/types';
 import { focusSongs, isFocusId } from '../../src/player/focus';
+import { pauseTone, playTone } from '../../src/player/tone';
 import { usePlayer } from '../../src/state/player';
+import { useSettings } from '../../src/state/settings';
 import { Button, SongRow, s } from '../../src/ui/components';
 import { MoodDial } from '../../src/ui/MoodDial';
 import { MINI_HEIGHT, colors, useScheme } from '../../src/ui/theme';
@@ -41,11 +43,25 @@ export default function MoodTab() {
     }, [load, option]),
   );
 
+  // the sine tone follows the 集中 sounds: it plays while they play, and stops when they pause or another song starts
+  useEffect(() => {
+    let last = '';
+    return usePlayer.subscribe((st) => {
+      const focus = !!st.current && isFocusId(st.current.id);
+      const key = `${focus}|${st.status}`;
+      if (key === last) return;
+      last = key;
+      if (focus && st.status === 'playing') void playTone(useSettings.getState().focusHz);
+      else if (!focus || st.status === 'paused' || st.status === 'idle' || st.status === 'error') pauseTone();
+    });
+  }, []);
+
   // a tap on the center: the 集中 sounds start (shuffled, never ending) or pause
   const toggleFocus = () => {
     const player = usePlayer.getState();
     if (focusOn) {
       void player.togglePlay();
+      pauseTone();
       return;
     }
     const list = focusSongs();

@@ -6,6 +6,9 @@ import { runSelfTest, runTokenServerTest, StepResult } from '../src/core/diagnos
 import type { StreamBackend } from '../src/core/streams/resolver';
 import { runCurrentSongProbe, runFormatMatrix, runPlaybackProbe, runRealPathTest, runTokenExperiment } from '../src/player/probe';
 import { usePlayer } from '../src/state/player';
+import { isFocusId } from '../src/player/focus';
+import { playTone } from '../src/player/tone';
+import { toneHz } from '../src/core/tone';
 import { useUpdate } from '../src/state/update';
 import { DEFAULT_SETTINGS, useSettings } from '../src/state/settings';
 import { s } from '../src/ui/components';
@@ -14,6 +17,7 @@ import { FADE_OPTIONS } from '../src/core/dj';
 import { type AudioQuality } from '../src/core/config';
 import { type NormalizeMode } from '../src/core/loudness';
 import { QUALITY_LABELS, qualitiesFor } from '../src/core/streams/quality';
+import { promptText } from '../src/ui/dialogs';
 import { LIST_BOTTOM, colors, useScheme } from '../src/ui/theme';
 import { Chips, Row, Section } from '../src/ui/SettingsParts';
 import { BackupSection } from '../src/ui/BackupSection';
@@ -182,6 +186,27 @@ export default function Settings() {
         />
         <Row title="再生速度" last />
         <Chips options={SPEEDS.map((x) => ({ label: `${x}×`, value: x }))} value={rate} onChange={(x) => void setRate(x)} />
+        <Row title="集中の音の高さ" sub="集中モードで、音楽の下に流す正弦波の高さです（20〜2000Hz）。次に集中モードを始めたときから反映されます" last>
+          <Pressable
+            onPress={() =>
+              promptText('集中の音の高さ', '20〜2000 の数字（Hz）', String(st.focusHz), (v) => {
+                const n = Number(v.trim());
+                if (!Number.isFinite(n) || n < 20 || n > 2000) {
+                  Alert.alert('数字を確かめてください', '20〜2000 のあいだの数字を入れてください');
+                  return;
+                }
+                const hz = toneHz(n);
+                st.update({ focusHz: hz });
+                // a tone that is playing now changes to the new height
+                const now = usePlayer.getState();
+                if (now.status === 'playing' && now.current && isFocusId(now.current.id)) void playTone(hz);
+              })
+            }
+            style={{ paddingHorizontal: 12, paddingVertical: 8, borderRadius: 14, backgroundColor: colors.surface2 }}
+          >
+            <Text style={{ color: colors.text, fontWeight: '700' }}>{st.focusHz} Hz</Text>
+          </Pressable>
+        </Row>
       </Section>
 
       <Section title="トークンサーバー" collapsible>

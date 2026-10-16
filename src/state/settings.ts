@@ -43,6 +43,8 @@ export interface Settings {
   /** fetch lyrics automatically on the player screen */
   autoLyrics: boolean;
   playbackRate: number;
+  /** the sine tone played under the 集中 sounds, in Hz */
+  focusHz: number;
   /** what to do with a new version of the app's contents that has been downloaded: ask / switch by itself / leave it to me */
   otaApplyMode: ApplyMode;
 }
@@ -70,6 +72,7 @@ export const DEFAULT_SETTINGS: Settings = {
   autoRadio: true,
   autoLyrics: true,
   playbackRate: 1,
+  focusHz: 432,
   otaApplyMode: DEFAULT_APPLY_MODE,
 };
 
