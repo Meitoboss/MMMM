@@ -24,9 +24,9 @@ export type ToneLevel = 'off' | 'low' | 'normal' | 'high';
 
 export const TONE_LEVELS: { value: ToneLevel; label: string; volume: number }[] = [
   { value: 'off', label: 'なし', volume: 0 },
-  { value: 'low', label: '低', volume: 0.035 },
-  { value: 'normal', label: '普通', volume: 0.07 },
-  { value: 'high', label: '高', volume: 0.12 },
+  { value: 'low', label: '低', volume: 0.12 },
+  { value: 'normal', label: '普通', volume: 0.25 },
+  { value: 'high', label: '高', volume: 0.5 },
 ];
 
 export const toneVolume = (level: ToneLevel): number => TONE_LEVELS.find((l) => l.value === level)?.volume ?? 0;
