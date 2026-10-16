@@ -186,6 +186,18 @@ export default function Settings() {
         />
         <Row title="再生速度" last />
         <Chips options={SPEEDS.map((x) => ({ label: `${x}×`, value: x }))} value={rate} onChange={(x) => void setRate(x)} />
+        <Row title="集中の音のサーバーのキー" sub="集中の音は、サーバーからダウンロードします。キーは、ここに手で入れます（アプリの中には入っていません）。未設定だと、集中モードは始まりません" last={false}>
+          <Pressable
+            onPress={() =>
+              promptText('集中の音のサーバーのキー', '管理者から受け取ったキーを入れてください', st.focusServerKey, (v) => {
+                st.update({ focusServerKey: v.trim() });
+              })
+            }
+            style={{ paddingHorizontal: 12, paddingVertical: 8, borderRadius: 14, backgroundColor: colors.surface2 }}
+          >
+            <Text style={{ color: colors.text, fontWeight: '700' }}>{st.focusServerKey ? '設定済み' : '未設定'}</Text>
+          </Pressable>
+        </Row>
         <Row title="集中の音の高さ" sub="集中モードで、音楽の下に流す正弦波の高さです（20〜2000Hz）。次に集中モードを始めたときから反映されます" last>
           <Pressable
             onPress={() =>

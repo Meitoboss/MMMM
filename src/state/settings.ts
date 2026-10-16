@@ -45,6 +45,9 @@ export interface Settings {
   playbackRate: number;
   /** the sine tone played under the 集中 sounds, in Hz */
   focusHz: number;
+  /** the server that gives out the 集中 sounds, and its app key (typed in by hand, never written into the app) */
+  focusServerUrl: string;
+  focusServerKey: string;
   /** what to do with a new version of the app's contents that has been downloaded: ask / switch by itself / leave it to me */
   otaApplyMode: ApplyMode;
 }
@@ -73,6 +76,8 @@ export const DEFAULT_SETTINGS: Settings = {
   autoLyrics: true,
   playbackRate: 1,
   focusHz: 432,
+  focusServerUrl: 'https://130-210-45-154.sslip.io',
+  focusServerKey: '',
   otaApplyMode: DEFAULT_APPLY_MODE,
 };
 
