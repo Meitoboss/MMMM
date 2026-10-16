@@ -1,4 +1,5 @@
 import * as FileSystem from 'expo-file-system/legacy';
+import { Platform } from 'react-native';
 
 import { LOCAL_ARTIST, LOCAL_PREFIX } from '../core/localMeta';
 import { focusFileName, focusHzOf, focusIssueUrl, FOCUS_SOUNDS } from '../core/focus';
@@ -52,7 +53,10 @@ async function download(key: string, local: string): Promise<void> {
   const { url } = (await issued.json()) as { url: string };
 
   const part = `${local}.part`;
-  const res = await FileSystem.createDownloadResumable(`${focusServerUrl}${url}`, part, {}).downloadAsync();
+  // on iPhone the download runs inside the app (foreground), like the saves for offline use: the system's background transfer
+  // can fail with "Cannot create file" when the app's signature is changed by the signing tool
+  const options: FileSystem.DownloadOptions = Platform.OS === 'ios' ? { sessionType: FileSystem.FileSystemSessionType.FOREGROUND } : {};
+  const res = await FileSystem.createDownloadResumable(`${focusServerUrl}${url}`, part, options).downloadAsync();
   if (!res || (res.status !== 200 && res.status !== 206)) {
     await FileSystem.deleteAsync(part, { idempotent: true });
     throw new Error(`集中の音をダウンロードできませんでした（${res?.status ?? '—'}）`);
