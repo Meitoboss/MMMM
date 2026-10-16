@@ -1,6 +1,6 @@
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { FlatList, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 
 import { openDb } from '../../src/db/expo';
 import * as repo from '../../src/db/repo';
@@ -9,9 +9,12 @@ import type { SongItem } from '../../src/core/types';
 import { usePlayer } from '../../src/state/player';
 import { Button, SongRow, s } from '../../src/ui/components';
 import { MoodDial } from '../../src/ui/MoodDial';
-import { LIST_BOTTOM, colors, useScheme } from '../../src/ui/theme';
+import { MINI_HEIGHT, colors, useScheme } from '../../src/ui/theme';
 
-/** 気分: a dial with the time of day and a few feelings – turn it, and the songs for that choice are listed */
+/** how many songs are shown under the dial (the screen does not scroll; the buttons play all of them) */
+const PREVIEW = 3;
+
+/** 気分: a dial with the time of day and a few feelings – turn it, and the songs for that choice are played from here */
 export default function MoodTab() {
   useScheme();
   const play = usePlayer((p) => p.playSongs);
@@ -41,27 +44,25 @@ export default function MoodTab() {
       : `「${option.label}」のタグが付いた曲は、まだありません。曲の「…」からタグを付けると、ここに並びます`;
 
   return (
-    <FlatList
-      data={songs}
-      keyExtractor={(x) => x.id}
-      contentContainerStyle={{ paddingBottom: LIST_BOTTOM }}
-      ListHeaderComponent={
-        <View style={{ paddingTop: 16, paddingBottom: 8, gap: 16 }}>
-          <MoodDial labels={labels} onChange={(o) => { setOption(o); }} />
-          <Text style={[s.sub, { textAlign: 'center', paddingHorizontal: 24 }]}>
-            ダイヤルを回して、止めたところの気分を選びます。
-          </Text>
-          {!!songs.length && (
-            <View style={{ flexDirection: 'row', gap: 8, paddingHorizontal: 16 }}>
-              <Button label="再生" icon="play" onPress={() => void play(songs, 0)} />
-              <Button label="シャッフル" icon="shuffle" secondary onPress={() => { usePlayer.setState({ shuffle: true }); void play(songs, Math.floor(Math.random() * songs.length)); }} />
-            </View>
-          )}
-        </View>
-      }
-      ListEmptyComponent={<Text style={{ color: colors.sub, textAlign: 'center', marginTop: 24, paddingHorizontal: 24 }}>{empty}</Text>}
-      renderItem={({ item, index }) => <SongRow song={item} index={index} onPress={() => void play(songs, index)} />}
-    />
+    // no scrolling on this screen: the dial takes the touches, and the songs are a short preview with the buttons for all of them
+    <View style={{ flex: 1, alignItems: 'stretch', paddingTop: 16, paddingBottom: MINI_HEIGHT + 16, gap: 14, overflow: 'hidden' }}>
+      <MoodDial labels={labels} onChange={(o) => { setOption(o); }} />
+      <Text style={[s.sub, { textAlign: 'center', paddingHorizontal: 24 }]}>ダイヤルを回して、止めたところの気分を選びます。</Text>
+
+      {songs.length ? (
+        <>
+          <Text style={{ color: colors.accentText, fontWeight: '700', textAlign: 'center' }}>{songs.length}曲</Text>
+          <View style={{ flexDirection: 'row', gap: 8, paddingHorizontal: 16 }}>
+            <Button label="再生" icon="play" onPress={() => void play(songs, 0)} />
+            <Button label="シャッフル" icon="shuffle" secondary onPress={() => { usePlayer.setState({ shuffle: true }); void play(songs, Math.floor(Math.random() * songs.length)); }} />
+          </View>
+          {songs.slice(0, PREVIEW).map((song, i) => (
+            <SongRow key={song.id} song={song} index={i} onPress={() => void play(songs, i)} />
+          ))}
+        </>
+      ) : (
+        <Text style={{ color: colors.sub, textAlign: 'center', paddingHorizontal: 24 }}>{empty}</Text>
+      )}
+    </View>
   );
 }
-
