@@ -12,20 +12,11 @@ export interface FocusSound {
   hz: number;
 }
 
-export const FOCUS_SOUNDS: FocusSound[] = [
-  { key: 'focus_loop', hz: 432 },
-  { key: 'relax_loop', hz: 432 },
-  { key: 'meditate_loop', hz: 432 },
-  { key: 'sleep_loop', hz: 432 },
-  { key: 'anxiety_loop', hz: 432 },
-  { key: 'spiritual_loop', hz: 432 },
-  { key: 'n011_wind_1', hz: 432 },
-  { key: 'so_852hz', hz: 432 },
-  { key: 'onboarding', hz: 432 },
-  { key: 'onboarding_trs_281', hz: 432 },
-  { key: 'sleep_06', hz: 432 },
-  { key: 'sleep_06_trs_223', hz: 432 },
-];
+/**
+ * The sounds on the server. Add a line here for each new sound (the file must be /var/oled/audio/<key>.flac on the server).
+ * Empty for now: the new sounds are not made yet.
+ */
+export const FOCUS_SOUNDS: FocusSound[] = [];
 
 /** how loud the sine tone is: none, low, normal, high */
 export type ToneLevel = 'off' | 'low' | 'normal' | 'high';

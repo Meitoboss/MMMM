@@ -69,6 +69,7 @@ export default function MoodTab() {
       return;
     }
     const list = focusSongs();
+    if (!list.length) return; // no focus sounds on the server yet
     usePlayer.setState({ shuffle: true });
     player.setRepeat('all');
     void play(list, Math.floor(Math.random() * list.length));
