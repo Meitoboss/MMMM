@@ -13,6 +13,7 @@ import { resolveAudio } from '../core/streams/resolver';
 import type { AudioSource, SongItem } from '../core/types';
 import { openDb } from '../db/expo';
 import * as repo from '../db/repo';
+import { resolveFocus, isFocusId } from '../player/focus';
 import { resolveLocal } from '../player/localFiles';
 import { resolveOffline } from '../player/offline';
 import { LOOP_INTERVAL, NORMAL_INTERVAL, ensurePlayer, setProgressInterval } from '../player/setup';
@@ -216,9 +217,11 @@ export const usePlayer = create<PlayerState>((set, get) => {
     get().log(`load ${song.id} (#${index + 1}/${get().queue.length})`);
     try {
       await ensurePlayer();
-      const src = isLocalId(song.id)
-        ? await resolveLocal(song.id)
-        : (await resolveOffline(song.id)) ?? (await resolveAudio(song.id, resolverOptions())); // a saved copy plays without the network
+      const src = isFocusId(song.id)
+        ? await resolveFocus(song.id)
+        : isLocalId(song.id)
+          ? await resolveLocal(song.id)
+          : (await resolveOffline(song.id)) ?? (await resolveAudio(song.id, resolverOptions())); // a saved copy plays without the network
       if (token !== loadToken) return; // user skipped again while resolving
       // start / end trim of this song (best effort)
       const trim = onThisPhone(song.id, useOffline.getState().ids) ? await openDb().then((db) => repo.trimOf(db, song.id)).catch(() => null) : null;

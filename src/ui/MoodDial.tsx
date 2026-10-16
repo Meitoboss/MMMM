@@ -20,7 +20,19 @@ const turnBetween = (from: number, to: number) => ((to - from + 540) % 360) - 18
  * The dial keeps the touch while it is turned, so a list it sits in does not scroll instead.
  * `labels` replaces the option's own name (the first option shows the time of day).
  */
-export function MoodDial({ labels, onChange }: { labels?: Partial<Record<string, string>>; onChange: (option: MoodOption, index: number) => void }) {
+export function MoodDial({
+  labels,
+  onChange,
+  focusOn = false,
+  onCenterPress,
+}: {
+  labels?: Partial<Record<string, string>>;
+  onChange: (option: MoodOption, index: number) => void;
+  /** the 集中 sounds are playing: the center shows it */
+  focusOn?: boolean;
+  /** a tap on the center toggles the 集中 sounds */
+  onCenterPress?: () => void;
+}) {
   useScheme();
   const ref = useRef<View>(null);
   const rot = useRef(new Animated.Value(angleFor(0))).current;
@@ -29,6 +41,8 @@ export function MoodDial({ labels, onChange }: { labels?: Partial<Record<string,
   const center = useRef<{ x: number; y: number } | null>(null);
   // where the finger was when the turn started, and the dial's angle then
   const anchor = useRef<{ touch: number; rot: number } | null>(null);
+  // where the touch started, to tell a tap from a turn
+  const downAt = useRef<{ x: number; y: number } | null>(null);
   const [angle, setAngle] = useState(angleFor(0));
   const [index, setIndex] = useState(0);
 
@@ -63,9 +77,10 @@ export function MoodDial({ labels, onChange }: { labels?: Partial<Record<string,
         onMoveShouldSetPanResponder: () => true,
         onMoveShouldSetPanResponderCapture: () => true,
         onPanResponderTerminationRequest: () => false,
-        onPanResponderGrant: () => {
+        onPanResponderGrant: (evt) => {
           rot.stopAnimation();
           anchor.current = null;
+          downAt.current = { x: evt.nativeEvent.pageX, y: evt.nativeEvent.pageY };
           measureCenter();
         },
         onPanResponderMove: (evt) => {
@@ -80,7 +95,17 @@ export function MoodDial({ labels, onChange }: { labels?: Partial<Record<string,
           // follow the finger around the circle: the turn is the change of its angle, so going round past the bottom keeps the same direction
           rot.setValue(anchor.current.rot + turnBetween(anchor.current.touch, t));
         },
-        onPanResponderRelease: () => settle(rotNow.current),
+        onPanResponderRelease: (_, g) => {
+          // a tap in the center toggles the 集中 sounds; anything else is a turn
+          const c = center.current;
+          const d = downAt.current;
+          const tap = Math.abs(g.dx) + Math.abs(g.dy) < 10;
+          if (tap && c && d && Math.hypot(d.x - c.x, d.y - c.y) < CENTER / 2) {
+            onCenterPress?.();
+            return;
+          }
+          settle(rotNow.current);
+        },
         onPanResponderTerminate: () => settle(rotNow.current),
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -88,7 +113,7 @@ export function MoodDial({ labels, onChange }: { labels?: Partial<Record<string,
   );
 
   const current = DIAL_OPTIONS[index];
-  const centerText = labels?.[current.key] ?? current.label;
+  const centerText = focusOn ? '集中中' : labels?.[current.key] ?? current.label;
 
   return (
     <View ref={ref} onLayout={measureCenter} style={{ width: SIZE, height: SIZE, alignSelf: 'center' }} {...responder.panHandlers}>

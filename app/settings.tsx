@@ -6,6 +6,9 @@ import { runSelfTest, runTokenServerTest, StepResult } from '../src/core/diagnos
 import type { StreamBackend } from '../src/core/streams/resolver';
 import { runCurrentSongProbe, runFormatMatrix, runPlaybackProbe, runRealPathTest, runTokenExperiment } from '../src/player/probe';
 import { usePlayer } from '../src/state/player';
+import { focusHzOfSong, isFocusId } from '../src/player/focus';
+import { pauseTone, playTone } from '../src/player/tone';
+import { TONE_LEVELS } from '../src/core/focus';
 import { useUpdate } from '../src/state/update';
 import { DEFAULT_SETTINGS, useSettings } from '../src/state/settings';
 import { s } from '../src/ui/components';
@@ -14,6 +17,7 @@ import { FADE_OPTIONS } from '../src/core/dj';
 import { type AudioQuality } from '../src/core/config';
 import { type NormalizeMode } from '../src/core/loudness';
 import { QUALITY_LABELS, qualitiesFor } from '../src/core/streams/quality';
+import { promptText } from '../src/ui/dialogs';
 import { LIST_BOTTOM, colors, useScheme } from '../src/ui/theme';
 import { Chips, Row, Section } from '../src/ui/SettingsParts';
 import { BackupSection } from '../src/ui/BackupSection';
@@ -182,6 +186,32 @@ export default function Settings() {
         />
         <Row title="再生速度" last />
         <Chips options={SPEEDS.map((x) => ({ label: `${x}×`, value: x }))} value={rate} onChange={(x) => void setRate(x)} />
+        <Row title="集中の音のサーバーのキー" sub="集中の音は、サーバーからダウンロードします。キーは、ここに手で入れます（アプリの中には入っていません）。未設定だと、集中モードは始まりません" last={false}>
+          <Pressable
+            onPress={() =>
+              promptText('集中の音のサーバーのキー', '管理者から受け取ったキーを入れてください', st.focusServerKey, (v) => {
+                st.update({ focusServerKey: v.trim() });
+              })
+            }
+            style={{ paddingHorizontal: 12, paddingVertical: 8, borderRadius: 14, backgroundColor: colors.surface2 }}
+          >
+            <Text style={{ color: colors.text, fontWeight: '700' }}>{st.focusServerKey ? '設定済み' : '未設定'}</Text>
+          </Pressable>
+        </Row>
+        <Row title="集中の音の正弦波の音量" sub="集中モードで、音楽の下に流す正弦波の音量です。高さは、音ごとに決まっています。次に音が変わるときから反映されます" last>
+          <Chips
+            options={TONE_LEVELS.map((l) => ({ label: l.label, value: l.value }))}
+            value={st.focusToneLevel}
+            onChange={(v) => {
+              st.update({ focusToneLevel: v });
+              // a tone that is playing now changes to the new loudness
+              const now = usePlayer.getState();
+              if (now.status !== 'playing' || !now.current || !isFocusId(now.current.id)) return;
+              if (v === 'off') pauseTone();
+              else void playTone(focusHzOfSong(now.current.id) ?? 432, v);
+            }}
+          />
+        </Row>
       </Section>
 
       <Section title="トークンサーバー" collapsible>
