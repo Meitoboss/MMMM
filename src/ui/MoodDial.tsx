@@ -17,6 +17,7 @@ const turnBetween = (from: number, to: number) => ((to - from + 540) % 360) - 18
 
 /**
  * A round dial: turn it with a finger that moves around it, the option at the top is chosen when it stops.
+ * The dial keeps the touch while it is turned, so a list it sits in does not scroll instead.
  * `labels` replaces the option's own name (the first option shows the time of day).
  */
 export function MoodDial({ labels, onChange }: { labels?: Partial<Record<string, string>>; onChange: (option: MoodOption, index: number) => void }) {
@@ -24,7 +25,8 @@ export function MoodDial({ labels, onChange }: { labels?: Partial<Record<string,
   const ref = useRef<View>(null);
   const rot = useRef(new Animated.Value(angleFor(0))).current;
   const rotNow = useRef(angleFor(0));
-  const center = useRef({ x: 0, y: 0 });
+  // the dial's center in page coordinates – the same coordinates the touch events use
+  const center = useRef<{ x: number; y: number } | null>(null);
   // where the finger was when the turn started, and the dial's angle then
   const anchor = useRef<{ touch: number; rot: number } | null>(null);
   const [angle, setAngle] = useState(angleFor(0));
@@ -38,6 +40,12 @@ export function MoodDial({ labels, onChange }: { labels?: Partial<Record<string,
     return () => rot.removeListener(id);
   }, [rot]);
 
+  const measureCenter = () => {
+    ref.current?.measure((_x, _y, w, h, px, py) => {
+      center.current = { x: px + w / 2, y: py + h / 2 };
+    });
+  };
+
   const settle = (target: number) => {
     const i = selectedIndex(target);
     Animated.spring(rot, { toValue: angleFor(i), useNativeDriver: false, friction: 9 }).start(() => {
@@ -49,17 +57,22 @@ export function MoodDial({ labels, onChange }: { labels?: Partial<Record<string,
   const responder = useMemo(
     () =>
       PanResponder.create({
+        // claim the touch before a list around the dial can scroll, and keep it while turning
         onStartShouldSetPanResponder: () => true,
-        onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) + Math.abs(g.dy) > 4,
+        onStartShouldSetPanResponderCapture: () => true,
+        onMoveShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponderCapture: () => true,
+        onPanResponderTerminationRequest: () => false,
         onPanResponderGrant: () => {
           rot.stopAnimation();
           anchor.current = null;
-          ref.current?.measureInWindow((x, y, w, h) => {
-            center.current = { x: x + w / 2, y: y + h / 2 };
-          });
+          measureCenter();
         },
-        onPanResponderMove: (_, g) => {
-          const t = touchAngle(g.moveX, g.moveY, center.current.x, center.current.y);
+        onPanResponderMove: (evt) => {
+          const c = center.current;
+          if (!c) return;
+          const { pageX, pageY } = evt.nativeEvent;
+          const t = touchAngle(pageX, pageY, c.x, c.y);
           if (!anchor.current) {
             anchor.current = { touch: t, rot: rotNow.current };
             return;
@@ -78,7 +91,7 @@ export function MoodDial({ labels, onChange }: { labels?: Partial<Record<string,
   const centerText = labels?.[current.key] ?? current.label;
 
   return (
-    <View ref={ref} style={{ width: SIZE, height: SIZE, alignSelf: 'center' }} {...responder.panHandlers}>
+    <View ref={ref} onLayout={measureCenter} style={{ width: SIZE, height: SIZE, alignSelf: 'center' }} {...responder.panHandlers}>
       <View style={{ position: 'absolute', width: SIZE, height: SIZE, borderRadius: SIZE / 2, backgroundColor: colors.surface2, borderWidth: 1, borderColor: colors.border }} />
       {DIAL_OPTIONS.map((o, i) => {
         const rad = ((i * DIAL_STEP + angle) * Math.PI) / 180;
