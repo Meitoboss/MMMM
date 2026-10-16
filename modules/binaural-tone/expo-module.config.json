@@ -1,0 +1,9 @@
+{
+  "platforms": ["ios", "android"],
+  "ios": {
+    "modules": ["BinauralToneModule"]
+  },
+  "android": {
+    "modules": ["expo.modules.binauraltone.BinauralToneModule"]
+  }
+}
