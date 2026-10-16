@@ -22,10 +22,10 @@ const folder = (): string => `${FileSystem.documentDirectory ?? ''}focus/`;
 
 /** the focus sounds as songs, in the order they are listed */
 export function focusSongs(): SongItem[] {
-  return FOCUS_SOUNDS.map(({ key }) => ({
+  return FOCUS_SOUNDS.map(({ key, name }) => ({
     kind: 'song',
     id: `${FOCUS_PREFIX}${key}`,
-    title: key,
+    title: name,
     artists: [{ name: LOCAL_ARTIST }],
     explicit: false,
   }));

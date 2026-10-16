@@ -8,15 +8,16 @@
 export interface FocusSound {
   /** the name of the sound on the server (without .flac) */
   key: string;
+  /** the name shown in the app */
+  name: string;
   /** the height of the sine tone under this sound, in Hz */
   hz: number;
 }
 
 /**
  * The sounds on the server. Add a line here for each new sound (the file must be /var/oled/audio/<key>.flac on the server).
- * Empty for now: the new sounds are not made yet.
  */
-export const FOCUS_SOUNDS: FocusSound[] = [];
+export const FOCUS_SOUNDS: FocusSound[] = [{ key: 'focus_loop', name: '集中', hz: 432 }];
 
 /** how loud the sine tone is: none, low, normal, high */
 export type ToneLevel = 'off' | 'low' | 'normal' | 'high';
