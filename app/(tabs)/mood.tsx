@@ -6,6 +6,7 @@ import { openDb } from '../../src/db/expo';
 import * as repo from '../../src/db/repo';
 import { type MoodOption, TIME_OPTION, matchTagIds, nowHours, timeLabel } from '../../src/core/mood';
 import type { SongItem } from '../../src/core/types';
+import { focusSongs, isFocusId } from '../../src/player/focus';
 import { usePlayer } from '../../src/state/player';
 import { Button, SongRow, s } from '../../src/ui/components';
 import { MoodDial } from '../../src/ui/MoodDial';
@@ -18,6 +19,8 @@ const PREVIEW = 3;
 export default function MoodTab() {
   useScheme();
   const play = usePlayer((p) => p.playSongs);
+  // the 集中 sounds are on while one of them is the song playing (or loading)
+  const focusOn = usePlayer((p) => !!p.current && isFocusId(p.current.id) && (p.status === 'playing' || p.status === 'loading'));
   const [option, setOption] = useState<MoodOption>(TIME_OPTION);
   const [songs, setSongs] = useState<SongItem[]>([]);
   const [labels] = useState(() => ({ [TIME_OPTION.key]: timeLabel(new Date()) }));
@@ -38,6 +41,19 @@ export default function MoodTab() {
     }, [load, option]),
   );
 
+  // a tap on the center: the 集中 sounds start (shuffled, never ending) or pause
+  const toggleFocus = () => {
+    const player = usePlayer.getState();
+    if (focusOn) {
+      void player.togglePlay();
+      return;
+    }
+    const list = focusSongs();
+    usePlayer.setState({ shuffle: true });
+    player.setRepeat('all');
+    void play(list, Math.floor(Math.random() * list.length));
+  };
+
   const empty =
     option.key === TIME_OPTION.key
       ? 'この時間帯に聴いた曲は、まだありません'
@@ -46,7 +62,7 @@ export default function MoodTab() {
   return (
     // no scrolling on this screen: the dial takes the touches, and the songs are a short preview with the buttons for all of them
     <View style={{ flex: 1, alignItems: 'stretch', paddingTop: 16, paddingBottom: MINI_HEIGHT + 16, gap: 14, overflow: 'hidden' }}>
-      <MoodDial labels={labels} onChange={(o) => { setOption(o); }} />
+      <MoodDial labels={labels} focusOn={focusOn} onCenterPress={toggleFocus} onChange={(o) => { setOption(o); }} />
       <Text style={[s.sub, { textAlign: 'center', paddingHorizontal: 24 }]}>ダイヤルを回して、止めたところの気分を選びます。</Text>
 
       {songs.length ? (
