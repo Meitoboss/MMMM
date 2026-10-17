@@ -2,6 +2,7 @@ import Storage from 'expo-sqlite/kv-store';
 import { Platform } from 'react-native';
 import { type NormalizeMode } from '../core/loudness';
 import type { ToneLevel } from '../core/focus';
+import type { NoiseLevel, SpeakerMode } from '../core/binaural';
 import { create } from 'zustand';
 
 import { type AudioQuality, DEFAULT_INVIDIOUS_INSTANCES, DEFAULT_PIPED_INSTANCES, IOS, WEB_REMIX, configure } from '../core/config';
@@ -47,6 +48,10 @@ export interface Settings {
   /** the sine tone played under the 集中 sounds, in Hz */
   /** how loud the sine tone under the 集中 sounds is: off / low / normal / high */
   focusToneLevel: ToneLevel;
+  /** the binaural tone on speakers: stop it, or play it with the pitch raised */
+  binauralSpeakerMode: SpeakerMode;
+  /** pink noise mixed under the tone */
+  binauralNoise: NoiseLevel;
   /** the server that gives out the 集中 sounds, and its app key (typed in by hand, never written into the app) */
   focusServerUrl: string;
   focusServerKey: string;
@@ -78,6 +83,8 @@ export const DEFAULT_SETTINGS: Settings = {
   autoLyrics: true,
   playbackRate: 1,
   focusToneLevel: 'normal',
+  binauralSpeakerMode: 'stop',
+  binauralNoise: 'off',
   focusServerUrl: 'https://130-210-45-154.sslip.io',
   focusServerKey: '',
   otaApplyMode: DEFAULT_APPLY_MODE,

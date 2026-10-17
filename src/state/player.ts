@@ -16,6 +16,7 @@ import * as repo from '../db/repo';
 import { resolveFocus, isFocusId } from '../player/focus';
 import { resolveLocal } from '../player/localFiles';
 import { resolveOffline } from '../player/offline';
+import { ambientFactor } from '../player/binaural';
 import { LOOP_INTERVAL, NORMAL_INTERVAL, ensurePlayer, setProgressInterval } from '../player/setup';
 import { useOffline } from './offline';
 import { resolverOptions, useSettings } from './settings';
@@ -111,6 +112,9 @@ function wantFineProgress(fine: boolean): void {
 
 /* ---- DJ-style: fade between songs, start / end trim ---- */
 let baseVolume = 1; // the normalised volume of the song that is playing – fades go from / to this
+/** the share the binaural tone leaves the environment sound (1 for songs, and when the tone is off) */
+let ambientMul = 1;
+const effectiveVolume = (): number => baseVolume * ambientMul;
 let trimEndSec: number | null = null;
 let fadeTimer: ReturnType<typeof setInterval> | undefined;
 let fadeStartTimer: ReturnType<typeof setTimeout> | undefined;
@@ -130,7 +134,7 @@ function stopFadeTimers(): void {
 function cancelFade(restore: boolean): void {
   const wasFading = fadePlanned || fadeTimer !== undefined;
   stopFadeTimers();
-  if (restore && wasFading) TrackPlayer.setVolume(baseVolume).catch(() => undefined);
+  if (restore && wasFading) TrackPlayer.setVolume(effectiveVolume()).catch(() => undefined);
 }
 
 /** steps the volume along an equal-power curve, driven by the clock (not by progress events, which are too coarse) */
@@ -142,11 +146,11 @@ function ramp(kind: 'in' | 'out', durationMs: number, done?: () => void): void {
     if (t >= 1) {
       clearInterval(timer);
       if (fadeTimer === timer) fadeTimer = undefined;
-      TrackPlayer.setVolume(kind === 'out' ? 0 : baseVolume).catch(() => undefined);
+      TrackPlayer.setVolume(kind === 'out' ? 0 : effectiveVolume()).catch(() => undefined);
       done?.();
       return;
     }
-    TrackPlayer.setVolume(baseVolume * fadeGain(kind, t)).catch(() => undefined);
+    TrackPlayer.setVolume(effectiveVolume() * fadeGain(kind, t)).catch(() => undefined);
   }, FADE_STEP_MS);
   fadeTimer = timer;
 }
@@ -194,13 +198,23 @@ async function applyVolume(song: SongItem, src: AudioSource, log: (line: string)
       }
     }
     const volume = normalizedVolume(loudness, mode);
-    await TrackPlayer.setVolume(volume);
+    ambientMul = isFocusId(song.id) ? ambientFactor() : 1;
+    await TrackPlayer.setVolume(volume * ambientMul);
     log(`volume=${volume.toFixed(2)} (${mode}, loudness ${loudness === undefined ? 'unknown' : `${loudness.toFixed(1)} dB`})`);
     return volume;
   } catch {
+    ambientMul = 1;
     await TrackPlayer.setVolume(1).catch(() => undefined);
     return 1;
   }
+}
+
+/** the environment sound follows the binaural tone: call after the tone or its settings change */
+export function refreshAmbient(): void {
+  const current = usePlayer.getState().current;
+  if (!current || !isFocusId(current.id)) return;
+  ambientMul = ambientFactor();
+  TrackPlayer.setVolume(effectiveVolume()).catch(() => undefined);
 }
 
 export const usePlayer = create<PlayerState>((set, get) => {
@@ -511,7 +525,7 @@ export const usePlayer = create<PlayerState>((set, get) => {
           // "repeat one": the same song again from the start (as when a song really ends); the end of the next round is handled the same way
           stopFadeTimers();
           void (async () => {
-            await TrackPlayer.setVolume(baseVolume).catch(() => undefined);
+            await TrackPlayer.setVolume(effectiveVolume()).catch(() => undefined);
             await TrackPlayer.seekTo(0).catch(() => undefined);
             await TrackPlayer.play().catch(() => undefined);
             leftSongToken = -1;
@@ -581,7 +595,7 @@ export const usePlayer = create<PlayerState>((set, get) => {
       }
       if (repeat === 'one') {
         stopFadeTimers();
-        await TrackPlayer.setVolume(baseVolume).catch(() => undefined);
+        await TrackPlayer.setVolume(effectiveVolume()).catch(() => undefined);
         await TrackPlayer.seekTo(0);
         await TrackPlayer.play();
         return;
