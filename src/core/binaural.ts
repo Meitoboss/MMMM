@@ -1,15 +1,12 @@
 /**
- * The volume plan for the 集中 mode: the environment sound (the music file) and the binaural tone share the loudness.
- * Pure, so it can be tested. The numbers follow the design for the binaural tone.
+ * The binaural tone of the 集中 mode: how loud it is, and where it goes (headphones or speakers).
+ * Pure, so it can be tested. The environment sound (the music file) is not made quieter by the tone:
+ * the tone sits on top of it, at the level of ANIMA's Normal (about 0.6).
  */
 
-/** share of the environment sound, and of the binaural tone (their sum must stay at 1 or below) */
-export const AMBIENT_COEF = 0.7;
-export const BINAURAL_COEF = 0.3;
-
-/** how strong the binaural tone is (the user's setting) */
+/** how strong the binaural tone is (the user's setting): the amplitude of the sine in each ear */
 export type StrengthLevel = 'off' | 'low' | 'normal' | 'high';
-export const STRENGTH: Record<StrengthLevel, number> = { off: 0, low: 0.3, normal: 0.5, high: 0.7 };
+export const STRENGTH: Record<StrengthLevel, number> = { off: 0, low: 0.3, normal: 0.6, high: 0.8 };
 
 /** how much pink noise is mixed under the tone (relative to the tone) */
 export type NoiseLevel = 'off' | 'low' | 'high';
@@ -21,20 +18,6 @@ export const SPEAKER_SHIFT_HZ = 100;
 
 /** a beat wider than this sounds like two notes, not like a beat */
 export const MAX_BEAT_HZ = 30;
-
-/** makes the two shares fit: when they add up to more than 1, both are scaled down by the same factor */
-export function normalizeCoefs(ambient: number, binaural: number): { ambient: number; binaural: number } {
-  const sum = ambient + binaural;
-  return sum <= 1 ? { ambient, binaural } : { ambient: ambient / sum, binaural: binaural / sum };
-}
-
-const COEFS = normalizeCoefs(AMBIENT_COEF, BINAURAL_COEF);
-
-/** a slider value (0 to 1) becomes the volume that is used: squared, so the low end is finer */
-export const sliderToVolume = (value: number): number => {
-  const v = Math.min(1, Math.max(0, value));
-  return v * v;
-};
 
 export const clampBeat = (beat: number): number => Math.min(MAX_BEAT_HZ, Math.max(0, beat));
 
@@ -57,27 +40,26 @@ export interface ToneMix {
 }
 
 export interface Mix {
-  /** the volume share of the environment sound (1 when the tone is off, so the sound is not made quieter for nothing) */
+  /** how loud the environment sound is: always 1, the tone does not take from it */
   ambient: number;
   /** the tone to play, or null when it is silent */
   tone: ToneMix | null;
 }
 
-/** the whole plan: how loud the environment sound is, and what the tone is (or that it is off) */
+/** the whole plan: the tone (or none) for the output that is used now */
 export function computeMix(input: MixInput): Mix {
   const strength = STRENGTH[input.strength];
   const shift = !input.headphones && input.speakerMode === 'shift';
   const on = strength > 0 && (input.headphones || shift);
   if (!on) return { ambient: 1, tone: null };
 
-  const toneVolume = strength * COEFS.binaural;
   return {
-    ambient: COEFS.ambient,
+    ambient: 1,
     tone: {
       center: shift ? input.center + SPEAKER_SHIFT_HZ : input.center,
       beat: clampBeat(input.beat),
-      toneVolume,
-      noiseVolume: toneVolume * NOISE_MIX[input.noise],
+      toneVolume: strength,
+      noiseVolume: strength * NOISE_MIX[input.noise],
     },
   };
 }
