@@ -1,3 +1,5 @@
+import { STRENGTH, type StrengthLevel } from './binaural';
+
 /**
  * The 集中 sounds on the server (/audio/<name>.flac), and the sine tone that plays under each one.
  * Pure logic, so it can be tested.
@@ -19,17 +21,17 @@ export interface FocusSound {
  */
 export const FOCUS_SOUNDS: FocusSound[] = [{ key: 'focus_loop', name: '広い野原', hz: 200 }];
 
-/** how loud the sine tone is: none, low, normal, high */
-export type ToneLevel = 'off' | 'low' | 'normal' | 'high';
+/** how strong the binaural tone is: none, low, normal, high (see core/binaural.ts) */
+export type ToneLevel = StrengthLevel;
 
 export const TONE_LEVELS: { value: ToneLevel; label: string; volume: number }[] = [
-  { value: 'off', label: 'なし', volume: 0 },
-  { value: 'low', label: '低', volume: 0.25 },
-  { value: 'normal', label: '普通', volume: 0.5 },
-  { value: 'high', label: '高', volume: 0.8 },
+  { value: 'off', label: "なし", volume: STRENGTH.off },
+  { value: 'low', label: "低", volume: STRENGTH.low },
+  { value: 'normal', label: "普通", volume: STRENGTH.normal },
+  { value: 'high', label: "高", volume: STRENGTH.high },
 ];
 
-export const toneVolume = (level: ToneLevel): number => TONE_LEVELS.find((l) => l.value === level)?.volume ?? 0;
+export const toneVolume = (level: ToneLevel): number => STRENGTH[level];
 
 /** the height of the tone for one sound (undefined when the sound is not in the list) */
 export const focusHzOf = (key: string): number | undefined => FOCUS_SOUNDS.find((s) => s.key === key)?.hz;

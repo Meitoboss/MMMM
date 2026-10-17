@@ -1,72 +1,96 @@
 import AVFoundation
 import ExpoModulesCore
 
-/// Makes the sine tone on the phone, in a stream that never ends (iOS). The math is the same as on Android (see the Kotlin file).
+/// The binaural tone on the phone, in a stream that never ends (iOS). The same math as the Kotlin file.
 public class BinauralToneModule: Module {
+  /// what the audio thread should move towards; written from the JS side, under `lock`
+  private struct Targets {
+    var freqL = 200.0, freqR = 200.0
+    var tone: Float = 0
+    var noise: Float = 0
+    var master: Float = 0
+  }
+
+  private let lock = NSLock()
+  private var targets = Targets()
   private var engine: AVAudioEngine?
   private var source: AVAudioSourceNode?
-  private let lock = NSLock()
-
-  // values the audio thread reads (guarded by `lock`)
-  private var targetFreqL = 200.0, targetFreqR = 200.0
-  private var targetGain: Float = 0
   private var sampleRate = 48_000.0
+  private var routeObserver: NSObjectProtocol?
+  private var configObserver: NSObjectProtocol?
+  private var lastHeadphones: Bool?
 
-  // audio-thread state
+  // only the audio thread uses these
   private var phaseL = 0.0, phaseR = 0.0
   private var freqL = 200.0, freqR = 200.0
-  private var gain: Float = 0
+  private var tone: Float = 0, noise: Float = 0, master: Float = 0
+  private var pink = [Float](repeating: 0, count: 7)
 
   public func definition() -> ModuleDefinition {
     Name("BinauralTone")
+    Events("onOutputChange")
 
-    Function("start") { (baseHz: Double, beatHz: Double, volume: Double) in
-      self.start(baseHz: baseHz, beatHz: beatHz, volume: Float(volume))
+    Function("start") { (center: Double, beat: Double, tone: Double, noise: Double) in
+      self.setTargets(center: center, beat: beat, tone: tone, noise: noise, master: 1)
+      self.startEngine()
     }
-    Function("setVolume") { (volume: Double) in
-      self.setTarget(gain: Float(volume))
+    Function("update") { (center: Double, beat: Double, tone: Double, noise: Double) in
+      self.setTargets(center: center, beat: beat, tone: tone, noise: noise, master: nil)
     }
     Function("stop") {
-      self.stop()
+      self.setTargets(master: 0)
+      // after the one-second fade-out the engine is stopped and released
+      DispatchQueue.main.asyncAfter(deadline: .now() + 1.3) { [weak self] in
+        guard let self else { return }
+        self.lock.lock()
+        let silent = self.targets.master == 0
+        self.lock.unlock()
+        if silent { self.releaseEngine() }
+      }
+    }
+    Function("headphones") { () -> Bool in
+      BinauralToneModule.headphonesConnected()
+    }
+
+    OnCreate {
+      self.routeObserver = NotificationCenter.default.addObserver(forName: AVAudioSession.routeChangeNotification, object: nil, queue: .main) { [weak self] _ in
+        self?.reportOutput()
+      }
+    }
+    OnDestroy {
+      if let observer = self.routeObserver { NotificationCenter.default.removeObserver(observer) }
+      self.releaseEngine()
     }
   }
 
-  private func start(baseHz: Double, beatHz: Double, volume: Float) {
-    // mix with the music player, and keep playing in the background like the music does
+  private func setTargets(center: Double, beat: Double, tone: Double, noise: Double, master: Float?) {
+    lock.lock()
+    targets.freqL = max(1, center - beat / 2)
+    targets.freqR = max(1, center + beat / 2)
+    targets.tone = Float(tone)
+    targets.noise = Float(noise)
+    if let master { targets.master = master }
+    lock.unlock()
+  }
+
+  private func setTargets(master: Float) {
+    lock.lock()
+    targets.master = master
+    lock.unlock()
+  }
+
+  private func startEngine() {
+    // mixes with the music player, and keeps playing in the background like the music does
     try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [.mixWithOthers])
     try? AVAudioSession.sharedInstance().setActive(true)
-
     if engine == nil { makeEngine() }
-    lock.lock()
-    targetFreqL = max(1, baseHz - beatHz / 2)
-    targetFreqR = max(1, baseHz + beatHz / 2)
-    targetGain = volume
-    lock.unlock()
     if let engine, !engine.isRunning { try? engine.start() }
-  }
-
-  private func setTarget(gain: Float) {
-    lock.lock()
-    targetGain = gain
-    lock.unlock()
-  }
-
-  private func stop() {
-    setTarget(gain: 0)
-    // the fade out takes a moment; then the engine stops so the phone can rest
-    DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
-      guard let self else { return }
-      self.lock.lock()
-      let silent = self.targetGain == 0
-      self.lock.unlock()
-      if silent { self.engine?.pause() }
-    }
   }
 
   private func makeEngine() {
     let engine = AVAudioEngine()
-    let format = AVAudioFormat(standardFormatWithSampleRate: engine.outputNode.outputFormat(forBus: 0).sampleRate, channels: 2)!
-    sampleRate = format.sampleRate
+    sampleRate = engine.outputNode.outputFormat(forBus: 0).sampleRate
+    let format = AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: 2)!
     let node = AVAudioSourceNode(format: format) { [weak self] _, _, frameCount, bufferList in
       guard let self else { return noErr }
       let buffers = UnsafeMutableAudioBufferListPointer(bufferList)
@@ -79,44 +103,75 @@ public class BinauralToneModule: Module {
     engine.connect(node, to: engine.mainMixerNode, format: format)
     self.engine = engine
     self.source = node
-
-    // when the music player changes the audio session, iOS stops the engine by itself: start it again while the tone should play
-    NotificationCenter.default.addObserver(forName: .AVAudioEngineConfigurationChange, object: engine, queue: .main) { [weak self] _ in
-      self?.restartIfWanted()
+    // iOS stops the engine by itself when the audio session changes (the music player does this): start it again
+    configObserver = NotificationCenter.default.addObserver(forName: .AVAudioEngineConfigurationChange, object: engine, queue: .main) { [weak self] _ in
+      guard let self, let engine = self.engine else { return }
+      self.lock.lock()
+      let wanted = self.targets.master > 0
+      self.lock.unlock()
+      if wanted && !engine.isRunning { try? engine.start() }
     }
   }
 
-  private func restartIfWanted() {
+  private func releaseEngine() {
     guard let engine else { return }
-    lock.lock()
-    let wanted = targetGain > 0
-    lock.unlock()
-    guard wanted else { return }
-    try? AVAudioSession.sharedInstance().setActive(true)
-    if !engine.isRunning { try? engine.start() }
+    engine.stop()
+    if let source { engine.detach(source) }
+    if let configObserver { NotificationCenter.default.removeObserver(configObserver) }
+    configObserver = nil
+    self.source = nil
+    self.engine = nil
   }
 
-  /// Fills one buffer. Frequency and loudness move smoothly to their targets, so a change never clicks.
+  /// Fills one buffer. Pitch, loudness and noise glide (time constant 0.15 s); the master fades linearly over 1 s.
   private func render(left: UnsafeMutablePointer<Float>, right: UnsafeMutablePointer<Float>, frames: Int) {
     lock.lock()
-    let tL = targetFreqL, tR = targetFreqR, tG = targetGain
+    let t = targets
     lock.unlock()
 
     let twoPi = 2.0 * Double.pi
     let glide = 1.0 - exp(-1.0 / (0.15 * sampleRate))
-    let fadeGain = Float(glide)
+    let g = Float(glide)
+    let fadeStep = Float(1.0 / sampleRate)
     for i in 0..<frames {
-      freqL += (tL - freqL) * glide
-      freqR += (tR - freqR) * glide
-      gain += (tG - gain) * fadeGain
+      freqL += (t.freqL - freqL) * glide
+      freqR += (t.freqR - freqR) * glide
+      tone += (t.tone - tone) * g
+      noise += (t.noise - noise) * g
+      if master < t.master { master = min(t.master, master + fadeStep) }
+      if master > t.master { master = max(t.master, master - fadeStep) }
 
       phaseL += twoPi * freqL / sampleRate
       phaseR += twoPi * freqR / sampleRate
       if phaseL > twoPi { phaseL -= twoPi }
       if phaseR > twoPi { phaseR -= twoPi }
 
-      left[i] = Float(sin(phaseL)) * gain
-      right[i] = Float(sin(phaseR)) * gain
+      // pink noise (Paul Kellet's filter), the same in both ears
+      let white = Float.random(in: -1...1)
+      pink[0] = 0.99886 * pink[0] + white * 0.0555179
+      pink[1] = 0.99332 * pink[1] + white * 0.0750759
+      pink[2] = 0.96900 * pink[2] + white * 0.1538520
+      pink[3] = 0.86650 * pink[3] + white * 0.3104856
+      pink[4] = 0.55000 * pink[4] + white * 0.5329522
+      pink[5] = -0.7616 * pink[5] - white * 0.0168980
+      let pinkSample = (pink[0] + pink[1] + pink[2] + pink[3] + pink[4] + pink[5] + pink[6] + white * 0.5362) * 0.11
+      pink[6] = white * 0.115926
+      let n = pinkSample * noise
+
+      left[i] = (Float(sin(phaseL)) * tone + n) * master
+      right[i] = (Float(sin(phaseR)) * tone + n) * master
     }
+  }
+
+  private func reportOutput() {
+    let headphones = BinauralToneModule.headphonesConnected()
+    guard headphones != lastHeadphones else { return }
+    lastHeadphones = headphones
+    sendEvent("onOutputChange", ["headphones": headphones])
+  }
+
+  static func headphonesConnected() -> Bool {
+    let phones: [AVAudioSession.Port] = [.headphones, .bluetoothA2DP, .bluetoothHFP, .bluetoothLE, .usbAudio, .lineOut]
+    return AVAudioSession.sharedInstance().currentRoute.outputs.contains { phones.contains($0.portType) }
   }
 }

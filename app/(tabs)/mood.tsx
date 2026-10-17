@@ -53,7 +53,7 @@ export default function MoodTab() {
       last = key;
       const { focusToneLevel } = useSettings.getState();
       if (focus && st.status === 'playing' && st.current && focusToneLevel !== 'off') {
-        void playTone(focusHzOfSong(st.current.id) ?? 432, focusToneLevel);
+        void playTone(focusHzOfSong(st.current.id) ?? 432);
       } else if (!focus || st.status === 'paused' || st.status === 'idle' || st.status === 'error' || focusToneLevel === 'off') {
         pauseTone();
       }

@@ -1,25 +1,51 @@
 import { native } from '../../modules/binaural-tone';
-import { type ToneLevel, toneVolume } from '../core/focus';
+import { refreshAmbient } from '../state/player';
+import { mixFor } from './binaural';
+import { onHeadphonesChange } from './output';
 
 /**
- * The sine tone beside a 集中 sound. It is made live on the phone (modules/binaural-tone), so it has no end.
- * The left ear hears `requested` Hz and the right ear `requested + BEAT_HZ` Hz, so the two make a slow beat (binaural).
- * This needs headphones.
+ * The binaural tone beside a 集中 sound. It is made on the phone (modules/binaural-tone), so it has no end.
+ * The plan (strength, noise, headphones or speakers) comes from core/binaural.ts.
  */
-const BEAT_HZ = 20;
 
-/** plays the tone at `requested` Hz; a new frequency or loudness takes effect at once */
-export function playTone(requested: number, level: ToneLevel): Promise<void> {
-  const volume = toneVolume(level);
-  if (!native) return Promise.resolve();
-  if (volume === 0) {
-    native.stop();
-    return Promise.resolve();
+/** the 集中 sound that is playing now, by its middle pitch (null when no 集中 sound plays) */
+let want: { center: number } | null = null;
+let playing = false;
+
+/** brings the tone in line with the plan: starts, changes or stops it, and sets the environment sound to match */
+function apply(): void {
+  if (!native) return;
+  const mix = want ? mixFor(want.center) : null;
+  const tone = mix?.tone ?? null;
+  if (!tone) {
+    if (playing) native.stop();
+    playing = false;
+  } else if (playing) {
+    native.update(tone.center, tone.beat, tone.toneVolume, tone.noiseVolume);
+  } else {
+    native.start(tone.center, tone.beat, tone.toneVolume, tone.noiseVolume);
+    playing = true;
   }
-  native.start(requested, BEAT_HZ, volume);
+  refreshAmbient();
+}
+
+/** a 集中 sound at `center` Hz is playing: the tone plays beside it */
+export function playTone(center: number): Promise<void> {
+  want = { center };
+  apply();
   return Promise.resolve();
 }
 
+/** the 集中 sound stopped or paused: the tone fades out */
 export function pauseTone(): void {
-  native?.stop();
+  want = null;
+  apply();
 }
+
+/** the settings (strength, noise, speakers) changed: apply them now */
+export function refreshTone(): void {
+  apply();
+}
+
+// headphones plugged in or out: the tone fades out (speakers, stop) or changes its pitch (speakers, shift)
+onHeadphonesChange(() => apply());
