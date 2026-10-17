@@ -78,6 +78,7 @@ jobs:
       - name: Tune Gradle for a small machine
         run: |
           {
+            echo ""
             echo "org.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=768m -Dfile.encoding=UTF-8"
             echo "org.gradle.daemon=false"
             echo "org.gradle.parallel=false"
