@@ -9,14 +9,16 @@ import { onHeadphonesChange } from './output';
  */
 
 /** the 集中 sound that is playing now, by its middle pitch (null when no 集中 sound plays) */
-let want: { center: number } | null = null;
+let focusWant: { center: number } | null = null;
+/** the tone on its own, for trying it out in Settings (null when off) */
+let testWant: { center: number } | null = null;
 let playing = false;
 
 /** brings the tone in line with the plan: starts, changes or stops it, and sets the environment sound to match */
 function apply(): void {
   if (!native) return;
-  const mix = want ? mixFor(want.center) : null;
-  const tone = mix?.tone ?? null;
+  const source = testWant ?? focusWant;
+  const tone = source ? mixFor(source.center).tone : null;
   if (!tone) {
     if (playing) native.stop();
     playing = false;
@@ -31,14 +33,14 @@ function apply(): void {
 
 /** a 集中 sound at `center` Hz is playing: the tone plays beside it */
 export function playTone(center: number): Promise<void> {
-  want = { center };
+  focusWant = { center };
   apply();
   return Promise.resolve();
 }
 
 /** the 集中 sound stopped or paused: the tone fades out */
 export function pauseTone(): void {
-  want = null;
+  focusWant = null;
   apply();
 }
 
@@ -46,6 +48,15 @@ export function pauseTone(): void {
 export function refreshTone(): void {
   apply();
 }
+
+/** the tone alone, without any music: starts it at `center` Hz, or stops it. Returns whether it is on now. */
+export function toggleToneTest(center: number): boolean {
+  testWant = testWant ? null : { center };
+  apply();
+  return testWant !== null;
+}
+
+export const toneTesting = (): boolean => testWant !== null;
 
 // headphones plugged in or out: the tone fades out (speakers, stop) or changes its pitch (speakers, shift)
 onHeadphonesChange(() => apply());

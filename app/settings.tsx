@@ -6,8 +6,8 @@ import { runSelfTest, runTokenServerTest, StepResult } from '../src/core/diagnos
 import type { StreamBackend } from '../src/core/streams/resolver';
 import { runCurrentSongProbe, runFormatMatrix, runPlaybackProbe, runRealPathTest, runTokenExperiment } from '../src/player/probe';
 import { usePlayer } from '../src/state/player';
-import { refreshTone } from '../src/player/tone';
-import { TONE_LEVELS } from '../src/core/focus';
+import { refreshTone, toggleToneTest, toneTesting } from '../src/player/tone';
+import { FOCUS_SOUNDS, TONE_LEVELS } from '../src/core/focus';
 import { useUpdate } from '../src/state/update';
 import { DEFAULT_SETTINGS, useSettings } from '../src/state/settings';
 import { s } from '../src/ui/components';
@@ -79,6 +79,19 @@ function Action({ title, sub, info, onPress, disabled, right }: { title: string;
         <Text style={{ color: colors.accentText, fontWeight: '700' }}>{disabled ? '実行中…' : right ?? '実行'}</Text>
       </Row>
     </Pressable>
+  );
+}
+
+function ToneTestRow() {
+  const [on, setOn] = useState(toneTesting);
+  const hz = FOCUS_SOUNDS[0]?.hz ?? 200;
+  return (
+    <Action
+      title='正弦波だけ鳴らす'
+      info="音楽は流さず、正弦波だけを鳴らします。もう一度押すと止まります。強さが「なし」のときは鳴りません"
+      right={on ? '止める' : '鳴らす'}
+      onPress={() => setOn(toggleToneTest(hz))}
+    />
   );
 }
 
@@ -220,6 +233,7 @@ export default function Settings() {
             }}
           />
         </Row>
+        <ToneTestRow />
         <Row title="うなりに混ぜるノイズ" sub="ピンクノイズを薄く混ぜると、純音のとげとげしさがやわらぎます" last>
           <Chips
             options={[
