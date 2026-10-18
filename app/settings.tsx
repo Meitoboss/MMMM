@@ -6,7 +6,8 @@ import { runSelfTest, runTokenServerTest, StepResult } from '../src/core/diagnos
 import type { StreamBackend } from '../src/core/streams/resolver';
 import { runCurrentSongProbe, runFormatMatrix, runPlaybackProbe, runRealPathTest, runTokenExperiment } from '../src/player/probe';
 import { usePlayer } from '../src/state/player';
-import { refreshTone, toggleToneTest, toneTesting } from '../src/player/tone';
+import { refreshTone, toggleToneTest, toneAvailable, toneTesting } from '../src/player/tone';
+import { headphonesNow } from '../src/player/output';
 import { FOCUS_SOUNDS, TONE_LEVELS } from '../src/core/focus';
 import { useUpdate } from '../src/state/update';
 import { DEFAULT_SETTINGS, useSettings } from '../src/state/settings';
@@ -90,7 +91,15 @@ function ToneTestRow() {
       title='正弦波だけ鳴らす'
       info="音楽は流さず、正弦波だけを鳴らします。もう一度押すと止まります。強さが「なし」のときは鳴りません"
       right={on ? '止める' : '鳴らす'}
-      onPress={() => setOn(toggleToneTest(hz))}
+      onPress={() => {
+        if (!toneAvailable()) {
+          Alert.alert('正弦波', 'このアプリには、正弦波の機能が入っていません。新しいビルドを入れてください');
+          return;
+        }
+        const next = toggleToneTest(hz);
+        setOn(next);
+        if (next) Alert.alert('正弦波', headphonesNow() ? '鳴らしています（ヘッドホンとして判定されています）' : '鳴らしています（ヘッドホンとして判定されていません）');
+      }}
     />
   );
 }
