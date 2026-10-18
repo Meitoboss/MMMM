@@ -60,3 +60,6 @@ export const toneTesting = (): boolean => testWant !== null;
 
 // headphones plugged in or out: the tone fades out (speakers, stop) or changes its pitch (speakers, shift)
 onHeadphonesChange(() => apply());
+
+/** whether this build of the app has the tone (a build from before the native code does not) */
+export const toneAvailable = (): boolean => native !== null;
