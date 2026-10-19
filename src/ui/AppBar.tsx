@@ -27,7 +27,7 @@ export function SettingsButton() {
   const router = useRouter();
   return (
     <Pressable hitSlop={12} accessibilityRole="button" accessibilityLabel="設定" onPress={() => router.push('/settings')} style={{ paddingHorizontal: 16 }}>
-      <Ionicons name="menu" size={26} color={colors.text} />
+      <Ionicons name="ellipsis-vertical" size={24} color={colors.text} />
     </Pressable>
   );
 }

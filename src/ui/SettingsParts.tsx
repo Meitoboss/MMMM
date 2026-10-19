@@ -49,6 +49,22 @@ function InfoButton({ title, text }: { title: string; text: string }) {
 }
 
 /**
+ * A row whose content takes the full width under the title (sliders, a wide set of chips).
+ */
+export function Block({ title, sub, last, children }: { title: string; sub?: string; last?: boolean; children?: React.ReactNode }) {
+  useScheme();
+  return (
+    <View style={{ paddingTop: 13, paddingBottom: last ? 4 : 8, borderBottomWidth: last ? 0 : 1, borderBottomColor: colors.border }}>
+      <View style={{ paddingHorizontal: 16 }}>
+        <Text style={{ color: colors.text, fontSize: 15, fontWeight: '600' }}>{title}</Text>
+        {!!sub && <Text style={s.sub}>{sub}</Text>}
+      </View>
+      {children}
+    </View>
+  );
+}
+
+/**
  * One line of a group. `sub` is shown under the title; `info` is shown behind an ⓘ button instead
  * (for the longer explanations, so that the list stays short).
  */
