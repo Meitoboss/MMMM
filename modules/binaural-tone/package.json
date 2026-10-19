@@ -1,0 +1,7 @@
+{
+  "name": "binaural-tone",
+  "version": "1.0.0",
+  "description": "The binaural tone of 集中 mode, made on the phone (local Expo module)",
+  "main": "index.ts",
+  "private": true
+}
