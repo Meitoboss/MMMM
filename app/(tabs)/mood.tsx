@@ -1,18 +1,47 @@
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
 import { openDb } from '../../src/db/expo';
 import * as repo from '../../src/db/repo';
 import { type MoodOption, TIME_OPTION, matchTagIds, nowHours, timeLabel } from '../../src/core/mood';
 import type { SongItem } from '../../src/core/types';
 import { focusHzOfSong, focusSongs, isFocusId } from '../../src/player/focus';
-import { pauseTone, playTone } from '../../src/player/tone';
+import { pauseTone, playTone, setTestEars, testEars } from '../../src/player/tone';
 import { usePlayer } from '../../src/state/player';
 import { useSettings } from '../../src/state/settings';
 import { Button, SongRow, s } from '../../src/ui/components';
 import { MoodDial } from '../../src/ui/MoodDial';
 import { MINI_HEIGHT, colors, useScheme } from '../../src/ui/theme';
+
+/** the pitch of each ear of the 集中 tone, changed on the spot while the 集中 sounds play (developer) */
+function EarHz() {
+  const [ears, setEars] = useState(testEars);
+  const move = (side: 'left' | 'right', step: number) => {
+    const next = { ...ears, [side]: Math.min(500, Math.max(20, ears[side] + step)) };
+    setTestEars(next.left, next.right);
+    setEars(next);
+  };
+  const button = (label: string, onPress: () => void) => (
+    <Pressable onPress={onPress} hitSlop={8} style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 14, backgroundColor: colors.surface2 }}>
+      <Text style={{ color: colors.text, fontWeight: '700' }}>{label}</Text>
+    </Pressable>
+  );
+  const ear = (name: string, side: 'left' | 'right') => (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+      <Text style={{ color: colors.sub, fontSize: 12 }}>{name}</Text>
+      {button('−', () => move(side, -5))}
+      <Text style={{ color: colors.text, fontWeight: '700', minWidth: 60, textAlign: 'center' }}>{ears[side]} Hz</Text>
+      {button('+', () => move(side, 5))}
+    </View>
+  );
+  return (
+    <View style={{ flexDirection: 'row', justifyContent: 'center', flexWrap: 'wrap', gap: 14, paddingHorizontal: 12 }}>
+      {ear('左', 'left')}
+      {ear('右', 'right')}
+    </View>
+  );
+}
 
 /** how many songs are shown under the dial (the screen does not scroll; the buttons play all of them) */
 const PREVIEW = 3;
@@ -85,6 +114,7 @@ export default function MoodTab() {
     <View style={{ flex: 1, alignItems: 'stretch', paddingTop: 16, paddingBottom: MINI_HEIGHT + 16, gap: 14, overflow: 'hidden' }}>
       <MoodDial labels={labels} focusOn={focusOn} onCenterPress={toggleFocus} onChange={(o) => { setOption(o); }} />
       <Text style={[s.sub, { textAlign: 'center', paddingHorizontal: 24 }]}>ダイヤルを回して、止めたところの気分を選びます。</Text>
+      {focusOn && <EarHz />}
 
       {songs.length ? (
         <>
