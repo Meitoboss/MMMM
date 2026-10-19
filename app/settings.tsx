@@ -20,7 +20,7 @@ import { type NormalizeMode } from '../src/core/loudness';
 import { QUALITY_LABELS, qualitiesFor } from '../src/core/streams/quality';
 import { promptText } from '../src/ui/dialogs';
 import { LIST_BOTTOM, colors, useScheme } from '../src/ui/theme';
-import { Chips, Row, Section } from '../src/ui/SettingsParts';
+import { Block, Chips, Row, Section } from '../src/ui/SettingsParts';
 import { BackupSection } from '../src/ui/BackupSection';
 import { SongArchiveSection } from '../src/ui/SongArchiveSection';
 import { NetLogRow } from '../src/ui/NetLogRow';
@@ -91,17 +91,18 @@ function TestEarSliders() {
     setTestEars(left, right);
     setEars({ left, right });
   };
-  const slider = (value: number, onChange: (v: number) => void) => (
-    <Slider style={{ width: '100%', height: 40 }} minimumValue={20} maximumValue={500} step={1} value={value} onValueChange={(v) => onChange(Math.round(v))} />
-  );
   return (
     <>
-      <Row title={`左の耳: ${ears.left} Hz`} sub="正弦波のテストで使う、左の高さです">
-        {slider(ears.left, (v) => change(v, ears.right))}
-      </Row>
-      <Row title={`右の耳: ${ears.right} Hz`} sub="正弦波のテストで使う、右の高さです。左との差がうなりの速さになります" last>
-        {slider(ears.right, (v) => change(ears.left, v))}
-      </Row>
+      <Block title={`左の耳: ${ears.left} Hz`} sub="正弦波のテストで使う、左の高さです">
+        <View style={{ paddingHorizontal: 16, paddingBottom: 6 }}>
+          <Slider minimumValue={20} maximumValue={500} step={1} value={ears.left} onValueChange={(v) => change(Math.round(v), ears.right)} />
+        </View>
+      </Block>
+      <Block title={`右の耳: ${ears.right} Hz`} sub="正弦波のテストで使う、右の高さです。左との差がうなりの速さになります" last>
+        <View style={{ paddingHorizontal: 16, paddingBottom: 6 }}>
+          <Slider minimumValue={20} maximumValue={500} step={1} value={ears.right} onValueChange={(v) => change(ears.left, Math.round(v))} />
+        </View>
+      </Block>
     </>
   );
 }
@@ -251,22 +252,9 @@ export default function Settings() {
             }}
           />
         </Row>
-        <Row title="ヘッドホンでないとき" sub="うなりは、ヘッドホンでないと聞こえません。スピーカーのときは、止めるか、高さを100Hz上げて鳴らし続けるかを選べます">
-          <Chips
-            options={[
-              { label: '止める', value: 'stop' as const },
-              { label: '高くして鳴らす', value: 'shift' as const },
-            ]}
-            value={st.binauralSpeakerMode}
-            onChange={(v) => {
-              st.update({ binauralSpeakerMode: v });
-              refreshTone();
-            }}
-          />
-        </Row>
         <ToneTestRow />
         <TestEarSliders />
-        <Row title="うなりに混ぜるノイズ" sub="ピンクノイズを薄く混ぜると、純音のとげとげしさがやわらぎます" last>
+        <Block title="うなりに混ぜるノイズ" sub="ピンクノイズを薄く混ぜると、純音のとげとげしさがやわらぎます" last>
           <Chips
             options={[
               { label: 'なし', value: 'off' as const },
@@ -279,7 +267,7 @@ export default function Settings() {
               refreshTone();
             }}
           />
-        </Row>
+        </Block>
       </Section>
 
       <Section title="トークンサーバー" collapsible>
