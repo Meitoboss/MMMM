@@ -6,9 +6,10 @@ import { runSelfTest, runTokenServerTest, StepResult } from '../src/core/diagnos
 import type { StreamBackend } from '../src/core/streams/resolver';
 import { runCurrentSongProbe, runFormatMatrix, runPlaybackProbe, runRealPathTest, runTokenExperiment } from '../src/player/probe';
 import { usePlayer } from '../src/state/player';
-import { refreshTone, toggleToneTest, toneAvailable, toneTesting } from '../src/player/tone';
+import { refreshTone, setTestEars, testEars, toggleToneTest, toneAvailable, toneTesting } from '../src/player/tone';
+import Slider from '@react-native-community/slider';
 import { headphonesNow } from '../src/player/output';
-import { FOCUS_SOUNDS, TONE_LEVELS } from '../src/core/focus';
+import { TONE_LEVELS } from '../src/core/focus';
 import { useUpdate } from '../src/state/update';
 import { DEFAULT_SETTINGS, useSettings } from '../src/state/settings';
 import { s } from '../src/ui/components';
@@ -83,9 +84,30 @@ function Action({ title, sub, info, onPress, disabled, right }: { title: string;
   );
 }
 
+/** the left and right ear's pitch for the test, for trying out the tone (developer) */
+function TestEarSliders() {
+  const [ears, setEars] = useState(testEars);
+  const change = (left: number, right: number) => {
+    setTestEars(left, right);
+    setEars({ left, right });
+  };
+  const slider = (value: number, onChange: (v: number) => void) => (
+    <Slider style={{ width: '100%', height: 40 }} minimumValue={20} maximumValue={500} step={1} value={value} onValueChange={(v) => onChange(Math.round(v))} />
+  );
+  return (
+    <>
+      <Row title={`左の耳: ${ears.left} Hz`} sub="正弦波のテストで使う、左の高さです">
+        {slider(ears.left, (v) => change(v, ears.right))}
+      </Row>
+      <Row title={`右の耳: ${ears.right} Hz`} sub="正弦波のテストで使う、右の高さです。左との差がうなりの速さになります" last>
+        {slider(ears.right, (v) => change(ears.left, v))}
+      </Row>
+    </>
+  );
+}
+
 function ToneTestRow() {
   const [on, setOn] = useState(toneTesting);
-  const hz = FOCUS_SOUNDS[0]?.hz ?? 200;
   return (
     <Action
       title='正弦波だけ鳴らす'
@@ -96,7 +118,7 @@ function ToneTestRow() {
           Alert.alert('正弦波', 'このアプリには、正弦波の機能が入っていません。新しいビルドを入れてください');
           return;
         }
-        const next = toggleToneTest(hz);
+        const next = toggleToneTest();
         setOn(next);
         if (next) Alert.alert('正弦波', headphonesNow() ? '鳴らしています（ヘッドホンとして判定されています）' : '鳴らしています（ヘッドホンとして判定されていません）');
       }}
@@ -243,6 +265,7 @@ export default function Settings() {
           />
         </Row>
         <ToneTestRow />
+        <TestEarSliders />
         <Row title="うなりに混ぜるノイズ" sub="ピンクノイズを薄く混ぜると、純音のとげとげしさがやわらぎます" last>
           <Chips
             options={[
