@@ -19,7 +19,7 @@ export interface FocusSound {
 /**
  * The sounds on the server. Add a line here for each new sound (the file must be /var/oled/audio/<key>.flac on the server).
  */
-export const FOCUS_SOUNDS: FocusSound[] = [{ key: 'focus_loop', name: '広い野原', hz: 105 }];
+export const FOCUS_SOUNDS: FocusSound[] = [{ key: 'focus_loop', name: '広い野原', hz: 200 }];
 
 /** how strong the binaural tone is: none, low, normal, high (see core/binaural.ts) */
 export type ToneLevel = StrengthLevel;
