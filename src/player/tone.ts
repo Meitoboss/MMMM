@@ -17,8 +17,8 @@ let playing = false;
 /** brings the tone in line with the plan: starts, changes or stops it, and sets the environment sound to match */
 function apply(): void {
   if (!native) return;
-  const source = testWant ?? focusWant;
-  const tone = source ? mixFor(source.center).tone : null;
+  // the test plays whatever the output is (headphones or not), so it can be heard without detection
+  const tone = testWant ? mixFor(testWant.center, true).tone : focusWant ? mixFor(focusWant.center).tone : null;
   if (!tone) {
     if (playing) native.stop();
     playing = false;
