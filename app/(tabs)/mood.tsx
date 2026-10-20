@@ -1,18 +1,11 @@
-import { useFocusEffect } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 
 import { FocusBackdrop } from '../../src/ui/FocusPlayer';
-
-import { openDb } from '../../src/db/expo';
-import * as repo from '../../src/db/repo';
-import { DIAL_OPTIONS, type MoodOption, TIME_OPTION, matchTagIds, nowHours, timeLabel } from '../../src/core/mood';
-import type { SongItem } from '../../src/core/types';
 import { focusHzOfSong, focusSongs, isFocusId } from '../../src/player/focus';
 import { pauseTone, playTone, setTestEars, testEars } from '../../src/player/tone';
 import { usePlayer } from '../../src/state/player';
 import { useSettings } from '../../src/state/settings';
-import { Button, SongRow } from '../../src/ui/components';
 import { MINI_HEIGHT, colors, useScheme } from '../../src/ui/theme';
 
 /** the pitch of each ear of the 集中 tone, changed on the spot while the 集中 sounds play (developer) */
@@ -43,35 +36,12 @@ function EarHz({ ears, onChange }: { ears: { left: number; right: number }; onCh
   );
 }
 
-/** the title of a section */
-const SECTION_TITLE = { color: colors.text, fontSize: 18, fontWeight: '800' } as const;
-
-/** 気分: the 集中 sounds as a card (the Hz is the difference between the ears), and the songs of the chosen mood below */
+/** 気分: the 集中 sounds on their own. The screen has no tab bar and no header of its own: 左上の「戻る」 leaves it */
 export default function MoodTab() {
   useScheme();
-  const play = usePlayer((p) => p.playSongs);
   // the 集中 sounds are on while one of them is the song playing (or loading)
   const focusOn = usePlayer((p) => !!p.current && isFocusId(p.current.id) && (p.status === 'playing' || p.status === 'loading'));
-  const [option, setOption] = useState<MoodOption>(TIME_OPTION);
-  const [songs, setSongs] = useState<SongItem[]>([]);
-  const [labels] = useState(() => ({ [TIME_OPTION.key]: timeLabel(new Date()) }));
   const [ears, setEars] = useState(testEars);
-
-  const load = useCallback(async (o: MoodOption) => {
-    const db = await openDb();
-    if (o.key === TIME_OPTION.key) {
-      setSongs(await repo.playedInHours(db, nowHours(new Date()), 30));
-      return;
-    }
-    const ids = matchTagIds(await repo.tags(db), o);
-    setSongs(ids.length ? await repo.songsByTags(db, ids, 'any') : []);
-  }, []);
-
-  useFocusEffect(
-    useCallback(() => {
-      void load(option);
-    }, [load, option]),
-  );
 
   // the sine tone follows the 集中 sounds: it plays while they play, and stops when they pause or another song starts
   useEffect(() => {
@@ -102,36 +72,15 @@ export default function MoodTab() {
     if (!list.length) return; // no focus sounds on the server yet
     usePlayer.setState({ shuffle: true });
     player.setRepeat('all');
-    void play(list, Math.floor(Math.random() * list.length));
+    void player.playSongs(list, Math.floor(Math.random() * list.length));
   };
 
-  const empty =
-    option.key === TIME_OPTION.key
-      ? 'この時間帯に聴いた曲は、まだありません'
-      : `「${option.label}」のタグが付いた曲は、まだありません。曲の「…」からタグを付けると、ここに並びます`;
   const beat = ears.right - ears.left;
 
   return (
     <ScrollView contentContainerStyle={{ paddingTop: 16, paddingBottom: MINI_HEIGHT + 24, gap: 22 }}>
-      {/* the moods: choose one, and the songs for it are listed below */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingHorizontal: 16 }}>
-        {DIAL_OPTIONS.map((o) => {
-          const on = o.key === option.key;
-          return (
-            <Pressable
-              key={o.key}
-              onPress={() => setOption(o)}
-              style={{ paddingHorizontal: 14, paddingVertical: 8, borderRadius: 18, backgroundColor: on ? colors.accent : colors.surface2 }}
-            >
-              <Text style={{ color: on ? colors.onAccent : colors.text, fontWeight: on ? '700' : '500' }}>{labels[o.key] ?? o.label}</Text>
-            </Pressable>
-          );
-        })}
-      </ScrollView>
-
-      {/* 集中: the card of the 集中 sounds, with the Hz (the difference between the ears) in large */}
       <View style={{ gap: 12, paddingHorizontal: 16 }}>
-        <Text style={SECTION_TITLE}>集中</Text>
+        <Text style={{ color: colors.text, fontSize: 18, fontWeight: '800' }}>集中</Text>
         <Pressable
           onPress={toggleFocus}
           accessibilityRole="button"
@@ -148,24 +97,6 @@ export default function MoodTab() {
           </View>
         </Pressable>
         {focusOn && <EarHz ears={ears} onChange={setEars} />}
-      </View>
-
-      {/* the songs of the chosen mood */}
-      <View style={{ gap: 12 }}>
-        <Text style={[SECTION_TITLE, { paddingHorizontal: 16 }]}>{labels[option.key] ?? option.label}</Text>
-        {songs.length ? (
-          <>
-            <View style={{ flexDirection: 'row', gap: 8, paddingHorizontal: 16 }}>
-              <Button label="再生" icon="play" onPress={() => void play(songs, 0)} />
-              <Button label="シャッフル" icon="shuffle" secondary onPress={() => { usePlayer.setState({ shuffle: true }); void play(songs, Math.floor(Math.random() * songs.length)); }} />
-            </View>
-            {songs.map((song, i) => (
-              <SongRow key={song.id} song={song} index={i} onPress={() => void play(songs, i)} />
-            ))}
-          </>
-        ) : (
-          <Text style={{ color: colors.sub, paddingHorizontal: 16 }}>{empty}</Text>
-        )}
       </View>
     </ScrollView>
   );
