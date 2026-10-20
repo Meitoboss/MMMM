@@ -184,7 +184,7 @@ export function FocusPlayer() {
           <Text style={{ color: colors.text, fontSize: 24, fontWeight: '800' }}>{current?.title ?? ''}</Text>
           {!!info && (
             <Text numberOfLines={2} style={{ color: colors.sub, fontSize: 14, lineHeight: 21, marginTop: 4 }}>
-              {info.text}
+              {info.short}
             </Text>
           )}
         </View>

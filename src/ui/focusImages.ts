@@ -9,6 +9,8 @@ export const focusImage = (key: string): ImageSourcePropType | undefined => IMAG
 
 /** the text of the description of a 集中 sound, as shown under the player */
 export interface FocusInfo {
+  /** the one line under the title on the player */
+  short: string;
   text: string;
   features: { icon: 'locate-outline' | 'git-network-outline' | 'extension-puzzle-outline' | 'flash-outline'; label: string }[];
   body: string;
@@ -16,6 +18,7 @@ export interface FocusInfo {
 
 export const FOCUS_INFO: Record<string, FocusInfo> = {
   focus_loop: {
+    short: '邪魔されないディープワークと勉強の状態を構築するための広がりのある構造的なトーン。',
     text: '集中した思考や覚醒に関連する、活発な脳波のパターンです。考えを分析したり、日常の問題を解決したりする際の心の働きを反映します。',
     features: [
       { icon: 'locate-outline', label: '能動的な集中' },
