@@ -1,15 +1,15 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect } from 'expo-router';
-import { useCallback, useEffect, useRef } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useEffect } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 
 import { FOCUS_SOUNDS, type FocusSound } from '../../src/core/focus';
-import type { SongItem } from '../../src/core/types';
-import { focusIdOf, focusKeyOf, focusSongOf, isFocusId, soundPitch } from '../../src/player/focus';
+import { focusKeyOf, isFocusId } from '../../src/player/focus';
 import { pauseTone, playTone, refreshTone } from '../../src/player/tone';
 import { usePlayer } from '../../src/state/player';
 import { useSettings } from '../../src/state/settings';
-import { FocusBackdrop, focusBeat } from '../../src/ui/FocusPlayer';
+import { leaveFocus, toggleFocusSound } from '../../src/player/focusControl';
+import { SoundCard } from '../../src/ui/SoundCard';
 import { MINI_HEIGHT, colors, useScheme } from '../../src/ui/theme';
 
 /** the シナリオ chips: two rows that slide sideways */
@@ -69,29 +69,6 @@ function EarHz() {
   );
 }
 
-/** one card of a 気分 section: the photo, the beat in large, the name, and the button (準備中 until the sound is on the server) */
-function SoundCard({ sound, playing, onPress }: { sound: FocusSound; playing: boolean; onPress: () => void }) {
-  const id = focusIdOf(sound.key);
-  const beat = focusBeat(id);
-  return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      style={{ marginHorizontal: 16, borderRadius: 22, overflow: 'hidden', backgroundColor: '#101113', padding: 20, minHeight: 170, justifyContent: 'space-between' }}
-    >
-      <FocusBackdrop id={id} dim={0.5} />
-      <Text style={{ color: colors.text, fontSize: 56, fontWeight: '200' }}>{beat} Hz</Text>
-      <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' }}>
-        <View>
-          <Text style={{ color: colors.text, fontSize: 18, fontWeight: '700' }}>{sound.name}</Text>
-          <Text style={{ color: colors.text, opacity: 0.8, fontSize: 12 }}>{sound.group === 'focus' ? '集中' : '睡眠'} ・ ミュージック</Text>
-        </View>
-        <Text style={{ color: colors.text, fontWeight: '700' }}>{!sound.ready ? '準備中' : playing ? '止める' : '再生'}</Text>
-      </View>
-    </Pressable>
-  );
-}
-
 /** 気分: the シナリオ chips, then the cards of each section; the 集中 and 睡眠 cards play their sounds on their own */
 export default function MoodTab() {
   useScheme();
@@ -99,8 +76,7 @@ export default function MoodTab() {
   const status = usePlayer((p) => p.status);
   // the key of the 集中 sound that is on (playing or loading)
   const playingKey = current && isFocusId(current.id) && (status === 'playing' || status === 'loading') ? focusKeyOf(current.id) : '';
-  // the music that was playing before the 集中 sounds took over: it comes back, paused, where it was when the 気分 tab is left
-  const before = useRef<{ queue: SongItem[]; index: number; position: number; shuffle: boolean; repeat: 'off' | 'all' | 'one' } | null>(null);
+  const router = useRouter();
 
   // the sine tone follows the 集中 sounds: it plays while they play, and stops when they pause or another song starts
   useEffect(() => {
@@ -119,49 +95,8 @@ export default function MoodTab() {
     });
   }, []);
 
-  // a tap on a card: its sound starts, or pauses (a sound that is not on the server yet cannot be played)
-  const toggle = async (sound: FocusSound) => {
-    if (!sound.ready) return;
-    const player = usePlayer.getState();
-    const isCurrent = !!player.current && focusKeyOf(player.current.id) === sound.key;
-    if (isCurrent) {
-      if (player.status === 'playing') {
-        await player.togglePlay();
-        pauseTone();
-      } else {
-        await player.togglePlay();
-      }
-      return;
-    }
-    if (player.current && !isFocusId(player.current.id)) {
-      before.current = { queue: player.queue, index: player.index, position: await player.getPosition(), shuffle: player.shuffle, repeat: player.repeat };
-    }
-    usePlayer.setState({ shuffle: false });
-    player.setRepeat('all');
-    await player.playSongs([focusSongOf(sound.key)], 0);
-  };
-
-  // leaving the 気分 tab: the 集中 sounds stop, and the music from before comes back, paused where it was
-  useFocusEffect(
-    useCallback(() => {
-      return () => {
-        const player = usePlayer.getState();
-        if (!player.current || !isFocusId(player.current.id)) return;
-        pauseTone();
-        void (async () => {
-          if (player.status === 'playing') await player.togglePlay();
-          const saved = before.current;
-          before.current = null;
-          if (!saved || !saved.queue.length) return;
-          usePlayer.setState({ shuffle: saved.shuffle });
-          player.setRepeat(saved.repeat);
-          await player.playSongs(saved.queue, saved.index);
-          await usePlayer.getState().seekTo(saved.position);
-          if (usePlayer.getState().status === 'playing') await usePlayer.getState().togglePlay();
-        })();
-      };
-    }, []),
-  );
+  // leaving the 気分 tab: the 集中 sounds stop, and the music from before comes back
+  useFocusEffect(useCallback(() => leaveFocus, []));
 
   const sections: { title: string; group: FocusSound['group'] }[] = [
     { title: '集中', group: 'focus' },
@@ -179,6 +114,7 @@ export default function MoodTab() {
               <Pressable
                 key={c.label}
                 accessibilityRole="button"
+                onPress={() => router.push(`/scenario/${encodeURIComponent(c.label)}`)}
                 style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 22, backgroundColor: colors.surface2 }}
               >
                 <Ionicons name={c.icon} size={18} color={colors.text} />
@@ -197,7 +133,7 @@ export default function MoodTab() {
             <Text style={{ color: colors.text, fontSize: 18, fontWeight: '800', paddingHorizontal: 16 }}>{sec.title}</Text>
             {cards.map((sound) => (
               <View key={sound.key} style={{ gap: 10 }}>
-                <SoundCard sound={sound} playing={playingKey === sound.key} onPress={() => void toggle(sound)} />
+                <SoundCard sound={sound} playing={playingKey === sound.key} onPress={() => void toggleFocusSound(sound)} />
                 {sound.key === 'focus_loop' && playingKey === sound.key && <EarHz />}
               </View>
             ))}
