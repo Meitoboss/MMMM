@@ -5,6 +5,7 @@ import { useRef, useState } from 'react';
 import { PanResponder, Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
 
 import { TONE_LEVELS, type ToneLevel } from '../core/focus';
+import { focusKeyOf, soundPitch } from '../player/focus';
 import { refreshTone } from '../player/tone';
 import { toggleLikeSong, useIsLiked } from '../state/likes';
 import { usePlayer } from '../state/player';
@@ -12,11 +13,8 @@ import { useSettings } from '../state/settings';
 import { FOCUS_INFO, focusImage } from './focusImages';
 import { colors, useScheme } from './theme';
 
-/** the beat (the difference between the ears) of the 集中 tone: the number that is shown big, in Hz */
-export const focusBeat = (): number => {
-  const { left, right } = useSettings.getState().focusEars;
-  return Math.round((right - left) * 10) / 10;
-};
+/** the beat (the difference between the ears) of a 集中 sound: the number that is shown big, in Hz */
+export const focusBeat = (id?: string): number => soundPitch(focusKeyOf(id ?? '')).beat;
 
 /** the glow of a number: the colour of the accent around the letters */
 export const glow = { textShadowColor: colors.accent, textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 14 } as const;
@@ -38,7 +36,7 @@ export function useVerticalSwipe(direction: 'up' | 'down', onSwipe: () => void) 
 
 /** the photo of the playing 集中 sound, dimmed so that the text reads over it */
 export function FocusBackdrop({ id, opacity = 1, dim = 0.55 }: { id?: string; opacity?: number; dim?: number }) {
-  const key = id?.replace(/^local:focus-/, '') ?? '';
+  const key = focusKeyOf(id ?? '');
   const source = focusImage(key);
   if (!source) return null;
   return (
@@ -68,7 +66,7 @@ function WaveDots({ width, hz }: { width: number; hz: number }) {
 /** the description: opens upwards from the bar at the bottom of the player */
 function FocusInfoSheet({ id, title, beat, onClose }: { id?: string; title: string; beat: number; onClose: () => void }) {
   const swipeDown = useVerticalSwipe('down', onClose);
-  const key = id?.replace(/^local:focus-/, '') ?? '';
+  const key = focusKeyOf(id ?? '');
   const info = FOCUS_INFO[key];
   const source = focusImage(key);
   const { width } = useWindowDimensions();
@@ -129,9 +127,9 @@ export function FocusPlayer() {
   const level = useSettings((st) => st.focusToneLevel);
   const [open, setOpen] = useState(false);
   const swipeUp = useVerticalSwipe('up', () => setOpen(true));
-  const beat = focusBeat();
+  const beat = focusBeat(current?.id);
   const playing = status === 'playing' || status === 'loading';
-  const info = FOCUS_INFO[current?.id?.replace(/^local:focus-/, '') ?? ''];
+  const info = FOCUS_INFO[focusKeyOf(current?.id ?? '')];
 
   const choose = (v: ToneLevel) => {
     useSettings.getState().update({ focusToneLevel: v });

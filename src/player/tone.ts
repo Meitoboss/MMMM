@@ -1,9 +1,7 @@
 import { native } from '../../modules/binaural-tone';
 import { refreshAmbient } from '../state/player';
-import { FOCUS_SOUNDS } from '../core/focus';
-import { presetByKey } from '../core/binauralPresets';
-import { useSettings } from '../state/settings';
 import { mixFor } from './binaural';
+import { focusKeyOf, soundPitch } from './focus';
 import { onHeadphonesChange } from './output';
 
 /**
@@ -11,21 +9,21 @@ import { onHeadphonesChange } from './output';
  * The plan (strength, noise, headphones or speakers) comes from core/binaural.ts.
  */
 
-/** the 集中 sound that is playing now, by its middle pitch (null when no 集中 sound plays) */
-let focusWant: { center: number } | null = null;
+/** the 集中 sound that is playing now, by its key (null when no 集中 sound plays) */
+let focusWant: { key: string } | null = null;
 /** the tone on its own, for trying it out in Settings (null when off) */
 let testWant: { center: number; beat: number } | null = null;
 /** the pitch the test uses: the middle pitch of the 集中 sound and the difference between the ears */
-let testPitch = { center: FOCUS_SOUNDS[0]?.hz ?? 200, beat: presetByKey('focus').beat };
+let testPitch = { center: 180, beat: 20 };
 let playing = false;
 
 /** brings the tone in line with the plan: starts, changes or stops it, and sets the environment sound to match */
 function apply(): void {
   if (!native) return;
   // the test and the 集中 sounds play the tone whatever the output is (headphones or not): detection is not needed to hear it
-  // the 集中 sounds use the pitch set in the settings (the 気分 tab changes it): the middle of the two ears, and their difference
-  const { left, right } = useSettings.getState().focusEars;
-  const tone = testWant ? mixFor(testWant.center, true, testWant.beat).tone : focusWant ? mixFor((left + right) / 2, true, right - left).tone : null;
+  // each 集中 sound has its own pitch (the focus sound's comes from the settings, which the 気分 tab changes)
+  const pitch = focusWant ? soundPitch(focusWant.key) : null;
+  const tone = testWant ? mixFor(testWant.center, true, testWant.beat).tone : pitch ? mixFor(pitch.center, true, pitch.beat).tone : null;
   if (!tone) {
     if (playing) native.stop();
     playing = false;
@@ -38,9 +36,9 @@ function apply(): void {
   refreshAmbient();
 }
 
-/** a 集中 sound at `center` Hz is playing: the tone plays beside it */
-export function playTone(center: number): Promise<void> {
-  focusWant = { center };
+/** a 集中 sound is playing: its tone plays beside it */
+export function playTone(songId: string): Promise<void> {
+  focusWant = { key: focusKeyOf(songId) };
   apply();
   return Promise.resolve();
 }

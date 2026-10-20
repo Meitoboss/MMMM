@@ -12,14 +12,24 @@ export interface FocusSound {
   key: string;
   /** the name shown in the app */
   name: string;
-  /** the height of the sine tone under this sound, in Hz */
+  /** the middle of the two ears of the sine tone, in Hz (the focus sound uses the setting instead) */
   hz: number;
+  /** the difference between the ears, in Hz: the beat */
+  beat: number;
+  /** the card it is shown under on the 気分 tab */
+  group: 'focus' | 'sleep';
+  /** false while the sound is not on the server yet: it is shown, but cannot be played */
+  ready: boolean;
 }
 
 /**
  * The sounds on the server. Add a line here for each new sound (the file must be /var/oled/audio/<key>.flac on the server).
  */
-export const FOCUS_SOUNDS: FocusSound[] = [{ key: 'focus_loop', name: '広い野原', hz: 180 }];
+export const FOCUS_SOUNDS: FocusSound[] = [
+  { key: 'focus_loop', name: '広い野原', hz: 180, beat: 20, group: 'focus', ready: true },
+  // the middle pitch (100 Hz) is a placeholder until the sound is made
+  { key: 'moon_light', name: '残る月光', hz: 100, beat: 0.5, group: 'sleep', ready: false },
+];
 
 /** how strong the binaural tone is: none, low, normal, high (see core/binaural.ts) */
 export type ToneLevel = StrengthLevel;
