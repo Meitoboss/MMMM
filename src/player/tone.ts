@@ -1,8 +1,9 @@
 import { native } from '../../modules/binaural-tone';
 import { refreshAmbient } from '../state/player';
 import { FOCUS_SOUNDS } from '../core/focus';
-import { mixFor } from './binaural';
 import { presetByKey } from '../core/binauralPresets';
+import { useSettings } from '../state/settings';
+import { mixFor } from './binaural';
 import { onHeadphonesChange } from './output';
 
 /**
@@ -22,7 +23,9 @@ let playing = false;
 function apply(): void {
   if (!native) return;
   // the test and the 集中 sounds play the tone whatever the output is (headphones or not): detection is not needed to hear it
-  const tone = testWant ? mixFor(testWant.center, true, testWant.beat).tone : focusWant ? mixFor(focusWant.center, true).tone : null;
+  // the 集中 sounds use the pitch set in the settings (the 気分 tab changes it): the middle of the two ears, and their difference
+  const { left, right } = useSettings.getState().focusEars;
+  const tone = testWant ? mixFor(testWant.center, true, testWant.beat).tone : focusWant ? mixFor((left + right) / 2, true, right - left).tone : null;
   if (!tone) {
     if (playing) native.stop();
     playing = false;

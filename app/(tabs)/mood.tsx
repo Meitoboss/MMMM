@@ -6,7 +6,7 @@ import { Pressable, ScrollView, Text, View } from 'react-native';
 import type { SongItem } from '../../src/core/types';
 import { FocusBackdrop, focusBeat } from '../../src/ui/FocusPlayer';
 import { focusHzOfSong, focusSongs, isFocusId } from '../../src/player/focus';
-import { pauseTone, playTone } from '../../src/player/tone';
+import { pauseTone, playTone, refreshTone } from '../../src/player/tone';
 import { usePlayer } from '../../src/state/player';
 import { useSettings } from '../../src/state/settings';
 import { MINI_HEIGHT, colors, useScheme } from '../../src/ui/theme';
@@ -38,6 +38,35 @@ const SCENARIO_ROWS: { label: string; icon: keyof typeof Ionicons.glyphMap }[][]
     { label: '赤ちゃんのための睡眠', icon: 'happy-outline' },
   ],
 ];
+
+/** the pitch of each ear of the 集中 tone, changed on the spot while the 集中 sounds play (developer). Steps of 0.5 Hz; the new value is kept as the setting */
+function EarHz() {
+  const ears = useSettings((st) => st.focusEars);
+  const move = (side: 'left' | 'right', step: number) => {
+    const next = { ...ears, [side]: Math.min(500, Math.max(20, Math.round((ears[side] + step) * 10) / 10)) };
+    useSettings.getState().update({ focusEars: next });
+    refreshTone();
+  };
+  const button = (label: string, onPress: () => void) => (
+    <Pressable onPress={onPress} hitSlop={8} style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 14, backgroundColor: colors.surface2 }}>
+      <Text style={{ color: colors.text, fontWeight: '700' }}>{label}</Text>
+    </Pressable>
+  );
+  const ear = (name: string, side: 'left' | 'right') => (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+      <Text style={{ color: colors.sub, fontSize: 12 }}>{name}</Text>
+      {button('−', () => move(side, -0.5))}
+      <Text style={{ color: colors.text, fontWeight: '700', minWidth: 72, textAlign: 'center' }}>{ears[side]} Hz</Text>
+      {button('+', () => move(side, 0.5))}
+    </View>
+  );
+  return (
+    <View style={{ flexDirection: 'row', justifyContent: 'center', flexWrap: 'wrap', gap: 14, paddingHorizontal: 12 }}>
+      {ear('左', 'left')}
+      {ear('右', 'right')}
+    </View>
+  );
+}
 
 /** 気分: the 集中 sounds on their own. The screen has no tab bar and no header of its own: 左上の「戻る」 leaves it */
 export default function MoodTab() {
@@ -146,6 +175,7 @@ export default function MoodTab() {
           </View>
         </Pressable>
       </View>
+      {focusOn && <EarHz />}
     </ScrollView>
   );
 }
