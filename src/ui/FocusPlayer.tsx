@@ -1,8 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
-import { Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
+import { useRef, useState } from 'react';
+import { PanResponder, Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
 
 import { TONE_LEVELS, type ToneLevel } from '../core/focus';
 import { refreshTone, testEars } from '../player/tone';
@@ -19,6 +19,21 @@ export const focusBeat = (): number => {
 
 /** the glow of a number: the colour of the accent around the letters */
 export const glow = { textShadowColor: colors.accent, textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 14 } as const;
+
+/** a swipe in one direction (up or down) runs `onSwipe`: a short, mostly vertical move is enough */
+export function useVerticalSwipe(direction: 'up' | 'down', onSwipe: () => void) {
+  const handler = useRef({ onSwipe, direction });
+  handler.current = { onSwipe, direction };
+  return useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dy) > 12 && Math.abs(g.dy) > Math.abs(g.dx) * 1.5 && (handler.current.direction === 'up' ? g.dy < 0 : g.dy > 0),
+      onPanResponderRelease: (_, g) => {
+        const passed = handler.current.direction === 'up' ? g.dy < -50 : g.dy > 50;
+        if (passed) handler.current.onSwipe();
+      },
+    }),
+  ).current.panHandlers;
+}
 
 /** the photo of the playing 集中 sound, dimmed so that the text reads over it */
 export function FocusBackdrop({ id, opacity = 1, dim = 0.55 }: { id?: string; opacity?: number; dim?: number }) {
@@ -51,6 +66,7 @@ function WaveDots({ width, hz }: { width: number; hz: number }) {
 
 /** the description: opens upwards from the bar at the bottom of the player */
 function FocusInfoSheet({ id, title, beat, onClose }: { id?: string; title: string; beat: number; onClose: () => void }) {
+  const swipeDown = useVerticalSwipe('down', onClose);
   const key = id?.replace(/^local:focus-/, '') ?? '';
   const info = FOCUS_INFO[key];
   const source = focusImage(key);
@@ -58,7 +74,7 @@ function FocusInfoSheet({ id, title, beat, onClose }: { id?: string; title: stri
   return (
     <View style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)' }}>
       <Pressable style={{ flex: 1 }} onPress={onClose} />
-      <View style={{ maxHeight: '86%', borderTopLeftRadius: 26, borderTopRightRadius: 26, backgroundColor: '#101113', overflow: 'hidden' }}>
+      <View {...swipeDown} style={{ maxHeight: '86%', borderTopLeftRadius: 26, borderTopRightRadius: 26, backgroundColor: '#101113', overflow: 'hidden' }}>
         <ScrollView contentContainerStyle={{ padding: 22, gap: 16, paddingBottom: 40 }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
             <Text style={{ color: colors.text, fontSize: 17, fontWeight: '800' }}>このサウンドスケープについて</Text>
@@ -111,6 +127,7 @@ export function FocusPlayer() {
   const togglePlay = usePlayer((p) => p.togglePlay);
   const level = useSettings((st) => st.focusToneLevel);
   const [open, setOpen] = useState(false);
+  const swipeUp = useVerticalSwipe('up', () => setOpen(true));
   const beat = focusBeat();
   const playing = status === 'playing' || status === 'loading';
 
@@ -120,7 +137,7 @@ export function FocusPlayer() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#050508' }}>
+    <View {...swipeUp} style={{ flex: 1, backgroundColor: '#050508' }}>
       <FocusBackdrop id={current?.id} />
       <View style={{ flex: 1, paddingTop: 52, paddingHorizontal: 20, paddingBottom: 24 }}>
         {/* the top: close and the menu */}

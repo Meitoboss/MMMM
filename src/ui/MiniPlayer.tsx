@@ -25,6 +25,8 @@ export function MiniPlayer() {
   const liked = useIsLiked(current?.id);
 
   if (!current || playerScreenOpen || FULL_SCREENS.includes(String(segments[0]))) return null;
+  // on the 気分 tab the usual mini bar is hidden (the tab has its own card); the 集中 mini bar stays
+  if (String((segments as string[])[1]) === 'mood' && !isFocusId(current.id)) return null;
   const inTabs = segments[0] === '(tabs)';
   const bottom = insets.bottom + (inTabs ? TAB_HEIGHT : 0);
   const pct = needsLoad
