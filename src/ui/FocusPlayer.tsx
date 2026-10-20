@@ -5,17 +5,15 @@ import { useRef, useState } from 'react';
 import { PanResponder, Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
 
 import { TONE_LEVELS, type ToneLevel } from '../core/focus';
-import { refreshTone, testEars } from '../player/tone';
+import { presetByKey } from '../core/binauralPresets';
+import { refreshTone } from '../player/tone';
 import { usePlayer } from '../state/player';
 import { useSettings } from '../state/settings';
 import { FOCUS_INFO, focusImage } from './focusImages';
 import { colors, useScheme } from './theme';
 
 /** the beat (the difference between the ears) of the 集中 tone: the number that is shown big */
-export const focusBeat = (): number => {
-  const { left, right } = testEars();
-  return Math.round(right - left);
-};
+export const focusBeat = (): number => presetByKey('focus').beat;
 
 /** the glow of a number: the colour of the accent around the letters */
 export const glow = { textShadowColor: colors.accent, textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 14 } as const;

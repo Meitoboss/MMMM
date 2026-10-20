@@ -1,10 +1,12 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useEffect, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
+import { useCallback, useEffect, useRef } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 
-import { FocusBackdrop } from '../../src/ui/FocusPlayer';
+import type { SongItem } from '../../src/core/types';
+import { FocusBackdrop, focusBeat } from '../../src/ui/FocusPlayer';
 import { focusHzOfSong, focusSongs, isFocusId } from '../../src/player/focus';
-import { pauseTone, playTone, setTestEars, testEars } from '../../src/player/tone';
+import { pauseTone, playTone } from '../../src/player/tone';
 import { usePlayer } from '../../src/state/player';
 import { useSettings } from '../../src/state/settings';
 import { MINI_HEIGHT, colors, useScheme } from '../../src/ui/theme';
@@ -37,40 +39,11 @@ const SCENARIO_ROWS: { label: string; icon: keyof typeof Ionicons.glyphMap }[][]
   ],
 ];
 
-/** the pitch of each ear of the 集中 tone, changed on the spot while the 集中 sounds play (developer) */
-function EarHz({ ears, onChange }: { ears: { left: number; right: number }; onChange: (next: { left: number; right: number }) => void }) {
-  const move = (side: 'left' | 'right', step: number) => {
-    const next = { ...ears, [side]: Math.min(500, Math.max(20, ears[side] + step)) };
-    setTestEars(next.left, next.right);
-    onChange(next);
-  };
-  const button = (label: string, onPress: () => void) => (
-    <Pressable onPress={onPress} hitSlop={8} style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 14, backgroundColor: colors.surface2 }}>
-      <Text style={{ color: colors.text, fontWeight: '700' }}>{label}</Text>
-    </Pressable>
-  );
-  const ear = (name: string, side: 'left' | 'right') => (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-      <Text style={{ color: colors.sub, fontSize: 12 }}>{name}</Text>
-      {button('−', () => move(side, -5))}
-      <Text style={{ color: colors.text, fontWeight: '700', minWidth: 60, textAlign: 'center' }}>{ears[side]} Hz</Text>
-      {button('+', () => move(side, 5))}
-    </View>
-  );
-  return (
-    <View style={{ flexDirection: 'row', justifyContent: 'center', flexWrap: 'wrap', gap: 14, paddingHorizontal: 12 }}>
-      {ear('左', 'left')}
-      {ear('右', 'right')}
-    </View>
-  );
-}
-
 /** 気分: the 集中 sounds on their own. The screen has no tab bar and no header of its own: 左上の「戻る」 leaves it */
 export default function MoodTab() {
   useScheme();
   // the 集中 sounds are on while one of them is the song playing (or loading)
   const focusOn = usePlayer((p) => !!p.current && isFocusId(p.current.id) && (p.status === 'playing' || p.status === 'loading'));
-  const [ears, setEars] = useState(testEars);
 
   // the sine tone follows the 集中 sounds: it plays while they play, and stops when they pause or another song starts
   useEffect(() => {
@@ -89,22 +62,50 @@ export default function MoodTab() {
     });
   }, []);
 
+  // the music that was playing before the 集中 sounds took over: it comes back, paused, where it was when the 気分 tab is left
+  const before = useRef<{ queue: SongItem[]; index: number; position: number; shuffle: boolean; repeat: 'off' | 'all' | 'one' } | null>(null);
+
   // a tap on the card: the 集中 sounds start (shuffled, never ending) or pause
-  const toggleFocus = () => {
+  const toggleFocus = async () => {
     const player = usePlayer.getState();
     if (focusOn) {
-      void player.togglePlay();
+      if (player.status === 'playing') await player.togglePlay();
       pauseTone();
       return;
     }
     const list = focusSongs();
     if (!list.length) return; // no focus sounds on the server yet
+    if (player.current && !isFocusId(player.current.id)) {
+      before.current = { queue: player.queue, index: player.index, position: await player.getPosition(), shuffle: player.shuffle, repeat: player.repeat };
+    }
     usePlayer.setState({ shuffle: true });
     player.setRepeat('all');
     void player.playSongs(list, Math.floor(Math.random() * list.length));
   };
 
-  const beat = ears.right - ears.left;
+  // leaving the 気分 tab: the 集中 sounds stop, and the music from before comes back, paused where it was
+  useFocusEffect(
+    useCallback(() => {
+      return () => {
+        const player = usePlayer.getState();
+        if (!player.current || !isFocusId(player.current.id)) return;
+        pauseTone();
+        void (async () => {
+          if (player.status === 'playing') await player.togglePlay();
+          const saved = before.current;
+          before.current = null;
+          if (!saved || !saved.queue.length) return;
+          usePlayer.setState({ shuffle: saved.shuffle });
+          player.setRepeat(saved.repeat);
+          await player.playSongs(saved.queue, saved.index);
+          await usePlayer.getState().seekTo(saved.position);
+          if (usePlayer.getState().status === 'playing') await usePlayer.getState().togglePlay();
+        })();
+      };
+    }, []),
+  );
+
+  const beat = focusBeat();
 
   return (
     <ScrollView contentContainerStyle={{ paddingTop: 16, paddingBottom: MINI_HEIGHT + 24, gap: 22 }}>
@@ -144,7 +145,6 @@ export default function MoodTab() {
             <Text style={{ color: colors.text, fontWeight: '700' }}>{focusOn ? '止める' : '再生'}</Text>
           </View>
         </Pressable>
-        {focusOn && <EarHz ears={ears} onChange={setEars} />}
       </View>
     </ScrollView>
   );

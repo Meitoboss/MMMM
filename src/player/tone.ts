@@ -22,8 +22,7 @@ let playing = false;
 function apply(): void {
   if (!native) return;
   // the test and the 集中 sounds play the tone whatever the output is (headphones or not): detection is not needed to hear it
-  // the 集中 sounds use the same pitch as the test, so the pitch can be changed while they play
-  const tone = testWant ? mixFor(testWant.center, true, testWant.beat).tone : focusWant ? mixFor(testPitch.center, true, testPitch.beat).tone : null;
+  const tone = testWant ? mixFor(testWant.center, true, testWant.beat).tone : focusWant ? mixFor(focusWant.center, true).tone : null;
   if (!tone) {
     if (playing) native.stop();
     playing = false;

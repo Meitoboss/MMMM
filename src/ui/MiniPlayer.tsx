@@ -40,8 +40,9 @@ export function MiniPlayer() {
       ? Math.min(1, position / duration)
       : 0;
 
-  // the 集中 sounds: the Hz (the difference between the ears) glows, instead of the cover
+  // the 集中 sounds: the Hz glows, instead of the cover; their bar is only shown on the 気分 tab
   if (isFocusId(current.id)) {
+    if (!onMood) return null;
     return (
       <Pressable onPress={() => router.push('/player')} style={[st.wrap, { bottom }]}>
         <FocusBackdrop id={current.id} dim={0.45} />
