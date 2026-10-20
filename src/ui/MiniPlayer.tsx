@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useProgress } from 'react-native-track-player';
 
 import { isFocusId } from '../player/focus';
-import { focusBeat, glow } from './FocusPlayer';
+import { FocusBackdrop, focusBeat, glow } from './FocusPlayer';
 
 import { useIsLiked, toggleLikeSong } from '../state/likes';
 import { usePlayer } from '../state/player';
@@ -39,6 +39,7 @@ export function MiniPlayer() {
   if (isFocusId(current.id)) {
     return (
       <Pressable onPress={() => router.push('/player')} style={[st.wrap, { bottom }]}>
+        <FocusBackdrop id={current.id} dim={0.45} />
         <View style={[st.progress, { width: `${pct * 100}%` }]} />
         <View style={{ flexDirection: 'row', alignItems: 'flex-end', minWidth: 64 }}>
           <Text style={[glow, { color: colors.text, fontSize: 28, fontWeight: '200' }]}>{focusBeat()}</Text>

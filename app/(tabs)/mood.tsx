@@ -2,6 +2,8 @@ import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 
+import { FocusBackdrop } from '../../src/ui/FocusPlayer';
+
 import { openDb } from '../../src/db/expo';
 import * as repo from '../../src/db/repo';
 import { DIAL_OPTIONS, type MoodOption, TIME_OPTION, matchTagIds, nowHours, timeLabel } from '../../src/core/mood';
@@ -133,15 +135,16 @@ export default function MoodTab() {
         <Pressable
           onPress={toggleFocus}
           accessibilityRole="button"
-          style={{ borderRadius: 22, backgroundColor: colors.accent, padding: 20, minHeight: 170, justifyContent: 'space-between' }}
+          style={{ borderRadius: 22, overflow: 'hidden', backgroundColor: '#101113', padding: 20, minHeight: 170, justifyContent: 'space-between' }}
         >
-          <Text style={{ color: colors.onAccent, fontSize: 56, fontWeight: '200' }}>{beat} Hz</Text>
+          <FocusBackdrop id={focusSongs()[0]?.id} dim={0.5} />
+          <Text style={{ color: colors.text, fontSize: 56, fontWeight: '200' }}>{beat} Hz</Text>
           <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' }}>
             <View>
-              <Text style={{ color: colors.onAccent, fontSize: 18, fontWeight: '700' }}>広い野原</Text>
-              <Text style={{ color: colors.onAccent, opacity: 0.8, fontSize: 12 }}>集中 ・ ミュージック</Text>
+              <Text style={{ color: colors.text, fontSize: 18, fontWeight: '700' }}>広い野原</Text>
+              <Text style={{ color: colors.text, opacity: 0.8, fontSize: 12 }}>集中 ・ ミュージック</Text>
             </View>
-            <Text style={{ color: colors.onAccent, fontWeight: '700' }}>{focusOn ? '止める' : '再生'}</Text>
+            <Text style={{ color: colors.text, fontWeight: '700' }}>{focusOn ? '止める' : '再生'}</Text>
           </View>
         </Pressable>
         {focusOn && <EarHz ears={ears} onChange={setEars} />}
