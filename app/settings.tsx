@@ -6,10 +6,7 @@ import { runSelfTest, runTokenServerTest, StepResult } from '../src/core/diagnos
 import type { StreamBackend } from '../src/core/streams/resolver';
 import { runCurrentSongProbe, runFormatMatrix, runPlaybackProbe, runRealPathTest, runTokenExperiment } from '../src/player/probe';
 import { usePlayer } from '../src/state/player';
-import { refreshTone, setTestEars, testEars, toggleToneTest, toneAvailable, toneTesting } from '../src/player/tone';
-import Slider from '@react-native-community/slider';
 import { headphonesNow } from '../src/player/output';
-import { TONE_LEVELS } from '../src/core/focus';
 import { useUpdate } from '../src/state/update';
 import { DEFAULT_SETTINGS, useSettings } from '../src/state/settings';
 import { s } from '../src/ui/components';
@@ -20,7 +17,7 @@ import { type NormalizeMode } from '../src/core/loudness';
 import { QUALITY_LABELS, qualitiesFor } from '../src/core/streams/quality';
 import { promptText } from '../src/ui/dialogs';
 import { LIST_BOTTOM, colors, useScheme } from '../src/ui/theme';
-import { Block, Chips, Row, Section } from '../src/ui/SettingsParts';
+import { Chips, Row, Section } from '../src/ui/SettingsParts';
 import { BackupSection } from '../src/ui/BackupSection';
 import { SongArchiveSection } from '../src/ui/SongArchiveSection';
 import { NetLogRow } from '../src/ui/NetLogRow';
@@ -81,49 +78,6 @@ function Action({ title, sub, info, onPress, disabled, right }: { title: string;
         <Text style={{ color: colors.accentText, fontWeight: '700' }}>{disabled ? '実行中…' : right ?? '実行'}</Text>
       </Row>
     </Pressable>
-  );
-}
-
-/** the left and right ear's pitch for the test, for trying out the tone (developer) */
-function TestEarSliders() {
-  const [ears, setEars] = useState(testEars);
-  const change = (left: number, right: number) => {
-    setTestEars(left, right);
-    setEars({ left, right });
-  };
-  return (
-    <>
-      <Block title={`左の耳: ${ears.left} Hz`} sub="正弦波のテストで使う、左の高さです">
-        <View style={{ paddingHorizontal: 16, paddingBottom: 6 }}>
-          <Slider minimumValue={20} maximumValue={500} step={1} value={ears.left} onValueChange={(v) => change(Math.round(v), ears.right)} />
-        </View>
-      </Block>
-      <Block title={`右の耳: ${ears.right} Hz`} sub="正弦波のテストで使う、右の高さです。左との差がうなりの速さになります" last>
-        <View style={{ paddingHorizontal: 16, paddingBottom: 6 }}>
-          <Slider minimumValue={20} maximumValue={500} step={1} value={ears.right} onValueChange={(v) => change(ears.left, Math.round(v))} />
-        </View>
-      </Block>
-    </>
-  );
-}
-
-function ToneTestRow() {
-  const [on, setOn] = useState(toneTesting);
-  return (
-    <Action
-      title='正弦波だけ鳴らす'
-      info="音楽は流さず、正弦波だけを鳴らします。もう一度押すと止まります。強さが「なし」のときは鳴りません"
-      right={on ? '止める' : '鳴らす'}
-      onPress={() => {
-        if (!toneAvailable()) {
-          Alert.alert('正弦波', 'このアプリには、正弦波の機能が入っていません。新しいビルドを入れてください');
-          return;
-        }
-        const next = toggleToneTest();
-        setOn(next);
-        if (next) Alert.alert('正弦波', headphonesNow() ? '鳴らしています（ヘッドホンとして判定されています）' : '鳴らしています（ヘッドホンとして判定されていません）');
-      }}
-    />
   );
 }
 
@@ -242,32 +196,6 @@ export default function Settings() {
             <Text style={{ color: colors.text, fontWeight: '700' }}>{st.focusServerKey ? '設定済み' : '未設定'}</Text>
           </Pressable>
         </Row>
-        <Row title="集中の音のうなり（正弦波）の強さ" sub="集中モードで、音楽の下に流す正弦波の音量です。高さは、音ごとに決まっています。次に音が変わるときから反映されます">
-          <Chips
-            options={TONE_LEVELS.map((l) => ({ label: l.label, value: l.value }))}
-            value={st.focusToneLevel}
-            onChange={(v) => {
-              st.update({ focusToneLevel: v });
-              refreshTone();
-            }}
-          />
-        </Row>
-        <ToneTestRow />
-        <TestEarSliders />
-        <Block title="うなりに混ぜるノイズ" sub="ピンクノイズを薄く混ぜると、純音のとげとげしさがやわらぎます" last>
-          <Chips
-            options={[
-              { label: 'なし', value: 'off' as const },
-              { label: '少し', value: 'low' as const },
-              { label: '多め', value: 'high' as const },
-            ]}
-            value={st.binauralNoise}
-            onChange={(v) => {
-              st.update({ binauralNoise: v });
-              refreshTone();
-            }}
-          />
-        </Block>
       </Section>
 
       <Section title="トークンサーバー" collapsible>
