@@ -28,7 +28,9 @@ export function MiniPlayer() {
   // on the 気分 tab the usual mini bar is hidden (the tab has its own card); the 集中 mini bar stays
   if (String((segments as string[])[1]) === 'mood' && !isFocusId(current.id)) return null;
   const inTabs = segments[0] === '(tabs)';
-  const bottom = insets.bottom + (inTabs ? TAB_HEIGHT : 0);
+  // the 気分 screen has no tab bar, so the mini bar sits at the bottom edge there
+  const onMood = String((segments as string[])[1]) === 'mood';
+  const bottom = insets.bottom + (inTabs && !onMood ? TAB_HEIGHT : 0);
   const pct = needsLoad
     ? current.durationSec
       ? Math.min(1, (resumePosition ?? 0) / current.durationSec)
