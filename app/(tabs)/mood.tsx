@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 
@@ -7,6 +8,34 @@ import { pauseTone, playTone, setTestEars, testEars } from '../../src/player/ton
 import { usePlayer } from '../../src/state/player';
 import { useSettings } from '../../src/state/settings';
 import { MINI_HEIGHT, colors, useScheme } from '../../src/ui/theme';
+
+/** the シナリオ chips: two rows that slide sideways */
+const SCENARIO_ROWS: { label: string; icon: keyof typeof Ionicons.glyphMap }[][] = [
+  [
+    { label: 'お気に入り', icon: 'heart' },
+    { label: '作成', icon: 'create-outline' },
+    { label: 'カラーノイズ', icon: 'color-palette-outline' },
+    { label: '目覚め', icon: 'sunny-outline' },
+    { label: '深い眠り', icon: 'moon-outline' },
+    { label: 'ASMR', icon: 'ear-outline' },
+    { label: 'ストレス解消', icon: 'leaf-outline' },
+    { label: '夜のリセット', icon: 'time-outline' },
+    { label: '瞑想', icon: 'ellipse-outline' },
+    { label: '耳鳴り緩和', icon: 'ear-outline' },
+    { label: '423hz スリープ', icon: 'bed-outline' },
+  ],
+  [
+    { label: 'ADHD緩和', icon: 'radio-button-off-outline' },
+    { label: '8Dオーディオ', icon: 'headset-outline' },
+    { label: '528hz リラックス', icon: 'sparkles-outline' },
+    { label: 'ディープワーク', icon: 'hardware-chip-outline' },
+    { label: '考えすぎをやめる', icon: 'cloudy-outline' },
+    { label: 'パワーナップ', icon: 'flash-outline' },
+    { label: 'ディープフロー状態', icon: 'pulse-outline' },
+    { label: '家事', icon: 'home-outline' },
+    { label: '赤ちゃんのための睡眠', icon: 'happy-outline' },
+  ],
+];
 
 /** the pitch of each ear of the 集中 tone, changed on the spot while the 集中 sounds play (developer) */
 function EarHz({ ears, onChange }: { ears: { left: number; right: number }; onChange: (next: { left: number; right: number }) => void }) {
@@ -79,6 +108,25 @@ export default function MoodTab() {
 
   return (
     <ScrollView contentContainerStyle={{ paddingTop: 16, paddingBottom: MINI_HEIGHT + 24, gap: 22 }}>
+      {/* シナリオ: two rows of chips that slide sideways */}
+      <View style={{ gap: 12 }}>
+        <Text style={{ color: colors.text, fontSize: 18, fontWeight: '800', paddingHorizontal: 16 }}>シナリオ</Text>
+        {SCENARIO_ROWS.map((row, r) => (
+          <ScrollView key={r} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingHorizontal: 16 }}>
+            {row.map((c) => (
+              <Pressable
+                key={c.label}
+                accessibilityRole="button"
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 22, backgroundColor: colors.surface2 }}
+              >
+                <Ionicons name={c.icon} size={18} color={colors.text} />
+                <Text style={{ color: colors.text, fontWeight: '600' }}>{c.label}</Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+        ))}
+      </View>
+
       <View style={{ gap: 12, paddingHorizontal: 16 }}>
         <Text style={{ color: colors.text, fontSize: 18, fontWeight: '800' }}>集中</Text>
         <Pressable
