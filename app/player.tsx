@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Animated, FlatList, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FocusPlayer } from '../src/ui/FocusPlayer';
+import { Marquee } from '../src/ui/Marquee';
 import { isFocusId } from '../src/player/focus';
 import { useProgress } from 'react-native-track-player';
 
@@ -281,7 +282,7 @@ function NormalPlayer() {
       <View style={{ paddingHorizontal: 24 }}>
         <View testID="player-title" style={{ flexDirection: 'row', alignItems: 'center' }}>
           <View style={{ flex: 1 }}>
-            <Text style={{ color: colors.text, fontSize: 20, fontWeight: '700' }} numberOfLines={1}>{song.title}</Text>
+            <Marquee text={song.title} style={{ color: colors.text, fontSize: 20, fontWeight: '700' }} />
             <Text style={{ color: colors.sub, fontSize: 15 }} numberOfLines={1}>{song.artists.map((a) => a.name).join(', ')}</Text>
           </View>
           {/* make a playlist / put the song in one: the same screen as the menu's "プレイリストに追加" (it can create one too) */}

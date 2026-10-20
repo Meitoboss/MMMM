@@ -1,0 +1,45 @@
+import { useEffect, useRef, useState } from 'react';
+import { Animated, Easing, StyleProp, Text, TextStyle, View } from 'react-native';
+
+/**
+ * A title that is too long for its place: it moves slowly from the start to the end, pauses, and starts again,
+ * so the whole title can be read. A short title stays still.
+ */
+export function Marquee({ text, style, speed = 28, pause = 2200 }: { text: string; style?: StyleProp<TextStyle>; speed?: number; pause?: number }) {
+  const [box, setBox] = useState(0); // the width of the place
+  const [full, setFull] = useState(0); // the width the whole title needs
+  const x = useRef(new Animated.Value(0)).current;
+  const overflow = Math.max(0, full - box);
+
+  useEffect(() => {
+    x.stopAnimation();
+    x.setValue(0);
+    if (overflow <= 0) return;
+    const animation = Animated.loop(
+      Animated.sequence([
+        Animated.delay(pause),
+        Animated.timing(x, { toValue: -overflow, duration: (overflow / speed) * 1000, easing: Easing.linear, useNativeDriver: true }),
+        Animated.delay(pause),
+        Animated.timing(x, { toValue: 0, duration: 0, useNativeDriver: true }),
+      ]),
+    );
+    animation.start();
+    return () => animation.stop();
+  }, [overflow, speed, pause, x]);
+
+  return (
+    <View style={{ overflow: 'hidden' }} onLayout={(e) => setBox(e.nativeEvent.layout.width)}>
+      {/* a wide, invisible copy only measures how wide the whole title is */}
+      <View pointerEvents="none" style={{ position: 'absolute', left: 0, top: 0, width: 4000, opacity: 0 }}>
+        <Text style={style} onLayout={(e) => setFull(e.nativeEvent.layout.width)}>
+          {text}
+        </Text>
+      </View>
+      <Animated.View style={{ transform: [{ translateX: x }], width: full > 0 ? full : undefined }}>
+        <Text style={style} numberOfLines={1}>
+          {text}
+        </Text>
+      </Animated.View>
+    </View>
+  );
+}

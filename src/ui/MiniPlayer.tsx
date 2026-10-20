@@ -6,6 +6,7 @@ import { useProgress } from 'react-native-track-player';
 
 import { isFocusId } from '../player/focus';
 import { FocusBackdrop, focusBeat, glow } from './FocusPlayer';
+import { Marquee } from './Marquee';
 
 import { useIsLiked, toggleLikeSong } from '../state/likes';
 import { usePlayer } from '../state/player';
@@ -50,7 +51,7 @@ export function MiniPlayer() {
           <Text style={[glow, { color: colors.text, fontSize: 13, fontWeight: '200', marginBottom: 4, marginLeft: 2 }]}>Hz</Text>
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={st.title} numberOfLines={1}>{current.title}</Text>
+          <Marquee text={current.title} style={st.title} />
           <Text style={st.sub} numberOfLines={1}>集中 ・ ミュージック</Text>
         </View>
         <Pressable hitSlop={10} onPress={() => void togglePlay()}>
@@ -65,7 +66,7 @@ export function MiniPlayer() {
       <View style={[st.progress, { width: `${pct * 100}%` }]} />
       <Cover uri={current.thumbnail} size={44} />
       <View style={{ flex: 1 }}>
-        <Text style={st.title} numberOfLines={1}>{current.title}</Text>
+        <Marquee text={current.title} style={st.title} />
         <Text style={st.sub} numberOfLines={1}>
           {status === 'loading' ? '読み込み中…' : status === 'error' ? '再生エラー（タップで詳細）' : current.artists.map((a) => a.name).join(', ')}
         </Text>

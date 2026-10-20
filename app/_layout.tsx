@@ -57,6 +57,7 @@ export default function RootLayout() {
             headerShadowVisible: false,
             headerTitleStyle: { fontWeight: '800' },
             contentStyle: { backgroundColor: colors.bg },
+            headerBackTitle: '戻る',
           }}
         >
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
