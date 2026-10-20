@@ -4,6 +4,8 @@ import { useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { Animated, FlatList, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { FocusPlayer } from '../src/ui/FocusPlayer';
+import { isFocusId } from '../src/player/focus';
 import { useProgress } from 'react-native-track-player';
 
 import { activeLineIndex, findLyrics, parseLrc } from '../src/core';
@@ -38,7 +40,7 @@ const SLEEP = [5, 15, 30, 45, 60];
 
 type View_ = 'cover' | 'lyrics' | 'queue' | 'dj';
 
-export default function PlayerScreen() {
+function NormalPlayer() {
   useScheme();
   const showDebug = useSettings((st) => st.showDebug);
   const router = useRouter();
@@ -353,4 +355,10 @@ export default function PlayerScreen() {
       <InlineSheetLayer />
     </Animated.View>
   );
+}
+
+/** the player: the 集中 sounds have their own screen; every other song uses the usual one */
+export default function PlayerScreen() {
+  const focus = usePlayer((p) => !!p.current && isFocusId(p.current.id));
+  return focus ? <FocusPlayer /> : <NormalPlayer />;
 }

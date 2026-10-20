@@ -164,7 +164,8 @@ let sleepTimeout: ReturnType<typeof setTimeout> | undefined;
 async function flushPlayTime(song?: SongItem) {
   const ms = playedMs;
   playedMs = 0;
-  if (!song || ms < 1000) return;
+  // the 集中 sounds are a separate part of the app: they do not count as listening (not in 最近, not in the statistics)
+  if (!song || ms < 1000 || isFocusId(song.id)) return;
   try {
     await repo.recordPlay(await openDb(), song, ms);
   } catch {

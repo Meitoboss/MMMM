@@ -25,7 +25,7 @@ export const FOCUS_SOUNDS: FocusSound[] = [{ key: 'focus_loop', name: '広い野
 export type ToneLevel = StrengthLevel;
 
 export const TONE_LEVELS: { value: ToneLevel; label: string; volume: number }[] = [
-  { value: 'off', label: "なし", volume: STRENGTH.off },
+  { value: 'off', label: 'オフ', volume: STRENGTH.off },
   { value: 'low', label: "低", volume: STRENGTH.low },
   { value: 'normal', label: "普通", volume: STRENGTH.normal },
   { value: 'high', label: "高", volume: STRENGTH.high },

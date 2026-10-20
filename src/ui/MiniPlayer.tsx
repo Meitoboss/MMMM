@@ -4,6 +4,9 @@ import { Pressable, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useProgress } from 'react-native-track-player';
 
+import { isFocusId } from '../player/focus';
+import { FocusBackdrop, focusBeat, glow } from './FocusPlayer';
+
 import { useIsLiked, toggleLikeSong } from '../state/likes';
 import { usePlayer } from '../state/player';
 import { Cover } from './components';
@@ -22,6 +25,8 @@ export function MiniPlayer() {
   const liked = useIsLiked(current?.id);
 
   if (!current || playerScreenOpen || FULL_SCREENS.includes(String(segments[0]))) return null;
+  // on the 気分 tab the usual mini bar is hidden (the tab has its own card); the 集中 mini bar stays
+  if (String((segments as string[])[1]) === 'mood' && !isFocusId(current.id)) return null;
   const inTabs = segments[0] === '(tabs)';
   const bottom = insets.bottom + (inTabs ? TAB_HEIGHT : 0);
   const pct = needsLoad
@@ -31,6 +36,27 @@ export function MiniPlayer() {
     : duration > 0
       ? Math.min(1, position / duration)
       : 0;
+
+  // the 集中 sounds: the Hz (the difference between the ears) glows, instead of the cover
+  if (isFocusId(current.id)) {
+    return (
+      <Pressable onPress={() => router.push('/player')} style={[st.wrap, { bottom }]}>
+        <FocusBackdrop id={current.id} dim={0.45} />
+        <View style={[st.progress, { width: `${pct * 100}%` }]} />
+        <View style={{ flexDirection: 'row', alignItems: 'flex-end', minWidth: 64 }}>
+          <Text style={[glow, { color: colors.text, fontSize: 28, fontWeight: '200' }]}>{focusBeat()}</Text>
+          <Text style={[glow, { color: colors.text, fontSize: 13, fontWeight: '200', marginBottom: 4, marginLeft: 2 }]}>Hz</Text>
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={st.title} numberOfLines={1}>{current.title}</Text>
+          <Text style={st.sub} numberOfLines={1}>集中 ・ ミュージック</Text>
+        </View>
+        <Pressable hitSlop={10} onPress={() => void togglePlay()}>
+          <Ionicons name={status === 'playing' ? 'pause' : 'play'} size={28} color={colors.text} />
+        </Pressable>
+      </Pressable>
+    );
+  }
 
   return (
     <Pressable onPress={() => router.push('/player')} style={[st.wrap, { bottom }]}>
