@@ -5,17 +5,16 @@ import { useRef, useState } from 'react';
 import { PanResponder, Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
 
 import { TONE_LEVELS, type ToneLevel } from '../core/focus';
+import { focusKeyOf, soundPitch } from '../player/focus';
 import { refreshTone } from '../player/tone';
+import { toggleLikeSong, useIsLiked } from '../state/likes';
 import { usePlayer } from '../state/player';
 import { useSettings } from '../state/settings';
 import { FOCUS_INFO, focusImage } from './focusImages';
 import { colors, useScheme } from './theme';
 
-/** the beat (the difference between the ears) of the 集中 tone: the number that is shown big, in Hz */
-export const focusBeat = (): number => {
-  const { left, right } = useSettings.getState().focusEars;
-  return Math.round((right - left) * 10) / 10;
-};
+/** the beat (the difference between the ears) of a 集中 sound: the number that is shown big, in Hz */
+export const focusBeat = (id?: string): number => soundPitch(focusKeyOf(id ?? '')).beat;
 
 /** the glow of a number: the colour of the accent around the letters */
 export const glow = { textShadowColor: colors.accent, textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 14 } as const;
@@ -37,7 +36,7 @@ export function useVerticalSwipe(direction: 'up' | 'down', onSwipe: () => void) 
 
 /** the photo of the playing 集中 sound, dimmed so that the text reads over it */
 export function FocusBackdrop({ id, opacity = 1, dim = 0.55 }: { id?: string; opacity?: number; dim?: number }) {
-  const key = id?.replace(/^local:focus-/, '') ?? '';
+  const key = focusKeyOf(id ?? '');
   const source = focusImage(key);
   if (!source) return null;
   return (
@@ -67,7 +66,7 @@ function WaveDots({ width, hz }: { width: number; hz: number }) {
 /** the description: opens upwards from the bar at the bottom of the player */
 function FocusInfoSheet({ id, title, beat, onClose }: { id?: string; title: string; beat: number; onClose: () => void }) {
   const swipeDown = useVerticalSwipe('down', onClose);
-  const key = id?.replace(/^local:focus-/, '') ?? '';
+  const key = focusKeyOf(id ?? '');
   const info = FOCUS_INFO[key];
   const source = focusImage(key);
   const { width } = useWindowDimensions();
@@ -118,7 +117,7 @@ function FocusInfoSheet({ id, title, beat, onClose }: { id?: string; title: stri
   );
 }
 
-/** the player for the 集中 sounds: the photo, a big glowing Hz, the play button, the strength, and the description under a bar that opens upwards */
+/** the player for the 集中 sounds: the photo, a big thin Hz, the play circle, the strength, and the description under a bar that opens upwards */
 export function FocusPlayer() {
   useScheme();
   const router = useRouter();
@@ -128,8 +127,9 @@ export function FocusPlayer() {
   const level = useSettings((st) => st.focusToneLevel);
   const [open, setOpen] = useState(false);
   const swipeUp = useVerticalSwipe('up', () => setOpen(true));
-  const beat = focusBeat();
+  const beat = focusBeat(current?.id);
   const playing = status === 'playing' || status === 'loading';
+  const info = FOCUS_INFO[focusKeyOf(current?.id ?? '')];
 
   const choose = (v: ToneLevel) => {
     useSettings.getState().update({ focusToneLevel: v });
@@ -139,7 +139,7 @@ export function FocusPlayer() {
   return (
     <View {...swipeUp} style={{ flex: 1, backgroundColor: '#050508' }}>
       <FocusBackdrop id={current?.id} />
-      <View style={{ flex: 1, paddingTop: 52, paddingHorizontal: 20, paddingBottom: 24 }}>
+      <View style={{ flex: 1, paddingTop: 52, paddingHorizontal: 24, paddingBottom: 28 }}>
         {/* the top: close and the menu */}
         <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
           <Pressable hitSlop={16} onPress={() => router.back()}>
@@ -148,42 +148,59 @@ export function FocusPlayer() {
           <Ionicons name="ellipsis-horizontal" size={24} color={colors.text} />
         </View>
 
-        {/* the big Hz, glowing */}
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-          <View style={{ flexDirection: 'row', alignItems: 'flex-end' }}>
-            <Text style={[glow, { color: colors.text, fontSize: 150, fontWeight: '200', lineHeight: 160 }]}>{beat}</Text>
-            <Text style={[glow, { color: colors.text, fontSize: 36, fontWeight: '200', marginBottom: 26, marginLeft: 6 }]}>Hz</Text>
-          </View>
+        {/* the big Hz: thin, with the unit at the lower right */}
+        <View style={{ flex: 1, justifyContent: 'center' }}>
+          <Text style={[glow, { color: colors.text, fontSize: 150, fontWeight: '100', lineHeight: 160 }]}>{beat}</Text>
+          <Text style={[glow, { color: colors.text, fontSize: 40, fontWeight: '100', alignSelf: 'flex-end', marginTop: -6 }]}>Hz</Text>
+        </View>
+
+        {/* the play circle on the left, the heart on the right */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           <Pressable
             onPress={() => void togglePlay()}
             accessibilityRole="button"
-            style={{ marginTop: 28, width: 72, height: 72, borderRadius: 36, borderWidth: 1.5, borderColor: colors.text, alignItems: 'center', justifyContent: 'center' }}
+            style={{ width: 84, height: 84, borderRadius: 42, borderWidth: 1, borderColor: colors.text, alignItems: 'center', justifyContent: 'center' }}
           >
             <Ionicons name={playing ? 'pause' : 'play'} size={30} color={colors.text} />
           </Pressable>
+          <Pressable hitSlop={12} accessibilityRole="button" accessibilityLabel="お気に入り" onPress={() => current && void toggleLikeSong(current)}>
+            <Ionicons name={useIsLiked(current?.id) ? 'heart' : 'heart-outline'} size={28} color={colors.text} />
+          </Pressable>
         </View>
 
-        {/* the strength: オフ / 低 / 普通 / 高 */}
-        <View style={{ gap: 8 }}>
-          <Text style={{ color: colors.sub, fontSize: 12 }}>周波数強度</Text>
-          <View style={{ flexDirection: 'row', borderWidth: 1, borderColor: colors.border, borderRadius: 14, overflow: 'hidden' }}>
-            {TONE_LEVELS.map((l) => {
-              const on = l.value === level;
-              return (
-                <Pressable key={l.value} onPress={() => choose(l.value)} style={{ flex: 1, alignItems: 'center', paddingVertical: 10, backgroundColor: on ? 'rgba(255,255,255,0.14)' : 'transparent' }}>
-                  <Text style={{ color: on ? colors.text : colors.sub, fontWeight: on ? '700' : '400' }}>{l.label}</Text>
-                </Pressable>
-              );
-            })}
+        {/* the timer, and the block pill */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 18, marginTop: 22 }}>
+          <Ionicons name="timer-outline" size={24} color={colors.text} />
+          <View style={{ paddingHorizontal: 18, paddingVertical: 10, borderRadius: 22, borderWidth: 1, borderColor: colors.border }}>
+            <Text style={{ color: colors.text, fontSize: 14 }}>アプリをブロック</Text>
           </View>
         </View>
 
-        {/* the title, and the description: a bar that opens upwards */}
+        {/* the title */}
         <View style={{ marginTop: 22, gap: 2 }}>
-          <Text style={{ color: colors.sub, fontSize: 12 }}>集中 ・ ミュージック</Text>
-          <Text style={{ color: colors.text, fontSize: 20, fontWeight: '700' }}>{current?.title ?? ''}</Text>
+          <Text style={{ color: colors.sub, fontSize: 13 }}>集中</Text>
+          <Text style={{ color: colors.text, fontSize: 24, fontWeight: '800' }}>{current?.title ?? ''}</Text>
+          {!!info && (
+            <Text numberOfLines={2} style={{ color: colors.sub, fontSize: 14, lineHeight: 21, marginTop: 4 }}>
+              {info.short}
+            </Text>
+          )}
         </View>
-        <Pressable onPress={() => setOpen(true)} style={{ marginTop: 16, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.1)', padding: 14 }}>
+
+        {/* the strength: オフ / 低 / 普通 / 高 */}
+        <View style={{ marginTop: 18, flexDirection: 'row', borderWidth: 1, borderColor: colors.border, borderRadius: 26, overflow: 'hidden' }}>
+          {TONE_LEVELS.map((l) => {
+            const on = l.value === level;
+            return (
+              <Pressable key={l.value} onPress={() => choose(l.value)} style={{ flex: 1, alignItems: 'center', paddingVertical: 12, borderRadius: 26, backgroundColor: on ? 'rgba(255,255,255,0.12)' : 'transparent', borderWidth: on ? 1 : 0, borderColor: colors.text }}>
+                <Text style={{ color: on ? colors.text : colors.sub, fontWeight: on ? '700' : '400' }}>{l.label}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+
+        {/* the description: a bar that opens upwards (swipe up also works) */}
+        <Pressable onPress={() => setOpen(true)} style={{ marginTop: 16, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.1)', padding: 16 }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
             <Text style={{ color: colors.text, fontWeight: '700' }}>このサウンドスケープについて</Text>
             <Ionicons name="chevron-up" size={18} color={colors.text} />

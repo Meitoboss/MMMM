@@ -16,14 +16,33 @@ const FOCUS_PREFIX = `${LOCAL_PREFIX}focus-`;
 
 export const isFocusId = (id: string): boolean => id.startsWith(FOCUS_PREFIX);
 
-/** the height of the tone for a focus song, from its id (undefined when it is not a focus song) */
-export const focusHzOfSong = (id: string): number | undefined => (isFocusId(id) ? focusHzOf(id.slice(FOCUS_PREFIX.length)) : undefined);
+/** the key of a focus song, from its id (empty when it is not a focus song) */
+export const focusKeyOf = (id: string): string => (isFocusId(id) ? id.slice(FOCUS_PREFIX.length) : '');
+
+/** the id of a focus sound, from its key */
+export const focusIdOf = (key: string): string => `${FOCUS_PREFIX}${key}`;
+
+/** the two ears of a sound's tone: the focus sound takes them from the settings (the 気分 tab changes them), the others from their list entry */
+export function soundPitch(key: string): { center: number; beat: number } {
+  if (key === 'focus_loop') {
+    const { left, right } = useSettings.getState().focusEars;
+    return { center: (left + right) / 2, beat: Math.round((right - left) * 10) / 10 };
+  }
+  const sound = FOCUS_SOUNDS.find((x) => x.key === key);
+  return { center: sound?.hz ?? 200, beat: sound?.beat ?? 20 };
+}
 
 const folder = (): string => `${FileSystem.documentDirectory ?? ''}focus/`;
 
-/** the focus sounds as songs, in the order they are listed */
-export function focusSongs(): SongItem[] {
-  return FOCUS_SOUNDS.map(({ key, name }) => ({
+/** one focus sound as a song */
+export function focusSongOf(key: string): SongItem {
+  const { name } = FOCUS_SOUNDS.find((x) => x.key === key) ?? { name: key };
+  return { kind: 'song', id: `${FOCUS_PREFIX}${key}`, title: name, artists: [{ name: LOCAL_ARTIST }], explicit: false };
+}
+
+/** the ready focus sounds of one card, as songs, in the order they are listed */
+export function focusSongs(group: 'focus' | 'sleep' = 'focus'): SongItem[] {
+  return FOCUS_SOUNDS.filter((x) => x.group === group && x.ready).map(({ key, name }) => ({
     kind: 'song',
     id: `${FOCUS_PREFIX}${key}`,
     title: name,

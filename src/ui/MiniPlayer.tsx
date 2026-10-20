@@ -48,7 +48,7 @@ export function MiniPlayer() {
         <FocusBackdrop id={current.id} dim={0.45} />
         <View style={[st.progress, { width: `${pct * 100}%` }]} />
         <View style={{ flexDirection: 'row', alignItems: 'flex-end', minWidth: 64 }}>
-          <Text style={[glow, { color: colors.text, fontSize: 28, fontWeight: '200' }]}>{focusBeat()}</Text>
+          <Text style={[glow, { color: colors.text, fontSize: 28, fontWeight: '200' }]}>{focusBeat(current.id)}</Text>
           <Text style={[glow, { color: colors.text, fontSize: 13, fontWeight: '200', marginBottom: 4, marginLeft: 2 }]}>Hz</Text>
         </View>
         <View style={{ flex: 1 }}>
