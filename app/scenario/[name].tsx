@@ -2,11 +2,14 @@ import { useFocusEffect, useLocalSearchParams, Stack } from 'expo-router';
 import { useCallback } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 
+import { Ionicons } from '@expo/vector-icons';
+
 import { FOCUS_SOUNDS } from '../../src/core/focus';
 import { leaveFocus, toggleFocusSound } from '../../src/player/focusControl';
 import { focusKeyOf, isFocusId } from '../../src/player/focus';
 import { usePlayer } from '../../src/state/player';
 import { SoundCard } from '../../src/ui/SoundCard';
+import { SCENARIO_SUBTITLE, scenarioIcon } from '../../src/ui/scenarios';
 import { MINI_HEIGHT, colors, useScheme } from '../../src/ui/theme';
 
 /** one シナリオ: only the sounds that belong to it, each with its card */
@@ -26,6 +29,12 @@ export default function ScenarioScreen() {
     <>
       <Stack.Screen options={{ title: scenario }} />
       <ScrollView contentContainerStyle={{ paddingTop: 16, paddingBottom: MINI_HEIGHT + 24, gap: 14 }}>
+        {/* the header: the icon of the シナリオ, its name, and a short line */}
+        <View style={{ alignItems: 'center', gap: 14, paddingVertical: 24, paddingHorizontal: 24 }}>
+          {!!scenarioIcon(scenario) && <Ionicons name={scenarioIcon(scenario)!} size={64} color={colors.text} />}
+          <Text style={{ color: colors.text, fontSize: 30, fontWeight: '800', textAlign: 'center' }}>{scenario}</Text>
+          {!!SCENARIO_SUBTITLE[scenario] && <Text style={{ color: colors.sub, fontSize: 15, textAlign: 'center' }}>{SCENARIO_SUBTITLE[scenario]}</Text>}
+        </View>
         {sounds.length ? (
           sounds.map((sound) => (
             <SoundCard key={sound.key} sound={sound} playing={playingKey === sound.key} onPress={() => void toggleFocusSound(sound)} />
