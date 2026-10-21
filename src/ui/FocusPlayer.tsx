@@ -118,9 +118,22 @@ function FocusInfoSheet({ id, title, beat, onClose }: { id?: string; title: stri
 }
 
 /** the time left on the timer, as text */
-const leftText = (sleepAt: number, now: number): string => {
-  const min = Math.max(1, Math.ceil((sleepAt - now) / 60000));
-  return min >= 60 ? `${Math.floor(min / 60)}時間${min % 60 ? `${min % 60}分` : ''}` : `${min}分`;
+const countdown = (sleepAt: number, now: number): string => {
+  const secs = Math.max(0, Math.ceil((sleepAt - now) / 1000));
+  const h = Math.floor(secs / 3600);
+  const m = Math.floor((secs % 3600) / 60);
+  const ss = String(secs % 60).padStart(2, '0');
+  return h ? `${h}:${String(m).padStart(2, '0')}:${ss}` : `${m}:${ss}`;
+};
+
+/** the clock of the timer, ticking every second while it runs */
+const useTick = (on: boolean) => {
+  const [, tick] = useState(0);
+  useEffect(() => {
+    if (!on) return;
+    const id = setInterval(() => tick((n) => n + 1), 1000);
+    return () => clearInterval(id);
+  }, [on]);
 };
 
 /** one column of the time picker: scrolls, and the number in the middle is the one chosen */
@@ -161,14 +174,9 @@ function TimerChip() {
   const [open, setOpen] = useState(false);
   const [hours, setHours] = useState(0);
   const [minutes, setMinutes] = useState(5);
-  const [, tick] = useState(0);
-  useEffect(() => {
-    if (!sleepAt) return;
-    const id = setInterval(() => tick((n) => n + 1), 30000);
-    return () => clearInterval(id);
-  }, [sleepAt]);
+  const active = !!sleepAt && sleepAt > Date.now();
+  useTick(active || open);
   const now = Date.now();
-  const active = !!sleepAt && sleepAt > now;
   const total = hours * 60 + minutes;
 
   return (
@@ -180,7 +188,7 @@ function TimerChip() {
         style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 22, backgroundColor: active ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.08)', borderWidth: 1, borderColor: active ? colors.text : 'transparent' }}
       >
         <Ionicons name="timer-outline" size={18} color={colors.text} />
-        <Text style={{ color: colors.text, fontSize: 14, fontWeight: '600' }}>{active ? `あと${leftText(sleepAt!, now)}` : 'シャットオフ'}</Text>
+        <Text style={{ color: colors.text, fontSize: 14, fontWeight: '600' }}>{active ? countdown(sleepAt!, now) : 'シャットオフ'}</Text>
       </Pressable>
 
       <Modal visible={open} transparent animationType="slide" onRequestClose={() => setOpen(false)}>
@@ -197,9 +205,14 @@ function TimerChip() {
                 <Ionicons name="chevron-down" size={22} color={colors.text} />
               </Pressable>
             </View>
-            <Text style={{ color: colors.sub, fontSize: 14 }}>集中の再生を停止するタイマーを設定：</Text>
+            <Text style={{ color: colors.sub, fontSize: 14 }}>{active ? '集中の再生を停止するまで' : '集中の再生を停止するタイマーを設定：'}</Text>
 
-            {/* the time picker: hours and minutes, with the chosen one in the middle */}
+            {active ? (
+              <View style={{ alignItems: 'center', justifyContent: 'center', height: 230 }}>
+                <Text style={{ color: colors.text, fontSize: 72, fontWeight: '200', fontVariant: ['tabular-nums'] }}>{countdown(sleepAt!, now)}</Text>
+              </View>
+            ) : (
+            /* the time picker: hours and minutes, with the chosen one in the middle */
             <View style={{ alignItems: 'center', justifyContent: 'center', height: 230 }}>
               <View pointerEvents="none" style={{ position: 'absolute', left: 16, right: 16, top: 93, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.1)' }} />
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
@@ -207,18 +220,20 @@ function TimerChip() {
                 <WheelColumn max={59} value={minutes} onChange={setMinutes} unit="分" />
               </View>
             </View>
+            )}
 
             {/* start, or cancel a running one */}
-            <Pressable
-              disabled={total === 0}
-              onPress={() => { setSleepTimer(total); setOpen(false); }}
-              style={{ alignSelf: 'center', paddingHorizontal: 40, paddingVertical: 14, borderRadius: 26, borderWidth: 1, borderColor: total === 0 ? 'rgba(255,255,255,0.15)' : colors.text, opacity: total === 0 ? 0.4 : 1 }}
-            >
-              <Text style={{ color: colors.text, fontWeight: '700', fontSize: 16 }}>タイマー開始</Text>
-            </Pressable>
-            {active && (
-              <Pressable onPress={() => { setSleepTimer(null); setOpen(false); }} style={{ alignSelf: 'center' }}>
-                <Text style={{ color: colors.sub, fontSize: 14 }}>タイマーを解除</Text>
+            {active ? (
+              <Pressable onPress={() => { setSleepTimer(null); setOpen(false); }} style={{ alignSelf: 'center', paddingHorizontal: 40, paddingVertical: 14, borderRadius: 26, borderWidth: 1, borderColor: colors.text }}>
+                <Text style={{ color: colors.text, fontWeight: '700', fontSize: 16 }}>キャンセル</Text>
+              </Pressable>
+            ) : (
+              <Pressable
+                disabled={total === 0}
+                onPress={() => { setSleepTimer(total); setOpen(false); }}
+                style={{ alignSelf: 'center', paddingHorizontal: 40, paddingVertical: 14, borderRadius: 26, borderWidth: 1, borderColor: total === 0 ? 'rgba(255,255,255,0.15)' : colors.text, opacity: total === 0 ? 0.4 : 1 }}
+              >
+                <Text style={{ color: colors.text, fontWeight: '700', fontSize: 16 }}>タイマー開始</Text>
               </Pressable>
             )}
           </View>
@@ -226,6 +241,15 @@ function TimerChip() {
       </Modal>
     </>
   );
+}
+
+/** the countdown in the top middle of the player: タイマー • 4:46 (only while the timer runs) */
+function TimerHeader() {
+  const sleepAt = usePlayer((p) => p.sleepAt);
+  const active = !!sleepAt && sleepAt > Date.now();
+  useTick(active);
+  if (!active) return <View />;
+  return <Text style={{ color: colors.text, fontSize: 15, fontWeight: '500', fontVariant: ['tabular-nums'] }}>タイマー • {countdown(sleepAt!, Date.now())}</Text>;
 }
 
 /** the player for the 集中 sounds: the photo, a big thin Hz, the play circle, the strength, and the description under a bar that opens upwards */
@@ -265,11 +289,12 @@ export function FocusPlayer() {
       <Stack.Screen options={{ gestureEnabled: false }} />
       <FocusBackdrop id={current?.id} />
       <View style={{ flex: 1, paddingTop: 52, paddingHorizontal: 24, paddingBottom: 28 }}>
-        {/* the top: close and the menu */}
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+        {/* the top: close, the timer's countdown in the middle while it runs, and the menu */}
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
           <Pressable hitSlop={16} onPress={() => router.back()}>
             <Ionicons name="close" size={26} color={colors.text} />
           </Pressable>
+          <TimerHeader />
           <Ionicons name="ellipsis-horizontal" size={24} color={colors.text} />
         </View>
 
