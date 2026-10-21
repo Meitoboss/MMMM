@@ -10,35 +10,9 @@ import { usePlayer } from '../../src/state/player';
 import { useSettings } from '../../src/state/settings';
 import { leaveFocus, toggleFocusSound } from '../../src/player/focusControl';
 import { SoundCard } from '../../src/ui/SoundCard';
+import { SCENARIO_ROWS } from '../../src/ui/scenarios';
 import { MINI_HEIGHT, colors, useScheme } from '../../src/ui/theme';
 
-/** the シナリオ chips: two rows that slide sideways */
-const SCENARIO_ROWS: { label: string; icon: keyof typeof Ionicons.glyphMap }[][] = [
-  [
-    { label: 'お気に入り', icon: 'heart' },
-    { label: '作成', icon: 'create-outline' },
-    { label: 'カラーノイズ', icon: 'color-palette-outline' },
-    { label: '目覚め', icon: 'sunny-outline' },
-    { label: '深い眠り', icon: 'moon-outline' },
-    { label: 'ASMR', icon: 'ear-outline' },
-    { label: 'ストレス解消', icon: 'leaf-outline' },
-    { label: '夜のリセット', icon: 'time-outline' },
-    { label: '瞑想', icon: 'ellipse-outline' },
-    { label: '耳鳴り緩和', icon: 'ear-outline' },
-    { label: '423hz スリープ', icon: 'bed-outline' },
-  ],
-  [
-    { label: 'ADHD緩和', icon: 'radio-button-off-outline' },
-    { label: '8Dオーディオ', icon: 'headset-outline' },
-    { label: '528hz リラックス', icon: 'sparkles-outline' },
-    { label: 'ディープワーク', icon: 'hardware-chip-outline' },
-    { label: '考えすぎをやめる', icon: 'cloudy-outline' },
-    { label: 'パワーナップ', icon: 'flash-outline' },
-    { label: 'ディープフロー状態', icon: 'pulse-outline' },
-    { label: '家事', icon: 'home-outline' },
-    { label: '赤ちゃんのための睡眠', icon: 'happy-outline' },
-  ],
-];
 
 /** the pitch of each ear of the 集中 tone, changed on the spot while the 集中 sounds play (developer). Steps of 0.5 Hz; the new value is kept as the setting */
 function EarHz() {
@@ -108,21 +82,26 @@ export default function MoodTab() {
       {/* シナリオ: two rows of chips that slide sideways */}
       <View style={{ gap: 12 }}>
         <Text style={{ color: colors.text, fontSize: 18, fontWeight: '800', paddingHorizontal: 16 }}>シナリオ</Text>
-        {SCENARIO_ROWS.map((row, r) => (
-          <ScrollView key={r} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingHorizontal: 16 }}>
-            {row.map((c) => (
-              <Pressable
-                key={c.label}
-                accessibilityRole="button"
-                onPress={() => router.push(`/scenario/${encodeURIComponent(c.label)}`)}
-                style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 22, backgroundColor: colors.surface2 }}
-              >
-                <Ionicons name={c.icon} size={18} color={colors.text} />
-                <Text style={{ color: colors.text, fontWeight: '600' }}>{c.label}</Text>
-              </Pressable>
+        {/* the two rows move together: one sideways scroll for both */}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16 }}>
+          <View style={{ gap: 8 }}>
+            {SCENARIO_ROWS.map((row, r) => (
+              <View key={r} style={{ flexDirection: 'row', gap: 8 }}>
+                {row.map((c) => (
+                  <Pressable
+                    key={c.label}
+                    accessibilityRole="button"
+                    onPress={() => router.push(`/scenario/${encodeURIComponent(c.label)}`)}
+                    style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 22, backgroundColor: colors.surface2 }}
+                  >
+                    <Ionicons name={c.icon} size={18} color={colors.text} />
+                    <Text style={{ color: colors.text, fontWeight: '600' }}>{c.label}</Text>
+                  </Pressable>
+                ))}
+              </View>
             ))}
-          </ScrollView>
-        ))}
+          </View>
+        </ScrollView>
       </View>
 
       {sections.map((sec) => {
