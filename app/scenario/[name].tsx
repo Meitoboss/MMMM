@@ -36,9 +36,11 @@ export default function ScenarioScreen() {
           {!!SCENARIO_SUBTITLE[scenario] && <Text style={{ color: colors.sub, fontSize: 15, textAlign: 'center' }}>{SCENARIO_SUBTITLE[scenario]}</Text>}
         </View>
         {sounds.length ? (
-          sounds.map((sound) => (
-            <SoundCard key={sound.key} sound={sound} playing={playingKey === sound.key} onPress={() => void toggleFocusSound(sound)} />
-          ))
+          <View style={{ gap: 18, paddingHorizontal: 20 }}>
+            {sounds.map((sound) => (
+              <SoundCard key={sound.key} sound={sound} row playing={playingKey === sound.key} onPress={() => void toggleFocusSound(sound)} />
+            ))}
+          </View>
         ) : (
           <View style={{ paddingHorizontal: 24, paddingTop: 24 }}>
             <Text style={{ color: colors.sub }}>「{scenario}」の曲は、まだありません。</Text>

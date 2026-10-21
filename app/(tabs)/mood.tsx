@@ -3,7 +3,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 
-import { FOCUS_SOUNDS, type FocusSound } from '../../src/core/focus';
+import { TUNINGS } from '../../src/core/tuning';
 import { focusKeyOf, isFocusId } from '../../src/player/focus';
 import { pauseTone, playTone } from '../../src/player/tone';
 import { usePlayer } from '../../src/state/player';
@@ -12,7 +12,6 @@ import { leaveFocusOnBlur, toggleFocusSound } from '../../src/player/focusContro
 import { SoundCard } from '../../src/ui/SoundCard';
 import { SCENARIO_ROWS } from '../../src/ui/scenarios';
 import { MINI_HEIGHT, colors, useScheme } from '../../src/ui/theme';
-
 
 export default function MoodTab() {
   useScheme();
@@ -42,14 +41,8 @@ export default function MoodTab() {
   // leaving the 気分 tab: the 集中 sounds stop, and the music from before comes back
   useFocusEffect(useCallback(() => leaveFocusOnBlur(), []));
 
-  const sections: { title: string; group: FocusSound['group'] }[] = [
-    { title: '集中', group: 'focus' },
-    { title: '回復', group: 'sleep' },
-    { title: '自然の旅', group: 'nature' },
-  ];
-
   return (
-    <ScrollView contentContainerStyle={{ paddingTop: 16, paddingBottom: MINI_HEIGHT + 150, gap: 22 }}>
+    <ScrollView contentContainerStyle={{ paddingTop: 16, paddingBottom: MINI_HEIGHT + 150, gap: 26 }}>
       {/* シナリオ: two rows of chips that slide sideways */}
       <View style={{ gap: 12 }}>
         <Text style={{ color: colors.text, fontSize: 18, fontWeight: '800', paddingHorizontal: 16 }}>シナリオ</Text>
@@ -75,20 +68,23 @@ export default function MoodTab() {
         </ScrollView>
       </View>
 
-      {sections.map((sec) => {
-        const cards = FOCUS_SOUNDS.filter((x) => x.group === sec.group);
-        if (!cards.length) return null;
-        return (
-          <View key={sec.group} style={{ gap: 12 }}>
-            <Text style={{ color: colors.text, fontSize: 18, fontWeight: '800', paddingHorizontal: 16 }}>{sec.title}</Text>
-            {cards.map((sound) => (
-              <View key={sound.key} style={{ gap: 10 }}>
-                <SoundCard sound={sound} playing={playingKey === sound.key} onPress={() => void toggleFocusSound(sound)} />
-              </View>
-            ))}
-          </View>
-        );
-      })}
+      {/* 脳をチューニング: one coloured card per kind of sound, sideways; a card opens its page */}
+      <View style={{ gap: 12 }}>
+        <Text style={{ color: colors.text, fontSize: 18, fontWeight: '800', paddingHorizontal: 16 }}>脳をチューニング</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, gap: 12 }}>
+          {TUNINGS.map((t) => (
+            <Pressable
+              key={t.key}
+              accessibilityRole="button"
+              onPress={() => router.push(`/tuning/${t.key}`)}
+              style={{ width: 150, height: 190, borderRadius: 22, padding: 16, justifyContent: 'space-between', backgroundColor: t.color }}
+            >
+              <Ionicons name={t.icon as keyof typeof Ionicons.glyphMap} size={30} color="#ffffff" />
+              <Text style={{ color: '#ffffff', fontSize: 18, fontWeight: '700' }}>{t.title}</Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+      </View>
     </ScrollView>
   );
 }
