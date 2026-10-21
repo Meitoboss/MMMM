@@ -12,16 +12,21 @@ export interface Tuning {
   icon: string;
   /** the colour of the card and of the page's header */
   color: string;
-  /** the line under the 「おすすめ」 heading of its page */
-  description: string;
 }
 
 export const TUNINGS: Tuning[] = [
-  { key: 'sleep', title: '睡眠', icon: 'moon-outline', color: '#2a3b66', description: '0.5〜7Hzの波がアンビエントメロディーを通じて流れ、眠る前の日常の緊張を解放します。' },
-  { key: 'relax', title: 'リラックス', icon: 'sparkles-outline', color: '#4d6e44', description: '体と心を緩め、穏やかな気づきへ導くサウンドです。' },
-  { key: 'focus', title: '集中', icon: 'ellipse-outline', color: '#5a4595', description: 'アルファ/ベータ波（8-30Hz）がタスクへの注意力を高めます。' },
-  { key: 'meditate', title: '瞑想', icon: 'person-outline', color: '#3f7a74', description: '内側へ意識を向け、静かな時間を過ごすためのサウンドです。' },
-  { key: 'tinnitus', title: '耳鳴り緩和', icon: 'ear-outline', color: '#3d6d92', description: '耳鳴りが気になるときに、やわらかい音で気をそらすサウンドです。' },
+  { key: 'sleep', title: '睡眠', icon: 'moon-outline', color: '#2a3b66' },
+  { key: 'relax', title: 'リラックス', icon: 'sparkles-outline', color: '#4d6e44' },
+  { key: 'focus', title: '集中', icon: 'ellipse-outline', color: '#5a4595' },
+  { key: 'meditate', title: '瞑想', icon: 'person-outline', color: '#3f7a74' },
+  { key: 'tinnitus', title: '耳鳴り緩和', icon: 'ear-outline', color: '#3d6d92' },
 ];
+
+/** the line under the heading of each group on a 脳をチューニング page */
+export const SECTION_TEXT: Record<string, string> = {
+  おすすめ: 'いまおすすめの、落ち着いたサウンドです。',
+  仕事と勉強: 'アルファ/ベータ波（8-30Hz）がタスクへの注意力を高めます。',
+  深い眠り: '0.5-7Hzの波がアンビエントメロディーを通じて流れ、眠る前の日常の緊張を解放します。',
+};
 
 export const tuningOf = (key: TuningKey): Tuning | undefined => TUNINGS.find((t) => t.key === key);

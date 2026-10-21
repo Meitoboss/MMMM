@@ -4,7 +4,7 @@ import { useCallback } from 'react';
 import { Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
 
 import { FOCUS_SOUNDS } from '../../src/core/focus';
-import { tuningOf, type TuningKey } from '../../src/core/tuning';
+import { SECTION_TEXT, tuningOf, type TuningKey } from '../../src/core/tuning';
 import { glow } from '../../src/ui/FocusPlayer';
 import { SoundCard } from '../../src/ui/SoundCard';
 import { leaveFocusOnBlur, toggleFocusSound } from '../../src/player/focusControl';
@@ -23,6 +23,8 @@ export default function TuningScreen() {
   const status = usePlayer((p) => p.status);
   const playingKey = current && isFocusId(current.id) && (status === 'playing' || status === 'loading') ? focusKeyOf(current.id) : '';
   const sounds = FOCUS_SOUNDS.filter((x) => x.tuning === key);
+  // the groups, in the order they first appear in the list
+  const sections = [...new Set(sounds.map((x) => x.section))];
 
   // leaving this page: the 集中 sounds stop, and the music from before comes back
   useFocusEffect(useCallback(() => leaveFocusOnBlur(), []));
@@ -39,20 +41,21 @@ export default function TuningScreen() {
           <Text style={[glow, { color: '#ffffff', fontSize: 34, fontWeight: '300', marginTop: 8 }]}>{tuning?.title ?? ''}</Text>
         </View>
 
-        <View style={{ backgroundColor: colors.bg, marginTop: -24, borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingTop: 24, paddingBottom: 12, gap: 14 }}>
-          <View style={{ paddingHorizontal: 20, gap: 6 }}>
-            <Text style={{ color: colors.text, fontSize: 20, fontWeight: '700' }}>おすすめ</Text>
-            {!!tuning && <Text style={{ color: colors.sub, fontSize: 14, lineHeight: 21 }}>{tuning.description}</Text>}
-          </View>
-          {sounds.length ? (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, gap: 12 }}>
-              {sounds.map((sound) => (
-                <SoundCard key={sound.key} sound={sound} width={Math.min(200, width * 0.55)} playing={playingKey === sound.key} onPress={() => void toggleFocusSound(sound)} />
-              ))}
-            </ScrollView>
-          ) : (
-            <Text style={{ color: colors.sub, paddingHorizontal: 20, paddingTop: 12 }}>この脳のチューニングの曲は、まだありません。</Text>
-          )}
+        <View style={{ backgroundColor: colors.bg, marginTop: -24, borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingTop: 24, paddingBottom: 12, gap: 26 }}>
+          {sections.map((section) => (
+            <View key={section} style={{ gap: 12, paddingHorizontal: 20 }}>
+              <View style={{ gap: 6 }}>
+                <Text style={{ color: colors.text, fontSize: 20, fontWeight: '700' }}>{section}</Text>
+                <Text style={{ color: colors.sub, fontSize: 14, lineHeight: 21 }}>{SECTION_TEXT[section] ?? ''}</Text>
+              </View>
+              {sounds
+                .filter((x) => x.section === section)
+                .map((sound) => (
+                  <SoundCard key={sound.key} sound={sound} wide width={width - 40} playing={playingKey === sound.key} onPress={() => void toggleFocusSound(sound)} />
+                ))}
+            </View>
+          ))}
+          {!sounds.length && <Text style={{ color: colors.sub, paddingHorizontal: 20 }}>この脳のチューニングの曲は、まだありません。</Text>}
         </View>
       </ScrollView>
     </>
