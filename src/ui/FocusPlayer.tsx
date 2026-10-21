@@ -1,8 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { Stack, useRouter } from 'expo-router';
-import { useRef, useState } from 'react';
-import { PanResponder, Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { Modal, PanResponder, Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
 
 import { TONE_LEVELS, type ToneLevel } from '../core/focus';
 import { focusKeyOf, soundPitch } from '../player/focus';
@@ -117,6 +117,117 @@ function FocusInfoSheet({ id, title, beat, onClose }: { id?: string; title: stri
   );
 }
 
+/** the time left on the timer, as text */
+const leftText = (sleepAt: number, now: number): string => {
+  const min = Math.max(1, Math.ceil((sleepAt - now) / 60000));
+  return min >= 60 ? `${Math.floor(min / 60)}時間${min % 60 ? `${min % 60}分` : ''}` : `${min}分`;
+};
+
+/** one column of the time picker: scrolls, and the number in the middle is the one chosen */
+function WheelColumn({ max, value, onChange, unit }: { max: number; value: number; onChange: (v: number) => void; unit: string }) {
+  const ITEM = 44;
+  const ref = useRef<ScrollView>(null);
+  const items = Array.from({ length: max + 1 }, (_, i) => i);
+  return (
+    <View style={{ width: 110, height: ITEM * 5, overflow: 'hidden' }}>
+      <ScrollView
+        ref={ref}
+        showsVerticalScrollIndicator={false}
+        snapToInterval={ITEM}
+        decelerationRate="fast"
+        contentOffset={{ x: 0, y: value * ITEM }}
+        contentContainerStyle={{ paddingVertical: ITEM * 2 }}
+        onMomentumScrollEnd={(e) => onChange(Math.min(max, Math.max(0, Math.round(e.nativeEvent.contentOffset.y / ITEM))))}
+        onScrollEndDrag={(e) => onChange(Math.min(max, Math.max(0, Math.round(e.nativeEvent.contentOffset.y / ITEM))))}
+      >
+        {items.map((n) => {
+          const on = n === value;
+          return (
+            <View key={n} style={{ height: ITEM, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 4 }}>
+              <Text style={{ color: on ? colors.text : 'rgba(255,255,255,0.3)', fontSize: on ? 30 : 22, fontWeight: on ? '300' : '200' }}>{n}</Text>
+              {on && <Text style={{ color: colors.text, fontSize: 14, fontWeight: '500' }}>{unit}</Text>}
+            </View>
+          );
+        })}
+      </ScrollView>
+    </View>
+  );
+}
+
+/** the timer: a chip that shows the time left, and a sheet (シャットオフタイマー) to choose how long the sound plays */
+function TimerChip() {
+  const sleepAt = usePlayer((p) => p.sleepAt);
+  const setSleepTimer = usePlayer((p) => p.setSleepTimer);
+  const [open, setOpen] = useState(false);
+  const [hours, setHours] = useState(0);
+  const [minutes, setMinutes] = useState(5);
+  const [, tick] = useState(0);
+  useEffect(() => {
+    if (!sleepAt) return;
+    const id = setInterval(() => tick((n) => n + 1), 30000);
+    return () => clearInterval(id);
+  }, [sleepAt]);
+  const now = Date.now();
+  const active = !!sleepAt && sleepAt > now;
+  const total = hours * 60 + minutes;
+
+  return (
+    <>
+      <Pressable
+        onPress={() => setOpen(true)}
+        accessibilityRole="button"
+        accessibilityLabel="シャットオフタイマー"
+        style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 22, backgroundColor: active ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.08)', borderWidth: 1, borderColor: active ? colors.text : 'transparent' }}
+      >
+        <Ionicons name="timer-outline" size={18} color={colors.text} />
+        <Text style={{ color: colors.text, fontSize: 14, fontWeight: '600' }}>{active ? `あと${leftText(sleepAt!, now)}` : 'シャットオフ'}</Text>
+      </Pressable>
+
+      <Modal visible={open} transparent animationType="slide" onRequestClose={() => setOpen(false)}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+          <Pressable style={{ flex: 1 }} onPress={() => setOpen(false)} />
+          <View style={{ borderTopLeftRadius: 32, borderTopRightRadius: 32, backgroundColor: 'rgba(18,18,22,0.96)', paddingHorizontal: 24, paddingTop: 22, paddingBottom: 40, gap: 18, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' }}>
+            {/* the title row */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                <Ionicons name="timer-outline" size={26} color={colors.text} />
+                <Text style={{ color: colors.text, fontSize: 20, fontWeight: '600' }}>シャットオフタイマー</Text>
+              </View>
+              <Pressable hitSlop={12} onPress={() => setOpen(false)}>
+                <Ionicons name="chevron-down" size={22} color={colors.text} />
+              </Pressable>
+            </View>
+            <Text style={{ color: colors.sub, fontSize: 14 }}>集中の再生を停止するタイマーを設定：</Text>
+
+            {/* the time picker: hours and minutes, with the chosen one in the middle */}
+            <View style={{ alignItems: 'center', justifyContent: 'center', height: 230 }}>
+              <View pointerEvents="none" style={{ position: 'absolute', left: 16, right: 16, top: 93, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.1)' }} />
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
+                <WheelColumn max={12} value={hours} onChange={setHours} unit="時間" />
+                <WheelColumn max={59} value={minutes} onChange={setMinutes} unit="分" />
+              </View>
+            </View>
+
+            {/* start, or cancel a running one */}
+            <Pressable
+              disabled={total === 0}
+              onPress={() => { setSleepTimer(total); setOpen(false); }}
+              style={{ alignSelf: 'center', paddingHorizontal: 40, paddingVertical: 14, borderRadius: 26, borderWidth: 1, borderColor: total === 0 ? 'rgba(255,255,255,0.15)' : colors.text, opacity: total === 0 ? 0.4 : 1 }}
+            >
+              <Text style={{ color: colors.text, fontWeight: '700', fontSize: 16 }}>タイマー開始</Text>
+            </Pressable>
+            {active && (
+              <Pressable onPress={() => { setSleepTimer(null); setOpen(false); }} style={{ alignSelf: 'center' }}>
+                <Text style={{ color: colors.sub, fontSize: 14 }}>タイマーを解除</Text>
+              </Pressable>
+            )}
+          </View>
+        </View>
+      </Modal>
+    </>
+  );
+}
+
 /** the player for the 集中 sounds: the photo, a big thin Hz, the play circle, the strength, and the description under a bar that opens upwards */
 export function FocusPlayer() {
   useScheme();
@@ -182,12 +293,9 @@ export function FocusPlayer() {
           </Pressable>
         </View>
 
-        {/* the timer, and the block pill */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 18, marginTop: 22 }}>
-          <Ionicons name="timer-outline" size={24} color={colors.text} />
-          <View style={{ paddingHorizontal: 18, paddingVertical: 10, borderRadius: 22, borderWidth: 1, borderColor: colors.border }}>
-            <Text style={{ color: colors.text, fontSize: 14 }}>アプリをブロック</Text>
-          </View>
+        {/* the sleep timer: how long the sound plays, shown as the time left */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 22 }}>
+          <TimerChip />
         </View>
 
         {/* the title */}
