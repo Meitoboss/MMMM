@@ -29,8 +29,7 @@ export interface FocusSound {
  */
 export const FOCUS_SOUNDS: FocusSound[] = [
   { key: 'focus_loop', name: '広い野原', hz: 180, beat: 20, group: 'focus', ready: true, scenarios: ['ディープワーク'] },
-  // the middle pitch (100 Hz) is a placeholder until the sound is made
-  { key: 'moon_light', name: '残る月光', hz: 100, beat: 0.5, group: 'sleep', ready: true, scenarios: ['深い眠り'] },
+  { key: 'moon_light', name: '残る月光', hz: 200.25, beat: 0.5, group: 'sleep', ready: true, scenarios: ['深い眠り'] },
 ];
 
 /** how strong the binaural tone is: none, low, normal, high (see core/binaural.ts) */
