@@ -3,6 +3,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 
+import { FOCUS_SOUNDS, type FocusSound } from '../../src/core/focus';
 import { TUNINGS } from '../../src/core/tuning';
 import { focusKeyOf, isFocusId } from '../../src/player/focus';
 import { pauseTone, playTone } from '../../src/player/tone';
@@ -85,6 +86,32 @@ export default function MoodTab() {
           ))}
         </ScrollView>
       </View>
+
+      {/* the sections of the sounds, below the cards: one horizontal row of tall photo cards each */}
+      {SECTIONS.map((sec) => {
+        const cards = FOCUS_SOUNDS.filter((x) => x.group === sec.group);
+        if (!cards.length) return null;
+        return (
+          <View key={sec.group} style={{ gap: 12 }}>
+            <View style={{ gap: 6, paddingHorizontal: 16 }}>
+              <Text style={{ color: colors.text, fontSize: 22, fontWeight: '700' }}>{sec.title}</Text>
+              <Text style={{ color: colors.sub, fontSize: 14, lineHeight: 21 }}>{sec.text}</Text>
+            </View>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, gap: 12 }}>
+              {cards.map((sound) => (
+                <SoundCard key={sound.key} sound={sound} width={210} playing={playingKey === sound.key} onPress={() => void toggleFocusSound(sound)} />
+              ))}
+            </ScrollView>
+          </View>
+        );
+      })}
     </ScrollView>
   );
 }
+
+/** the sections under the 脳をチューニング cards: the group of each sound, with its heading and line */
+const SECTIONS: { title: string; text: string; group: FocusSound['group'] }[] = [
+  { title: '集中', text: 'アルファ/ベータ波（8-30Hz）がタスクへの注意力を高めます。', group: 'focus' },
+  { title: '深い眠り', text: '0.5-7Hzの波がアンビエントメロディーを通じて流れ、眠る前の日常の緊張を解放します。', group: 'sleep' },
+  { title: '自然の旅', text: '自然の音とともに、心を遠くへ旅させるサウンドです。', group: 'nature' },
+];
