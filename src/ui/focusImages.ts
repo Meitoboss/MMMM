@@ -5,6 +5,7 @@ const IMAGES: Record<string, ImageSourcePropType> = {
   focus_loop: require('../../assets/focus/broad_field.jpg'),
   moon_light: require('../../assets/focus/moon_light.jpg'),
   rain: require('../../assets/focus/rain.jpg'),
+  light: require('../../assets/focus/light.jpg'),
 };
 
 export const focusImage = (key: string): ImageSourcePropType | undefined => IMAGES[key];
@@ -14,7 +15,7 @@ export interface FocusInfo {
   /** the one line under the title on the player */
   short: string;
   text: string;
-  features: { icon: 'locate-outline' | 'git-network-outline' | 'extension-puzzle-outline' | 'flash-outline' | 'moon-outline' | 'bed-outline' | 'leaf-outline' | 'water-outline' | 'ellipse-outline' | 'sparkles-outline' | 'eye-outline'; label: string }[];
+  features: { icon: 'locate-outline' | 'git-network-outline' | 'extension-puzzle-outline' | 'flash-outline' | 'moon-outline' | 'bed-outline' | 'leaf-outline' | 'water-outline' | 'ellipse-outline' | 'sparkles-outline' | 'eye-outline' | 'time-outline' | 'person-outline'; label: string }[];
   body: string;
 }
 
@@ -51,5 +52,16 @@ export const FOCUS_INFO: Record<string, FocusInfo> = {
       { icon: 'eye-outline', label: '内面の振り返り' },
     ],
     body: 'ブリキ屋根に安定した雨の柔らかく金属的な音が部屋を満たしています。このセッションの5Hz周波数はシータ波の誘導を助け、深いリラクゼーション瞑想に理想的な脳の状態です。',
+  },
+  light: {
+    short: 'きらめくダストの心地よいアンビエントサウンド',
+    text: 'リラックスしながらも目覚めている状態に関連する、落ち着いた脳波のパターンです。積極的に考える負担から離れ、穏やかな注意を保つ状態を表します。',
+    features: [
+      { icon: 'water-outline', label: '穏やかな心' },
+      { icon: 'ellipse-outline', label: '穏やかな集中' },
+      { icon: 'time-outline', label: '今この瞬間' },
+      { icon: 'person-outline', label: 'リラックスした気づき' },
+    ],
+    body: '温かく太陽の光が差す森の中、完全に静かです。8Hz周波数はシータ波の誘導を助け、深いリラクゼーションと内省に理想的です。',
   },
 };

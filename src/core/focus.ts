@@ -25,7 +25,8 @@ export interface FocusSound {
 }
 
 /** the big sections of the 気分 tab the sounds are shown under */
-export type FocusGroup = 'focus' | 'sleep' | 'nature';
+/** 'none': not under a heading on the 気分 tab (the sound is only found through its scenario) */
+export type FocusGroup = 'focus' | 'sleep' | 'nature' | 'none';
 
 /**
  * The sounds on the server. Add a line here for each new sound (the file must be /var/oled/audio/<key>.flac on the server).
@@ -34,6 +35,7 @@ export const FOCUS_SOUNDS: FocusSound[] = [
   { key: 'focus_loop', name: '広い野原', hz: 180, beat: 20, group: 'focus', ready: true, scenarios: ['ディープワーク'] },
   { key: 'moon_light', name: '残る月光', hz: 200.25, beat: 0.5, group: 'sleep', ready: true, scenarios: ['深い眠り'] },
   { key: 'rain', name: 'ブリキ屋根の夢想', hz: 102.5, beat: 5, group: 'nature', ready: true, scenarios: [] },
+  { key: 'light', name: '光と踊る', hz: 528, beat: 8, group: 'none', ready: true, scenarios: ['528hz リラックス'] },
 ];
 
 /** how strong the binaural tone is: none, low, normal, high (see core/binaural.ts) */
