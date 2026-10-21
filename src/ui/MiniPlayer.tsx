@@ -14,7 +14,7 @@ import { Cover } from './components';
 import { MINI_HEIGHT, TAB_HEIGHT, colors, dynamicStyles, useScheme } from './theme';
 
 /** screens that cover the whole screen (or have their own bottom buttons): the mini bar is not shown on them */
-const FULL_SCREENS = ['player', 'archive-pick', 'add-to-playlist', 'song-tags'];
+const FULL_SCREENS = ['player', 'focus-player', 'archive-pick', 'add-to-playlist', 'song-tags'];
 
 export function MiniPlayer() {
   const router = useRouter();
@@ -44,7 +44,7 @@ export function MiniPlayer() {
   if (isFocusId(current.id)) {
     if (!onMood) return null;
     return (
-      <Pressable onPress={() => router.push('/player')} style={[st.wrap, { bottom }]}>
+      <Pressable onPress={() => router.push('/focus-player')} style={[st.wrap, { bottom }]}>
         <FocusBackdrop id={current.id} dim={0.45} />
         <View style={[st.progress, { width: `${pct * 100}%` }]} />
         <View style={{ flexDirection: 'row', alignItems: 'flex-end', minWidth: 64 }}>
