@@ -128,8 +128,6 @@ export default function MoodTab() {
             ))}
           </View>
         </ScrollView>
-          </ScrollView>
-        ))}
       </View>
 
       {sections.map((sec) => {
