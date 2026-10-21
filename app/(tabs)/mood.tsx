@@ -82,7 +82,7 @@ export default function MoodTab() {
   ];
 
   return (
-    <ScrollView contentContainerStyle={{ paddingTop: 16, paddingBottom: MINI_HEIGHT + 24, gap: 22 }}>
+    <ScrollView contentContainerStyle={{ paddingTop: 16, paddingBottom: MINI_HEIGHT + 150, gap: 22 }}>
       {/* シナリオ: two rows of chips that slide sideways */}
       <View style={{ gap: 12 }}>
         <Text style={{ color: colors.text, fontSize: 18, fontWeight: '800', paddingHorizontal: 16 }}>シナリオ</Text>
