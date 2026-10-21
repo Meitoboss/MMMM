@@ -1,8 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { Stack, useRouter } from 'expo-router';
-import { useRef, useState } from 'react';
-import { PanResponder, Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { Modal, PanResponder, Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
 
 import { TONE_LEVELS, type ToneLevel } from '../core/focus';
 import { focusKeyOf, soundPitch } from '../player/focus';
@@ -117,6 +117,73 @@ function FocusInfoSheet({ id, title, beat, onClose }: { id?: string; title: stri
   );
 }
 
+/** the options of the sleep timer, in minutes (0 = off) */
+const TIMER_OPTIONS = [15, 30, 45, 60, 90, 120];
+
+/** the time left on the timer, as text */
+const leftText = (sleepAt: number, now: number): string => {
+  const min = Math.max(1, Math.ceil((sleepAt - now) / 60000));
+  return min >= 60 ? `${Math.floor(min / 60)}時間${min % 60 ? `${min % 60}分` : ''}` : `${min}分`;
+};
+
+/** the timer: a chip that shows the time left, and opens a sheet to choose how long to play */
+function TimerChip() {
+  const sleepAt = usePlayer((p) => p.sleepAt);
+  const setSleepTimer = usePlayer((p) => p.setSleepTimer);
+  const [open, setOpen] = useState(false);
+  const [, tick] = useState(0);
+  useEffect(() => {
+    if (!sleepAt) return;
+    const id = setInterval(() => tick((n) => n + 1), 30000);
+    return () => clearInterval(id);
+  }, [sleepAt]);
+  const now = Date.now();
+  const active = !!sleepAt && sleepAt > now;
+
+  return (
+    <>
+      <Pressable
+        onPress={() => setOpen(true)}
+        accessibilityRole="button"
+        accessibilityLabel="タイマー"
+        style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 22, backgroundColor: active ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.08)', borderWidth: 1, borderColor: active ? colors.text : 'transparent' }}
+      >
+        <Ionicons name={active ? 'hourglass' : 'hourglass-outline'} size={18} color={colors.text} />
+        <Text style={{ color: colors.text, fontSize: 14, fontWeight: '600' }}>{active ? `あと${leftText(sleepAt!, now)}` : 'タイマー'}</Text>
+      </Pressable>
+
+      <Modal visible={open} transparent animationType="slide" onRequestClose={() => setOpen(false)}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.55)' }}>
+          <Pressable style={{ flex: 1 }} onPress={() => setOpen(false)} />
+          <View style={{ borderTopLeftRadius: 28, borderTopRightRadius: 28, backgroundColor: '#101113', padding: 24, paddingBottom: 40, gap: 18 }}>
+            <View style={{ alignItems: 'center', gap: 6 }}>
+              <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.25)' }} />
+              <Text style={{ color: colors.text, fontSize: 18, fontWeight: '800', marginTop: 10 }}>タイマー</Text>
+              <Text style={{ color: colors.sub, fontSize: 13 }}>この時間が経つと、再生を止めます</Text>
+            </View>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 10 }}>
+              {TIMER_OPTIONS.map((m) => (
+                <Pressable
+                  key={m}
+                  onPress={() => { setSleepTimer(m); setOpen(false); }}
+                  style={{ width: '30%', alignItems: 'center', paddingVertical: 14, borderRadius: 18, backgroundColor: active && sleepAt && Math.round((sleepAt - Date.now()) / 60000) === m ? colors.text : 'rgba(255,255,255,0.08)' }}
+                >
+                  <Text style={{ color: colors.text, fontWeight: '700', fontSize: 16 }}>{m >= 60 ? `${m / 60}時間` : `${m}分`}</Text>
+                </Pressable>
+              ))}
+            </View>
+            {active && (
+              <Pressable onPress={() => { setSleepTimer(null); setOpen(false); }} style={{ alignItems: 'center', paddingVertical: 14, borderRadius: 18, borderWidth: 1, borderColor: colors.border }}>
+                <Text style={{ color: colors.text, fontWeight: '700' }}>タイマーを解除</Text>
+              </Pressable>
+            )}
+          </View>
+        </View>
+      </Modal>
+    </>
+  );
+}
+
 /** the player for the 集中 sounds: the photo, a big thin Hz, the play circle, the strength, and the description under a bar that opens upwards */
 export function FocusPlayer() {
   useScheme();
@@ -182,12 +249,9 @@ export function FocusPlayer() {
           </Pressable>
         </View>
 
-        {/* the timer, and the block pill */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 18, marginTop: 22 }}>
-          <Ionicons name="timer-outline" size={24} color={colors.text} />
-          <View style={{ paddingHorizontal: 18, paddingVertical: 10, borderRadius: 22, borderWidth: 1, borderColor: colors.border }}>
-            <Text style={{ color: colors.text, fontSize: 14 }}>アプリをブロック</Text>
-          </View>
+        {/* the sleep timer: how long the sound plays, shown as the time left */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 22 }}>
+          <TimerChip />
         </View>
 
         {/* the title */}
