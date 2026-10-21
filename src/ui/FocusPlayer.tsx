@@ -161,7 +161,6 @@ function TimerChip() {
   const [open, setOpen] = useState(false);
   const [hours, setHours] = useState(0);
   const [minutes, setMinutes] = useState(5);
-  const [alarm, setAlarm] = useState(false);
   const [, tick] = useState(0);
   useEffect(() => {
     if (!sleepAt) return;
@@ -206,18 +205,6 @@ function TimerChip() {
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
                 <WheelColumn max={12} value={hours} onChange={setHours} unit="時間" />
                 <WheelColumn max={59} value={minutes} onChange={setMinutes} unit="分" />
-              </View>
-            </View>
-
-            {/* the alarm sound: ON / OFF */}
-            <View style={{ alignItems: 'center', gap: 10 }}>
-              <Text style={{ color: colors.text, fontSize: 15 }}>アラーム音</Text>
-              <View style={{ flexDirection: 'row', borderRadius: 22, borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)', padding: 4, width: 220 }}>
-                {[true, false].map((v) => (
-                  <Pressable key={String(v)} onPress={() => setAlarm(v)} style={{ flex: 1, alignItems: 'center', paddingVertical: 8, borderRadius: 18, backgroundColor: alarm === v ? 'rgba(255,255,255,0.16)' : 'transparent' }}>
-                    <Text style={{ color: alarm === v ? colors.text : colors.sub, fontWeight: alarm === v ? '700' : '400' }}>{v ? 'ON' : 'OFF'}</Text>
-                  </Pressable>
-                ))}
               </View>
             </View>
 
