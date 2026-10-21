@@ -74,7 +74,7 @@ export default function MoodTab() {
 
   const sections: { title: string; group: FocusSound['group'] }[] = [
     { title: '集中', group: 'focus' },
-    { title: '睡眠', group: 'sleep' },
+    { title: '回復', group: 'sleep' },
   ];
 
   return (
