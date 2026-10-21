@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import { useRouter } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import { useRef, useState } from 'react';
 import { PanResponder, Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
 
@@ -126,7 +126,22 @@ export function FocusPlayer() {
   const togglePlay = usePlayer((p) => p.togglePlay);
   const level = useSettings((st) => st.focusToneLevel);
   const [open, setOpen] = useState(false);
-  const swipeUp = useVerticalSwipe('up', () => setOpen(true));
+  // the swipes of this screen: up opens the description, down closes it, or (with it closed) closes the player.
+  // The screen's own swipe-to-close is off here (iOS would take the swipe up), so the player is closed by this swipe
+  const openNow = useRef(open);
+  openNow.current = open;
+  const swipe = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dy) > 12 && Math.abs(g.dy) > Math.abs(g.dx) * 1.5,
+      onPanResponderRelease: (_, g) => {
+        if (g.dy < -50) setOpen(true);
+        else if (g.dy > 50) {
+          if (openNow.current) setOpen(false);
+          else router.back();
+        }
+      },
+    }),
+  ).current.panHandlers;
   const beat = focusBeat(current?.id);
   const playing = status === 'playing' || status === 'loading';
   const info = FOCUS_INFO[focusKeyOf(current?.id ?? '')];
@@ -137,7 +152,9 @@ export function FocusPlayer() {
   };
 
   return (
-    <View {...swipeUp} style={{ flex: 1, backgroundColor: '#050508' }}>
+    <View {...swipe} style={{ flex: 1, backgroundColor: '#050508' }}>
+      {/* the screen's own swipe-to-close is off, so the swipes above are not taken by iOS */}
+      <Stack.Screen options={{ gestureEnabled: false }} />
       <FocusBackdrop id={current?.id} />
       <View style={{ flex: 1, paddingTop: 52, paddingHorizontal: 24, paddingBottom: 28 }}>
         {/* the top: close and the menu */}
