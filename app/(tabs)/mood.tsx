@@ -108,19 +108,26 @@ export default function MoodTab() {
       {/* シナリオ: two rows of chips that slide sideways */}
       <View style={{ gap: 12 }}>
         <Text style={{ color: colors.text, fontSize: 18, fontWeight: '800', paddingHorizontal: 16 }}>シナリオ</Text>
-        {SCENARIO_ROWS.map((row, r) => (
-          <ScrollView key={r} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingHorizontal: 16 }}>
-            {row.map((c) => (
-              <Pressable
-                key={c.label}
-                accessibilityRole="button"
-                onPress={() => router.push(`/scenario/${encodeURIComponent(c.label)}`)}
-                style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 22, backgroundColor: colors.surface2 }}
-              >
-                <Ionicons name={c.icon} size={18} color={colors.text} />
-                <Text style={{ color: colors.text, fontWeight: '600' }}>{c.label}</Text>
-              </Pressable>
+        {/* the two rows move together: one sideways scroll for both */}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16 }}>
+          <View style={{ gap: 8 }}>
+            {SCENARIO_ROWS.map((row, r) => (
+              <View key={r} style={{ flexDirection: 'row', gap: 8 }}>
+                {row.map((c) => (
+                  <Pressable
+                    key={c.label}
+                    accessibilityRole="button"
+                    onPress={() => router.push(`/scenario/${encodeURIComponent(c.label)}`)}
+                    style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 22, backgroundColor: colors.surface2 }}
+                  >
+                    <Ionicons name={c.icon} size={18} color={colors.text} />
+                    <Text style={{ color: colors.text, fontWeight: '600' }}>{c.label}</Text>
+                  </Pressable>
+                ))}
+              </View>
             ))}
+          </View>
+        </ScrollView>
           </ScrollView>
         ))}
       </View>
