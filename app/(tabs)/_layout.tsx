@@ -4,7 +4,6 @@ import { Pressable, Text } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppBarTitle, SettingsButton } from '../../src/ui/AppBar';
-import { MoodTabButton } from '../../src/ui/MoodTabButton';
 import { TAB_HEIGHT, colors, useScheme } from '../../src/ui/theme';
 
 const icon = (name: keyof typeof Ionicons.glyphMap, outline: keyof typeof Ionicons.glyphMap) =>
@@ -42,7 +41,6 @@ export default function TabsLayout() {
         options={{
           title: '気分',
           tabBarIcon: icon('disc', 'disc-outline'),
-          tabBarButton: (props) => <MoodTabButton {...props} />,
           tabBarStyle: { display: 'none' },
           headerShown: true,
           headerTitle: '',
