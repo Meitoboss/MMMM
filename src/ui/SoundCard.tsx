@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import { Pressable, Text, View } from 'react-native';
 
 import type { FocusSound } from '../core/focus';
@@ -7,14 +8,32 @@ import { FocusBackdrop, focusBeat } from './FocusPlayer';
 import { colors } from './theme';
 
 /**
- * One card of a sound. `wide` is the usual card (a full-width bar: the beat, the name and the button).
+ * One card of a sound. `row` is a list row (a small tall photo, the name, and a round play button) for the シナリオ screen.
+ * `wide` is the full-width bar (the beat, the name and the button) for the 脳をチューニング pages.
  * Otherwise it is a tall photo card, with the width given by the screen it is in (a row, or two in a grid).
  */
-export function SoundCard({ sound, playing, onPress, width = 200, wide = false }: { sound: FocusSound; playing: boolean; onPress: () => void; width?: number; wide?: boolean }) {
+export function SoundCard({ sound, playing, onPress, width = 200, wide = false, row = false }: { sound: FocusSound; playing: boolean; onPress: () => void; width?: number; wide?: boolean; row?: boolean }) {
   const id = focusIdOf(sound.key);
   const beat = focusBeat(id);
   const tuning = sound.tuning ? tuningOf(sound.tuning) : undefined;
   const label = tuning ? `${tuning.title} ・ ミュージック` : 'ミュージック';
+  if (row) {
+    return (
+      <Pressable onPress={onPress} accessibilityRole="button" style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
+        <View style={{ width: 86, height: 120, borderRadius: 14, overflow: 'hidden', backgroundColor: '#101113', padding: 10, justifyContent: 'flex-start' }}>
+          <FocusBackdrop id={id} dim={0.4} />
+          <Text style={{ color: colors.text, fontSize: 17, fontWeight: '200' }}>{beat} Hz</Text>
+        </View>
+        <View style={{ flex: 1, gap: 4 }}>
+          <Text style={{ color: colors.text, fontSize: 18, fontWeight: '500' }}>{sound.name}</Text>
+          <Text style={{ color: colors.sub, fontSize: 14 }}>{label}{!sound.ready ? '　準備中' : ''}</Text>
+        </View>
+        <View style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: colors.text, alignItems: 'center', justifyContent: 'center', marginRight: 4 }}>
+          <Ionicons name={playing ? 'pause' : 'play'} size={22} color={colors.bg} style={{ marginLeft: playing ? 0 : 3 }} />
+        </View>
+      </Pressable>
+    );
+  }
   if (wide) {
     return (
       <Pressable

@@ -1,6 +1,6 @@
 import { useFocusEffect, useLocalSearchParams, Stack } from 'expo-router';
 import { useCallback } from 'react';
-import { ScrollView, Text, View, useWindowDimensions } from 'react-native';
+import { ScrollView, Text, View } from 'react-native';
 
 import { Ionicons } from '@expo/vector-icons';
 
@@ -21,8 +21,6 @@ export default function ScenarioScreen() {
   const status = usePlayer((p) => p.status);
   const playingKey = current && isFocusId(current.id) && (status === 'playing' || status === 'loading') ? focusKeyOf(current.id) : '';
   const sounds = FOCUS_SOUNDS.filter((x) => x.scenarios.includes(scenario));
-  const { width } = useWindowDimensions();
-  const cardWidth = (width - 16 * 2 - 12) / 2;
 
   // leaving this screen: the 集中 sounds stop, and the music from before comes back
   useFocusEffect(useCallback(() => leaveFocusOnBlur(), []));
@@ -38,9 +36,9 @@ export default function ScenarioScreen() {
           {!!SCENARIO_SUBTITLE[scenario] && <Text style={{ color: colors.sub, fontSize: 15, textAlign: 'center' }}>{SCENARIO_SUBTITLE[scenario]}</Text>}
         </View>
         {sounds.length ? (
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, paddingHorizontal: 16 }}>
+          <View style={{ gap: 18, paddingHorizontal: 20 }}>
             {sounds.map((sound) => (
-              <SoundCard key={sound.key} sound={sound} width={cardWidth} playing={playingKey === sound.key} onPress={() => void toggleFocusSound(sound)} />
+              <SoundCard key={sound.key} sound={sound} row playing={playingKey === sound.key} onPress={() => void toggleFocusSound(sound)} />
             ))}
           </View>
         ) : (
