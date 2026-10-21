@@ -267,10 +267,14 @@ export function FocusPlayer() {
   openNow.current = open;
   const swipe = useRef(
     PanResponder.create({
-      onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dy) > 12 && Math.abs(g.dy) > Math.abs(g.dx) * 1.5,
+      // the swipe is taken before the buttons and the scrolling inside (Android needs this); with the description open,
+      // the scrolling inside it is left alone, and only a swipe down closes it
+      onMoveShouldSetPanResponderCapture: (_, g) => !openNow.current && g.dy < -14 && Math.abs(g.dy) > Math.abs(g.dx) * 1.5,
+      onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dy) > 14 && Math.abs(g.dy) > Math.abs(g.dx) * 1.5,
+      onPanResponderTerminationRequest: () => false,
       onPanResponderRelease: (_, g) => {
-        if (g.dy < -50) setOpen(true);
-        else if (g.dy > 50 && openNow.current) setOpen(false);
+        if (!openNow.current && (g.dy < -50 || g.vy < -0.6)) setOpen(true);
+        else if (openNow.current && (g.dy > 50 || g.vy > 0.6)) setOpen(false);
       },
     }),
   ).current.panHandlers;
