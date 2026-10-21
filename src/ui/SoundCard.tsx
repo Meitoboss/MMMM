@@ -20,7 +20,7 @@ export function SoundCard({ sound, playing, onPress }: { sound: FocusSound; play
       <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' }}>
         <View>
           <Text style={{ color: colors.text, fontSize: 18, fontWeight: '700' }}>{sound.name}</Text>
-          <Text style={{ color: colors.text, opacity: 0.8, fontSize: 12 }}>{sound.group === 'focus' ? '集中' : '睡眠'} ・ ミュージック</Text>
+          <Text style={{ color: colors.text, opacity: 0.8, fontSize: 12 }}>{sound.group === 'focus' ? '集中' : '回復'} ・ ミュージック</Text>
         </View>
         <Text style={{ color: colors.text, fontWeight: '700' }}>{!sound.ready ? '準備中' : playing ? '止める' : '再生'}</Text>
       </View>
