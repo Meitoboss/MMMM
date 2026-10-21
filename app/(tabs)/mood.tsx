@@ -8,7 +8,7 @@ import { focusKeyOf, isFocusId } from '../../src/player/focus';
 import { pauseTone, playTone } from '../../src/player/tone';
 import { usePlayer } from '../../src/state/player';
 import { useSettings } from '../../src/state/settings';
-import { leaveFocus, toggleFocusSound } from '../../src/player/focusControl';
+import { leaveFocusOnBlur, toggleFocusSound } from '../../src/player/focusControl';
 import { SoundCard } from '../../src/ui/SoundCard';
 import { SCENARIO_ROWS } from '../../src/ui/scenarios';
 import { MINI_HEIGHT, colors, useScheme } from '../../src/ui/theme';
@@ -40,7 +40,7 @@ export default function MoodTab() {
   }, []);
 
   // leaving the 気分 tab: the 集中 sounds stop, and the music from before comes back
-  useFocusEffect(useCallback(() => leaveFocus, []));
+  useFocusEffect(useCallback(() => leaveFocusOnBlur(), []));
 
   const sections: { title: string; group: FocusSound['group'] }[] = [
     { title: '集中', group: 'focus' },

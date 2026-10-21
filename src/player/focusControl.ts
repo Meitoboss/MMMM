@@ -46,3 +46,19 @@ export function leaveFocus(): void {
     if (usePlayer.getState().status === 'playing') await usePlayer.getState().togglePlay();
   })();
 }
+
+/** true while the full 集中 player is open: it opens over the 集中 tabs, which must not end the sound */
+let playerOpen = false;
+
+export function setFocusPlayerOpen(open: boolean): void {
+  playerOpen = open;
+}
+
+/** the cleanup of a 集中 screen: leaves the sound, unless the full player has opened over it (checked after it has mounted) */
+export function leaveFocusOnBlur(): () => void {
+  return () => {
+    setTimeout(() => {
+      if (!playerOpen) leaveFocus();
+    }, 0);
+  };
+}

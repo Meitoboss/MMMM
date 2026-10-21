@@ -5,7 +5,7 @@ import { ScrollView, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { FOCUS_SOUNDS } from '../../src/core/focus';
-import { leaveFocus, toggleFocusSound } from '../../src/player/focusControl';
+import { leaveFocusOnBlur, toggleFocusSound } from '../../src/player/focusControl';
 import { focusKeyOf, isFocusId } from '../../src/player/focus';
 import { usePlayer } from '../../src/state/player';
 import { SoundCard } from '../../src/ui/SoundCard';
@@ -23,7 +23,7 @@ export default function ScenarioScreen() {
   const sounds = FOCUS_SOUNDS.filter((x) => x.scenarios.includes(scenario));
 
   // leaving this screen: the 集中 sounds stop, and the music from before comes back
-  useFocusEffect(useCallback(() => leaveFocus, []));
+  useFocusEffect(useCallback(() => leaveFocusOnBlur(), []));
 
   return (
     <>
