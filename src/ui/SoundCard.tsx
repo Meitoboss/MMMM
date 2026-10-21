@@ -5,6 +5,8 @@ import { focusIdOf } from '../player/focus';
 import { FocusBackdrop, focusBeat } from './FocusPlayer';
 import { colors } from './theme';
 
+const GROUP_LABEL: Record<FocusSound['group'], string> = { focus: '集中', sleep: '回復', nature: '自然の旅' };
+
 /** one card of a 気分 section: the photo, the beat in large, the name, and the button (準備中 until the sound is on the server) */
 export function SoundCard({ sound, playing, onPress }: { sound: FocusSound; playing: boolean; onPress: () => void }) {
   const id = focusIdOf(sound.key);
@@ -20,7 +22,7 @@ export function SoundCard({ sound, playing, onPress }: { sound: FocusSound; play
       <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' }}>
         <View>
           <Text style={{ color: colors.text, fontSize: 18, fontWeight: '700' }}>{sound.name}</Text>
-          <Text style={{ color: colors.text, opacity: 0.8, fontSize: 12 }}>{sound.group === 'focus' ? '集中' : '回復'} ・ ミュージック</Text>
+          <Text style={{ color: colors.text, opacity: 0.8, fontSize: 12 }}>{GROUP_LABEL[sound.group]} ・ ミュージック</Text>
         </View>
         <Text style={{ color: colors.text, fontWeight: '700' }}>{!sound.ready ? '準備中' : playing ? '止める' : '再生'}</Text>
       </View>

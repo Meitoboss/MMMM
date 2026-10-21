@@ -17,12 +17,15 @@ export interface FocusSound {
   /** the difference between the ears, in Hz: the beat */
   beat: number;
   /** the card it is shown under on the 気分 tab */
-  group: 'focus' | 'sleep';
+  group: FocusGroup;
   /** false while the sound is not on the server yet: it is shown, but cannot be played */
   ready: boolean;
   /** the シナリオ (the chips on the 気分 tab) this sound belongs to */
   scenarios: string[];
 }
+
+/** the big sections of the 気分 tab the sounds are shown under */
+export type FocusGroup = 'focus' | 'sleep' | 'nature';
 
 /**
  * The sounds on the server. Add a line here for each new sound (the file must be /var/oled/audio/<key>.flac on the server).
@@ -30,6 +33,7 @@ export interface FocusSound {
 export const FOCUS_SOUNDS: FocusSound[] = [
   { key: 'focus_loop', name: '広い野原', hz: 180, beat: 20, group: 'focus', ready: true, scenarios: ['ディープワーク'] },
   { key: 'moon_light', name: '残る月光', hz: 200.25, beat: 0.5, group: 'sleep', ready: true, scenarios: ['深い眠り'] },
+  { key: 'rain', name: 'ブリキ屋根の夢想', hz: 102.5, beat: 5, group: 'nature', ready: true, scenarios: [] },
 ];
 
 /** how strong the binaural tone is: none, low, normal, high (see core/binaural.ts) */

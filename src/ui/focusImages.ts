@@ -4,6 +4,7 @@ import type { ImageSourcePropType } from 'react-native';
 const IMAGES: Record<string, ImageSourcePropType> = {
   focus_loop: require('../../assets/focus/broad_field.jpg'),
   moon_light: require('../../assets/focus/moon_light.jpg'),
+  rain: require('../../assets/focus/rain.jpg'),
 };
 
 export const focusImage = (key: string): ImageSourcePropType | undefined => IMAGES[key];
@@ -13,7 +14,7 @@ export interface FocusInfo {
   /** the one line under the title on the player */
   short: string;
   text: string;
-  features: { icon: 'locate-outline' | 'git-network-outline' | 'extension-puzzle-outline' | 'flash-outline' | 'moon-outline' | 'bed-outline' | 'leaf-outline' | 'water-outline'; label: string }[];
+  features: { icon: 'locate-outline' | 'git-network-outline' | 'extension-puzzle-outline' | 'flash-outline' | 'moon-outline' | 'bed-outline' | 'leaf-outline' | 'water-outline' | 'ellipse-outline' | 'sparkles-outline' | 'eye-outline'; label: string }[];
   body: string;
 }
 
@@ -39,5 +40,16 @@ export const FOCUS_INFO: Record<string, FocusInfo> = {
       { icon: 'water-outline', label: '静かな心' },
     ],
     body: '広大な海の上を巨大な満月の下で漂うシーンです。6Hz周波数は集中した集中力に関連しており、心に広がる思考を解放する前にクリアにする助けとなります。',
+  },
+  rain: {
+    short: '安定した雨の居心地のよいサウンドスケープ。',
+    text: '深いリラックスや内面への気づきに関連する、穏やかな脳波のパターンです。瞑想や想像、自由に漂う思考の内省的な感覚を思わせます。',
+    features: [
+      { icon: 'leaf-outline', label: '深いリラックス' },
+      { icon: 'ellipse-outline', label: '瞑想' },
+      { icon: 'sparkles-outline', label: '創造性' },
+      { icon: 'eye-outline', label: '内面の振り返り' },
+    ],
+    body: 'ブリキ屋根に安定した雨の柔らかく金属的な音が部屋を満たしています。このセッションの5Hz周波数はシータ波の誘導を助け、深いリラクゼーション瞑想に理想的な脳の状態です。',
   },
 };

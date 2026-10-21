@@ -2,7 +2,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { Platform } from 'react-native';
 
 import { LOCAL_ARTIST, LOCAL_PREFIX } from '../core/localMeta';
-import { focusFileName, focusHzOf, focusIssueUrl, FOCUS_SOUNDS } from '../core/focus';
+import { focusFileName, focusHzOf, focusIssueUrl, FOCUS_SOUNDS, type FocusGroup } from '../core/focus';
 import type { AudioSource, SongItem } from '../core/types';
 import { useSettings } from '../state/settings';
 
@@ -37,7 +37,7 @@ export function focusSongOf(key: string): SongItem {
 }
 
 /** the ready focus sounds of one card, as songs, in the order they are listed */
-export function focusSongs(group: 'focus' | 'sleep' = 'focus'): SongItem[] {
+export function focusSongs(group: FocusGroup = 'focus'): SongItem[] {
   return FOCUS_SOUNDS.filter((x) => x.group === group && x.ready).map(({ key, name }) => ({
     kind: 'song',
     id: `${FOCUS_PREFIX}${key}`,
