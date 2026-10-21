@@ -48,8 +48,6 @@ export interface Settings {
   /** the sine tone played under the 集中 sounds, in Hz */
   /** how loud the sine tone under the 集中 sounds is: off / low / normal / high */
   focusToneLevel: ToneLevel;
-  /** the pitch of each ear of each 集中 sound's tone, in Hz, by the sound's key (empty = the default from its list entry); developers change it on the 気分 tab */
-  soundEars: Record<string, { left: number; right: number }>;
   /** the binaural tone on speakers: stop it, or play it with the pitch raised */
   binauralSpeakerMode: SpeakerMode;
   /** pink noise mixed under the tone */
@@ -85,7 +83,6 @@ export const DEFAULT_SETTINGS: Settings = {
   autoLyrics: true,
   playbackRate: 1,
   focusToneLevel: 'normal',
-  soundEars: {},
   binauralSpeakerMode: 'stop',
   binauralNoise: 'off',
   focusServerUrl: 'https://130-210-45-154.sslip.io',

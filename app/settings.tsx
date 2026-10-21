@@ -184,6 +184,15 @@ export default function Settings() {
         />
         <Row title="再生速度" last />
         <Chips options={SPEEDS.map((x) => ({ label: `${x}×`, value: x }))} value={rate} onChange={(x) => void setRate(x)} />
+      </Section>
+
+      <Section title="サーバー" collapsible>
+        <Row title="トークンをサーバーで作る" info="YouTubeの再生に必要なトークンを、サーバーに作ってもらいます。音声そのものは、この端末がYouTubeから直接取得します。未設定でも使えます。" />
+        <Field label="サーバーのURL（https://…）" value={st.potServerUrl} onSave={(v) => { clearStreamCache(); st.update({ potServerUrl: v }); }} />
+        <Field label="キー" value={st.potServerKey} secure onSave={(v) => { clearStreamCache(); st.update({ potServerKey: v }); }} />
+        <Action title="接続テスト" info="届くか、キーが合っているか、トークンを作れるかを確認します" disabled={running} onPress={() => void runTests(setTokenSteps, runTokenServerTest)} right="テスト" />
+        <Results steps={tokenSteps} />
+        <NetLogRow />
         <Row title="集中の音のサーバーのキー" sub="集中の音は、サーバーからダウンロードします。キーは、ここに手で入れます（アプリの中には入っていません）。未設定だと、集中モードは始まりません" last={false}>
           <Pressable
             onPress={() =>
@@ -196,15 +205,6 @@ export default function Settings() {
             <Text style={{ color: colors.text, fontWeight: '700' }}>{st.focusServerKey ? '設定済み' : '未設定'}</Text>
           </Pressable>
         </Row>
-      </Section>
-
-      <Section title="トークンサーバー" collapsible>
-        <Row title="トークンをサーバーで作る" info="YouTubeの再生に必要なトークンを、サーバーに作ってもらいます。音声そのものは、この端末がYouTubeから直接取得します。未設定でも使えます。" />
-        <Field label="サーバーのURL（https://…）" value={st.potServerUrl} onSave={(v) => { clearStreamCache(); st.update({ potServerUrl: v }); }} />
-        <Field label="キー" value={st.potServerKey} secure onSave={(v) => { clearStreamCache(); st.update({ potServerKey: v }); }} />
-        <Action title="接続テスト" info="届くか、キーが合っているか、トークンを作れるかを確認します" disabled={running} onPress={() => void runTests(setTokenSteps, runTokenServerTest)} right="テスト" />
-        <Results steps={tokenSteps} />
-        <NetLogRow />
       </Section>
 
       <BackupSection collapsible />

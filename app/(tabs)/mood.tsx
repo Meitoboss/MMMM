@@ -4,8 +4,8 @@ import { useCallback, useEffect } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 
 import { FOCUS_SOUNDS, type FocusSound } from '../../src/core/focus';
-import { focusKeyOf, isFocusId, soundPitch } from '../../src/player/focus';
-import { pauseTone, playTone, refreshTone } from '../../src/player/tone';
+import { focusKeyOf, isFocusId } from '../../src/player/focus';
+import { pauseTone, playTone } from '../../src/player/tone';
 import { usePlayer } from '../../src/state/player';
 import { useSettings } from '../../src/state/settings';
 import { leaveFocus, toggleFocusSound } from '../../src/player/focusControl';
@@ -14,40 +14,6 @@ import { SCENARIO_ROWS } from '../../src/ui/scenarios';
 import { MINI_HEIGHT, colors, useScheme } from '../../src/ui/theme';
 
 
-/** the pitch of each ear of the playing 集中 sound, changed on the spot (developer). Steps of 0.5 Hz; the new value is kept per sound */
-function EarHz({ soundKey }: { soundKey: string }) {
-  // the two ears of the sound: the saved ones, or the middle and beat of its list entry
-  const saved = useSettings((st) => st.soundEars[soundKey]);
-  const base = soundPitch(soundKey);
-  const ears = saved ?? { left: base.center - base.beat / 2, right: base.center + base.beat / 2 };
-  const move = (side: 'left' | 'right', step: number) => {
-    const next = { ...ears, [side]: Math.min(500, Math.max(20, Math.round((ears[side] + step) * 100) / 100)) };
-    const st = useSettings.getState();
-    st.update({ soundEars: { ...st.soundEars, [soundKey]: next } });
-    refreshTone();
-  };
-  const button = (label: string, onPress: () => void) => (
-    <Pressable onPress={onPress} hitSlop={8} style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 14, backgroundColor: colors.surface2 }}>
-      <Text style={{ color: colors.text, fontWeight: '700' }}>{label}</Text>
-    </Pressable>
-  );
-  const ear = (name: string, side: 'left' | 'right') => (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-      <Text style={{ color: colors.sub, fontSize: 12 }}>{name}</Text>
-      {button('−', () => move(side, -0.5))}
-      <Text style={{ color: colors.text, fontWeight: '700', minWidth: 72, textAlign: 'center' }}>{ears[side]} Hz</Text>
-      {button('+', () => move(side, 0.5))}
-    </View>
-  );
-  return (
-    <View style={{ flexDirection: 'row', justifyContent: 'center', flexWrap: 'wrap', gap: 14, paddingHorizontal: 12 }}>
-      {ear('左', 'left')}
-      {ear('右', 'right')}
-    </View>
-  );
-}
-
-/** 気分: the シナリオ chips, then the cards of each section; the 集中 and 睡眠 cards play their sounds on their own */
 export default function MoodTab() {
   useScheme();
   const current = usePlayer((p) => p.current);
@@ -117,7 +83,6 @@ export default function MoodTab() {
             {cards.map((sound) => (
               <View key={sound.key} style={{ gap: 10 }}>
                 <SoundCard sound={sound} playing={playingKey === sound.key} onPress={() => void toggleFocusSound(sound)} />
-                {playingKey === sound.key && <EarHz soundKey={sound.key} />}
               </View>
             ))}
           </View>

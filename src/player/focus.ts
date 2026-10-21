@@ -22,11 +22,9 @@ export const focusKeyOf = (id: string): string => (isFocusId(id) ? id.slice(FOCU
 /** the id of a focus sound, from its key */
 export const focusIdOf = (key: string): string => `${FOCUS_PREFIX}${key}`;
 
-/** the two ears of a sound's tone: the ones changed on the 気分 tab (kept in the settings), or else the middle and beat of its list entry */
+/** the two ears of a sound's tone: the middle and the beat of its list entry (fixed: 広い野原 170:190, 残る月光 200:200.5) */
 export function soundPitch(key: string): { center: number; beat: number } {
   const sound = FOCUS_SOUNDS.find((x) => x.key === key);
-  const saved = useSettings.getState().soundEars[key];
-  if (saved) return { center: (saved.left + saved.right) / 2, beat: Math.round((saved.right - saved.left) * 10) / 10 };
   return { center: sound?.hz ?? 200, beat: sound?.beat ?? 20 };
 }
 
