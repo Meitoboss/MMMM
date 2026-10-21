@@ -1,32 +1,33 @@
 import { Pressable, Text, View } from 'react-native';
 
 import type { FocusSound } from '../core/focus';
+import { tuningOf } from '../core/tuning';
 import { focusIdOf } from '../player/focus';
 import { FocusBackdrop, focusBeat } from './FocusPlayer';
 import { colors } from './theme';
 
-const GROUP_LABEL: Partial<Record<FocusSound['group'], string>> = { focus: '集中', sleep: '回復', nature: '自然の旅' };
-
-/** one card of a 気分 section: the photo, the beat in large, the name, and the button (準備中 until the sound is on the server) */
-export function SoundCard({ sound, playing, onPress }: { sound: FocusSound; playing: boolean; onPress: () => void }) {
+/**
+ * One card of a sound: a tall photo card, the beat in large at the top, and the name at the bottom.
+ * The width is given by the screen it is in (a row, or two in a grid).
+ */
+export function SoundCard({ sound, playing, onPress, width = 200 }: { sound: FocusSound; playing: boolean; onPress: () => void; width?: number }) {
   const id = focusIdOf(sound.key);
   const beat = focusBeat(id);
+  const tuning = sound.tuning ? tuningOf(sound.tuning) : undefined;
   return (
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
-      style={{ marginHorizontal: 16, borderRadius: 22, overflow: 'hidden', backgroundColor: '#101113', padding: 20, minHeight: 170, justifyContent: 'space-between' }}
+      style={{ width, height: width * 1.4, borderRadius: 22, overflow: 'hidden', backgroundColor: '#101113', padding: 16, justifyContent: 'space-between' }}
     >
-      <FocusBackdrop id={id} dim={0.5} />
-      <Text style={{ color: colors.text, fontSize: 56, fontWeight: '200' }}>{beat} Hz</Text>
-      <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' }}>
-        <View>
-          <Text style={{ color: colors.text, fontSize: 18, fontWeight: '700' }}>{sound.name}</Text>
-          <Text style={{ color: colors.text, opacity: 0.8, fontSize: 12 }}>{sound.group === 'none' ? 'ミュージック' : `${GROUP_LABEL[sound.group]} ・ ミュージック`}</Text>
-        </View>
-        <Text style={{ color: colors.text, fontWeight: '700' }}>{!sound.ready ? '準備中' : playing ? '止める' : '再生'}</Text>
+      <FocusBackdrop id={id} dim={0.45} />
+      <Text style={{ color: colors.text, fontSize: 40, fontWeight: '200' }}>{beat} Hz</Text>
+      <View>
+        <Text style={{ color: colors.text, fontSize: 17, fontWeight: '700' }}>{sound.name}</Text>
+        <Text style={{ color: colors.text, opacity: 0.75, fontSize: 12, marginTop: 2 }}>
+          {tuning ? `${tuning.title} ・ ` : ''}ミュージック{!sound.ready ? '　準備中' : playing ? '　止める' : ''}
+        </Text>
       </View>
     </Pressable>
   );
 }
-
