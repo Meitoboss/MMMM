@@ -30,9 +30,9 @@ public class BinauralToneModule: Module {
     Name("BinauralTone")
     Events("onOutputChange")
 
-    Function("start") { (center: Double, beat: Double, tone: Double, noise: Double) in
+    Function("start") { (center: Double, beat: Double, tone: Double, noise: Double) throws in
       self.setTargets(center: center, beat: beat, tone: tone, noise: noise, master: 1)
-      self.startEngine()
+      try self.startEngine()
     }
     Function("update") { (center: Double, beat: Double, tone: Double, noise: Double) in
       self.setTargets(center: center, beat: beat, tone: tone, noise: noise, master: nil)
@@ -79,12 +79,15 @@ public class BinauralToneModule: Module {
     lock.unlock()
   }
 
-  private func startEngine() {
+  private func startEngine() throws {
     // mixes with the music player, and keeps playing in the background like the music does
-    try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [.mixWithOthers])
-    try? AVAudioSession.sharedInstance().setActive(true)
+    // (errors are passed on to the app, so a silent tone shows its reason instead of nothing)
+    let session = AVAudioSession.sharedInstance()
+    try session.setCategory(.playback, mode: .default, options: [.mixWithOthers])
+    try session.setActive(true)
     if engine == nil { makeEngine() }
-    if let engine, !engine.isRunning { try? engine.start() }
+    if let engine, !engine.isRunning { try engine.start() }
+    if engine?.isRunning != true { throw NSError(domain: "BinauralTone", code: 1, userInfo: [NSLocalizedDescriptionKey: "the audio engine did not start"]) }
   }
 
   private func makeEngine() {

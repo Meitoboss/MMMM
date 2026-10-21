@@ -1,3 +1,5 @@
+import { Alert } from 'react-native';
+
 import { native } from '../../modules/binaural-tone';
 import { refreshAmbient } from '../state/player';
 import { mixFor } from './binaural';
@@ -30,8 +32,13 @@ function apply(): void {
   } else if (playing) {
     native.update(tone.center, tone.beat, tone.toneVolume, tone.noiseVolume);
   } else {
-    native.start(tone.center, tone.beat, tone.toneVolume, tone.noiseVolume);
-    playing = true;
+    try {
+      native.start(tone.center, tone.beat, tone.toneVolume, tone.noiseVolume);
+      playing = true;
+    } catch (e) {
+      // the reason is shown, so a tone that does not sound on a phone can be traced
+      Alert.alert('正弦波', `鳴らせませんでした: ${e instanceof Error ? e.message : String(e)}`);
+    }
   }
   refreshAmbient();
 }
