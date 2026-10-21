@@ -126,8 +126,8 @@ export function FocusPlayer() {
   const togglePlay = usePlayer((p) => p.togglePlay);
   const level = useSettings((st) => st.focusToneLevel);
   const [open, setOpen] = useState(false);
-  // the swipes of this screen: up opens the description, down closes it, or (with it closed) closes the player.
-  // The screen's own swipe-to-close is off here (iOS would take the swipe up), so the player is closed by this swipe
+  // the swipes of this screen are for the description only: up opens it, down closes it.
+  // Closing the player is by the ✕ button (no swipe), so it does not compete with the swipe up
   const openNow = useRef(open);
   openNow.current = open;
   const swipe = useRef(
@@ -135,10 +135,7 @@ export function FocusPlayer() {
       onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dy) > 12 && Math.abs(g.dy) > Math.abs(g.dx) * 1.5,
       onPanResponderRelease: (_, g) => {
         if (g.dy < -50) setOpen(true);
-        else if (g.dy > 50) {
-          if (openNow.current) setOpen(false);
-          else router.back();
-        }
+        else if (g.dy > 50 && openNow.current) setOpen(false);
       },
     }),
   ).current.panHandlers;
@@ -153,7 +150,7 @@ export function FocusPlayer() {
 
   return (
     <View {...swipe} style={{ flex: 1, backgroundColor: '#050508' }}>
-      {/* the screen's own swipe-to-close is off, so the swipes above are not taken by iOS */}
+      {/* the player is closed with the ✕ button: the screen's swipe-to-close is off, so it does not compete with the description swipe */}
       <Stack.Screen options={{ gestureEnabled: false }} />
       <FocusBackdrop id={current?.id} />
       <View style={{ flex: 1, paddingTop: 52, paddingHorizontal: 24, paddingBottom: 28 }}>
