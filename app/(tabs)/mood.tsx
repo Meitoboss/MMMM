@@ -111,7 +111,7 @@ export default function MoodTab() {
 
 /** the sections under the 脳をチューニング cards: the group of each sound, with its heading and line */
 const SECTIONS: { title: string; text: string; group: FocusSound['group'] }[] = [
-  { title: '集中', text: 'アルファ/ベータ波（8-30Hz）がタスクへの注意力を高めます。', group: 'focus' },
+  { title: '仕事・勉強', text: 'アルファ/ベータ波（8-30Hz）がタスクへの注意力を高めます。', group: 'focus' },
   { title: '深い眠り', text: '0.5-7Hzの波がアンビエントメロディーを通じて流れ、眠る前の日常の緊張を解放します。', group: 'sleep' },
   { title: '自然の旅', text: '自然の音とともに、心を遠くへ旅させるサウンドです。', group: 'nature' },
 ];
