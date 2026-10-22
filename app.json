@@ -28,12 +28,7 @@
         "UIFileSharingEnabled": true,
         "LSSupportsOpeningDocumentsInPlace": true
       },
-      "buildNumber": "6",
-      "entitlements": {
-        "com.apple.security.application-groups": [
-          "group.app.musicspace.player"
-        ]
-      }
+      "buildNumber": "6"
     },
     "plugins": [
       "expo-router",
@@ -50,8 +45,7 @@
           }
         }
       ],
-      "expo-audio",
-      "@bacons/apple-targets"
+      "expo-audio"
     ],
     "experiments": {
       "typedRoutes": false
