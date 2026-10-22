@@ -48,11 +48,22 @@ export default function TuningScreen() {
                 <Text style={{ color: colors.text, fontSize: 20, fontWeight: '700' }}>{section}</Text>
                 <Text style={{ color: colors.sub, fontSize: 14, lineHeight: 21 }}>{SECTION_TEXT[section] ?? ''}</Text>
               </View>
-              {sounds
-                .filter((x) => x.section === section)
-                .map((sound) => (
-                  <SoundCard key={sound.key} sound={sound} wide width={width - 40} playing={playingKey === sound.key} onPress={() => void toggleFocusSound(sound)} />
-                ))}
+              {/* 深い眠り: the cards slide sideways; the other groups list them one under the other */}
+              {section === '深い眠り' ? (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12 }}>
+                  {sounds
+                    .filter((x) => x.section === section)
+                    .map((sound) => (
+                      <SoundCard key={sound.key} sound={sound} wide width={width * 0.8} playing={playingKey === sound.key} onPress={() => void toggleFocusSound(sound)} />
+                    ))}
+                </ScrollView>
+              ) : (
+                sounds
+                  .filter((x) => x.section === section)
+                  .map((sound) => (
+                    <SoundCard key={sound.key} sound={sound} wide width={width - 40} playing={playingKey === sound.key} onPress={() => void toggleFocusSound(sound)} />
+                  ))
+              )}
             </View>
           ))}
           {!sounds.length && <Text style={{ color: colors.sub, paddingHorizontal: 20 }}>この脳のチューニングの曲は、まだありません。</Text>}
