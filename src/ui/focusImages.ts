@@ -7,6 +7,7 @@ const IMAGES: Record<string, ImageSourcePropType> = {
   rain: require('../../assets/focus/rain.jpg'),
   sunset_flow: require('../../assets/focus/sunset_flow.jpg'),
   light: require('../../assets/focus/light.jpg'),
+  moon_window: require('../../assets/focus/moon_window.jpg'),
 };
 
 export const focusImage = (key: string): ImageSourcePropType | undefined => IMAGES[key];
@@ -42,6 +43,17 @@ export const FOCUS_INFO: Record<string, FocusInfo> = {
       { icon: 'water-outline', label: '静かな心' },
     ],
     body: '広大な海の上を巨大な満月の下で漂うシーンです。6Hz周波数は集中した集中力に関連しており、心に広がる思考を解放する前にクリアにする助けとなります。',
+  },
+  moon_window: {
+    short: '天空の窓の中で、深く夢のない眠りへと導く、静かで包み込むような音色。',
+    text: '深く、夢を見ない睡眠に関連する、ゆっくりとした脳波のパターンです。外の世界への意識が薄れ、静かな休息へと移っていきます。',
+    features: [
+      { icon: 'moon-outline', label: '深い睡眠' },
+      { icon: 'bed-outline', label: '深い休息' },
+      { icon: 'leaf-outline', label: 'くつろぎ' },
+      { icon: 'water-outline', label: '静かな心' },
+    ],
+    body: '深い青の夜空の中央に、細い三日月が浮かび、いくつかの星がそれを取り囲みます。周囲では分厚く渦巻く雲が円形の額縁をかたちづくり、その縁は隠された光に照らされて温かなオレンジとピンクに輝きます――まるで天に窓が開いたかのようです。このトラックは1Hzのデルタ波周波数に基づいており、夢を見ない深い眠りの状態と直接共鳴します。これは細胞の修復、エネルギーのリセット、免疫力の強化に不可欠な段階です。',
   },
   sunset_flow: {
     short: '暖かい夕暮れの中で深い集中を始めるための穏やかで没入的なトーン。',
