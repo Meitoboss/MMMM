@@ -42,7 +42,7 @@ export const FOCUS_SOUNDS: FocusSound[] = [
   { key: 'sunset_flow', name: 'サンセットフロー', hz: 200, beat: 16, group: 'focus', ready: false, scenarios: ['ディープワーク'], tuning: 'focus', section: '仕事・勉強' },
   { key: 'moon_light', name: '残る月光', hz: 200.25, beat: 0.5, group: 'sleep', ready: true, scenarios: ['深い眠り'], tuning: 'sleep', section: '深い眠り' },
   { key: 'rain', name: 'ブリキ屋根の夢想', hz: 102.5, beat: 5, group: 'nature', ready: true, scenarios: [], tuning: 'relax', section: 'おすすめ' },
-  { key: 'light', name: '光と踊る', hz: 528, beat: 8, group: 'none', ready: true, scenarios: ['528hz リラックス'], tuning: 'relax', section: 'おすすめ' },
+  { key: 'light', name: '光と踊る', hz: 134, beat: 8, group: 'none', ready: true, scenarios: ['528hz リラックス'], tuning: 'relax', section: 'おすすめ' },
 ];
 
 /** how strong the binaural tone is: none, low, normal, high (see core/binaural.ts) */
