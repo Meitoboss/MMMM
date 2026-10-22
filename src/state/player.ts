@@ -14,6 +14,7 @@ import type { AudioSource, SongItem } from '../core/types';
 import { openDb } from '../db/expo';
 import * as repo from '../db/repo';
 import { resolveFocus, isFocusId } from '../player/focus';
+import { focusLoopPosition, loadFocusLoop, pauseFocusLoop, playFocusLoop, setFocusLoopVolume, stopFocusLoop } from '../player/focusLoop';
 import { resolveLocal } from '../player/localFiles';
 import { resolveOffline } from '../player/offline';
 import { ambientFactor } from '../player/binaural';
@@ -215,10 +216,34 @@ export function refreshAmbient(): void {
   const current = usePlayer.getState().current;
   if (!current || !isFocusId(current.id)) return;
   ambientMul = ambientFactor();
+  setFocusLoopVolume(effectiveVolume());
   TrackPlayer.setVolume(effectiveVolume()).catch(() => undefined);
 }
 
 export const usePlayer = create<PlayerState>((set, get) => {
+  /** a 集中 sound: played by the two-player loop (its own engine), after the music player is cleared */
+  async function loadFocus(song: SongItem, token: number) {
+    try {
+      await ensurePlayer();
+      await TrackPlayer.reset();
+      const src = await resolveFocus(song.id);
+      if (token !== loadToken) return; // user skipped again while resolving
+      ambientMul = ambientFactor();
+      await loadFocusLoop(src.url, effectiveVolume());
+      if (token !== loadToken) return;
+      playFocusLoop();
+      loadedAt = Date.now();
+      get().log(`focus loop ${song.id}`);
+      set({ status: 'playing' });
+    } catch (e) {
+      if (token === loadToken) {
+        const msg = e instanceof Error ? e.message : String(e);
+        get().log(`FAILED ${msg.split('\n')[0]}`);
+        set({ status: 'error', error: msg });
+      }
+    }
+  }
+
   /** `fadeIn`: start silent and fade up (the song was reached by itself – the end of the previous one) */
   async function loadAt(index: number, startAt = 0, fadeIn = false) {
     const song = get().queue[index];
@@ -230,6 +255,8 @@ export const usePlayer = create<PlayerState>((set, get) => {
     set({ index, current: song, status: 'loading', error: undefined, needsLoad: false, resumePosition: undefined, loop: null, loopA: undefined, trim: null, tempo: null });
     wantFineProgress(false);
     get().log(`load ${song.id} (#${index + 1}/${get().queue.length})`);
+    if (isFocusId(song.id)) return loadFocus(song, token);
+    stopFocusLoop(); // a normal song: the 集中 loop (if it was playing) stops
     try {
       await ensurePlayer();
       const src = isFocusId(song.id)
@@ -293,6 +320,7 @@ export const usePlayer = create<PlayerState>((set, get) => {
     if (useSettings.getState().autoRadio && current && (await appendRadio(current)) > 0) return loadAt(index + 1, 0, fadeIn);
     await flushPlayTime(current);
     cancelFade(true);
+    pauseFocusLoop();
     await TrackPlayer.pause();
     set({ status: 'paused' });
   }
@@ -388,6 +416,21 @@ export const usePlayer = create<PlayerState>((set, get) => {
         await loadAt(get().index, get().resumePosition ?? 0);
         return;
       }
+      const focusNow = get().current;
+      if (focusNow && isFocusId(focusNow.id)) {
+        // a 集中 sound: its own loop plays and pauses (the music player is not used for it)
+        const st = get().status;
+        if (st === 'playing') {
+          pauseFocusLoop();
+          set({ status: 'paused' });
+        } else if (st === 'paused') {
+          playFocusLoop();
+          set({ status: 'playing' });
+        } else if (st === 'error') {
+          await loadAt(get().index);
+        }
+        return;
+      }
       const { status } = get();
       if (status === 'playing') {
         cancelFade(true);
@@ -403,6 +446,7 @@ export const usePlayer = create<PlayerState>((set, get) => {
 
     seekTo: async (s) => {
       if (get().needsLoad) set({ resumePosition: s });
+      else if (get().current && isFocusId(get().current!.id)) return; // a 集中 sound is not seeked
       else {
         cancelFade(true);
         await TrackPlayer.seekTo(s);
@@ -445,6 +489,7 @@ export const usePlayer = create<PlayerState>((set, get) => {
     getPosition: async () => {
       const { needsLoad, resumePosition } = get();
       if (needsLoad) return resumePosition ?? 0;
+      if (get().current && isFocusId(get().current!.id)) return focusLoopPosition();
       try {
         return (await TrackPlayer.getProgress()).position;
       } catch {
@@ -581,6 +626,7 @@ export const usePlayer = create<PlayerState>((set, get) => {
       if (!minutes) return set({ sleepAt: undefined });
       set({ sleepAt: Date.now() + minutes * 60_000 });
       sleepTimeout = setTimeout(async () => {
+        pauseFocusLoop();
         await TrackPlayer.pause();
         set({ status: 'paused', sleepAt: undefined });
       }, minutes * 60_000);

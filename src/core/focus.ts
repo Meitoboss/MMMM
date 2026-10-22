@@ -37,7 +37,9 @@ export type FocusGroup = 'focus' | 'sleep' | 'nature' | 'none';
  * The sounds on the server. Add a line here for each new sound (the file must be /var/oled/audio/<key>.flac on the server).
  */
 export const FOCUS_SOUNDS: FocusSound[] = [
-  { key: 'focus_loop', name: '広い野原', hz: 180, beat: 20, group: 'focus', ready: true, scenarios: ['ディープワーク'], tuning: 'focus', section: '仕事と勉強' },
+  { key: 'focus_loop', name: '広い野原', hz: 180, beat: 20, group: 'focus', ready: true, scenarios: ['ディープワーク'], tuning: 'focus', section: '仕事・勉強' },
+  // the height (hz) is not set yet: it is a placeholder until the height is decided; the sound is not on the server yet (準備中)
+  { key: 'sunset_flow', name: 'サンセットフロー', hz: 200, beat: 16, group: 'focus', ready: false, scenarios: ['ディープワーク'], tuning: 'focus', section: '仕事・勉強' },
   { key: 'moon_light', name: '残る月光', hz: 200.25, beat: 0.5, group: 'sleep', ready: true, scenarios: ['深い眠り'], tuning: 'sleep', section: '深い眠り' },
   { key: 'rain', name: 'ブリキ屋根の夢想', hz: 102.5, beat: 5, group: 'nature', ready: true, scenarios: [], tuning: 'relax', section: 'おすすめ' },
   { key: 'light', name: '光と踊る', hz: 528, beat: 8, group: 'none', ready: true, scenarios: ['528hz リラックス'], tuning: 'relax', section: 'おすすめ' },

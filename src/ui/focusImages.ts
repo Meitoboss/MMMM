@@ -5,6 +5,7 @@ const IMAGES: Record<string, ImageSourcePropType> = {
   focus_loop: require('../../assets/focus/broad_field.jpg'),
   moon_light: require('../../assets/focus/moon_light.jpg'),
   rain: require('../../assets/focus/rain.jpg'),
+  sunset_flow: require('../../assets/focus/sunset_flow.jpg'),
   light: require('../../assets/focus/light.jpg'),
 };
 
@@ -41,6 +42,17 @@ export const FOCUS_INFO: Record<string, FocusInfo> = {
       { icon: 'water-outline', label: '静かな心' },
     ],
     body: '広大な海の上を巨大な満月の下で漂うシーンです。6Hz周波数は集中した集中力に関連しており、心に広がる思考を解放する前にクリアにする助けとなります。',
+  },
+  sunset_flow: {
+    short: '暖かい夕暮れの中で深い集中を始めるための穏やかで没入的なトーン。',
+    text: '集中した思考や覚醒に関連する、活発な脳波のパターンです。考えを分析したり、日常の問題を解決したりする際の心の働きを反映します。',
+    features: [
+      { icon: 'locate-outline', label: '能動的な集中' },
+      { icon: 'git-network-outline', label: '分析的思考' },
+      { icon: 'extension-puzzle-outline', label: '問題解決' },
+      { icon: 'flash-outline', label: '覚醒' },
+    ],
+    body: '夕暮れの光が柔らかく温かな輝きで部屋を包みます。このトラックは16Hzのベータ波周波数を使用し、高い集中力と活発な認知の状態に直接対応します。精神的な明晰さを研ぎ澄まし、情報処理を加速し、深く没入した「フロー状態」へと心を導きます。',
   },
   rain: {
     short: '安定した雨の居心地のよいサウンドスケープ。',

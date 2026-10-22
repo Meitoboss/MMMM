@@ -25,7 +25,7 @@ export const TUNINGS: Tuning[] = [
 /** the line under the heading of each group on a 脳をチューニング page */
 export const SECTION_TEXT: Record<string, string> = {
   おすすめ: 'いまおすすめの、落ち着いたサウンドです。',
-  仕事と勉強: 'アルファ/ベータ波（8-30Hz）がタスクへの注意力を高めます。',
+  '仕事・勉強': 'アルファ/ベータ波（8-30Hz）がタスクへの注意力を高めます。',
   深い眠り: '0.5-7Hzの波がアンビエントメロディーを通じて流れ、眠る前の日常の緊張を解放します。',
 };
 
