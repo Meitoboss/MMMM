@@ -1,0 +1,7 @@
+{
+  "name": "widget-bridge",
+  "version": "1.0.0",
+  "description": "Gives the home screen widget the state of the 集中 sound, and receives its play / pause button (local Expo module)",
+  "main": "index.ts",
+  "private": true
+}
