@@ -12,7 +12,6 @@ import { restoreResume, startResumeSaving } from '../src/state/resume';
 import { ensurePlayer } from '../src/player/setup';
 import { applySettings, useSettings } from '../src/state/settings';
 import { startNetLog } from '../src/state/netlog';
-import { startWidgetSync } from '../src/player/widget';
 import { useUpdate } from '../src/state/update';
 import { DialogHost } from '../src/ui/dialogs';
 import { EngineHost } from '../src/ui/EngineHost';
@@ -37,7 +36,6 @@ export default function RootLayout() {
     const updateCheck = setTimeout(() => void useUpdate.getState().check(), 4000); // the "new version" notice; nothing happens without an address in Settings
     void ensurePlayer();
     const stopNetLog = startNetLog(); // every answer of the token server is written down (Settings → 通信の記録)
-    const stopWidget = startWidgetSync(); // the home screen widget follows the 集中 sound
     // Android 13+: the media notification (lock-screen controls) needs this permission
     if (Platform.OS === 'android' && Number(Platform.Version) >= 33) {
       void PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS).catch(() => undefined);
@@ -45,7 +43,6 @@ export default function RootLayout() {
     return () => {
       clearTimeout(updateCheck);
       stopNetLog();
-      stopWidget();
     };
   }, []);
 
