@@ -42,7 +42,8 @@ export function MiniPlayer() {
 
   // the 集中 sounds: the Hz glows, instead of the cover; their bar is only shown on the 気分 tab
   if (isFocusId(current.id)) {
-    if (!onMood) return null;
+    const focusPage = onMood || String(segments[0]) === 'tuning' || String(segments[0]) === 'scenario';
+    if (!focusPage) return null;
     return (
       <Pressable onPress={() => router.push('/focus-player')} style={[st.wrap, { bottom }]}>
         <FocusBackdrop id={current.id} dim={0.45} />

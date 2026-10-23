@@ -7,6 +7,9 @@ import type { AlbumItem, ArtistItem, Lyrics, SongItem } from '../core/types';
 import { type SortKey, type SortTab, isRelease } from '../core/librarySort';
 import type { Db, SqlValue } from './driver';
 
+/** the id of the 集中 sounds starts with this (see src/player/focus.ts); they are not kept in the lists of the library */
+const FOCUS_ID_PREFIX = 'local:focus-';
+
 /* ------------------------------------------------------------------ *
  * Row types (match the Room entities)
  * ------------------------------------------------------------------ */
@@ -126,7 +129,7 @@ export async function allSongs(db: Db, orderBy: 'title' | 'recent' | 'plays' = '
         ? 'totalPlayTimeMs DESC'
         : '(SELECT MAX(timestamp) FROM Event WHERE songId = Song.id) DESC';
   const rows = await db.all<SongRow>(
-    `SELECT * FROM Song WHERE totalPlayTimeMs > 0 OR likedAt IS NOT NULL OR id IN (SELECT songId FROM SongPlaylistMap) ORDER BY ${order}`,
+    `SELECT * FROM Song WHERE (totalPlayTimeMs > 0 OR likedAt IS NOT NULL OR id IN (SELECT songId FROM SongPlaylistMap)) AND id NOT LIKE '${FOCUS_ID_PREFIX}%' ORDER BY ${order}`,
   );
   return rows.map(songFromRow);
 }
@@ -146,7 +149,7 @@ export async function recordPlay(db: Db, song: SongItem, playTimeMs: number): Pr
 
 export async function history(db: Db, limit = 100): Promise<SongItem[]> {
   const rows = await db.all<SongRow>(
-    'SELECT Song.* FROM Song JOIN (SELECT songId, MAX(timestamp) AS t FROM Event GROUP BY songId) e ON e.songId = Song.id ORDER BY e.t DESC LIMIT ?',
+    `SELECT Song.* FROM Song JOIN (SELECT songId, MAX(timestamp) AS t FROM Event WHERE songId NOT LIKE '${FOCUS_ID_PREFIX}%' GROUP BY songId) e ON e.songId = Song.id ORDER BY e.t DESC LIMIT ?`,
     [limit],
   );
   return rows.map(songFromRow);
@@ -157,13 +160,14 @@ export async function history(db: Db, limit = 100): Promise<SongItem[]> {
  * a song ends, so the song you are listening to right now would be missing).
  */
 export async function markPlayed(db: Db, song: SongItem): Promise<void> {
+  if (song.id.startsWith(FOCUS_ID_PREFIX)) return; // the 集中 sounds stay inside the 気分 tab
   await upsertSong(db, song);
   await db.run('INSERT OR REPLACE INTO RecentPlay (songId, playedAt) VALUES (?,?)', [song.id, now()]);
 }
 
 export async function recentSongs(db: Db, limit = 20): Promise<SongItem[]> {
   const rows = await db.all<SongRow>(
-    'SELECT Song.* FROM RecentPlay JOIN Song ON Song.id = RecentPlay.songId ORDER BY RecentPlay.playedAt DESC, Song.rowid DESC LIMIT ?',
+    `SELECT Song.* FROM RecentPlay JOIN Song ON Song.id = RecentPlay.songId WHERE RecentPlay.songId NOT LIKE '${FOCUS_ID_PREFIX}%' ORDER BY RecentPlay.playedAt DESC, Song.rowid DESC LIMIT ?`,
     [limit],
   );
   return rows.map(songFromRow);
