@@ -28,6 +28,7 @@ export const SECTION_TEXT: Record<string, string> = {
   '仕事・勉強': 'アルファ/ベータ波（8-30Hz）がタスクへの注意力を高めます。',
   深い眠り: '0.5-7Hzの波がアンビエントメロディーを通じて流れ、眠る前の日常の緊張を解放します。',
   夜のリセット: '0.5-7Hzの波がアンビエントメロディーを通じて流れ、眠る前の日常の緊張を解放します。',
+  '不安を手放す': '穏やかな音で、心の緊張をゆるめます。',
 };
 
 export const tuningOf = (key: TuningKey): Tuning | undefined => TUNINGS.find((t) => t.key === key);

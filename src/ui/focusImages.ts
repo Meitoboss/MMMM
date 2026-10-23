@@ -9,6 +9,7 @@ const IMAGES: Record<string, ImageSourcePropType> = {
   light: require('../../assets/focus/light.jpg'),
   moon_window: require('../../assets/focus/moon_window.jpg'),
   night_rain: require('../../assets/focus/night_rain.jpg'),
+  morning_mist: require('../../assets/focus/morning_mist.jpg'),
 };
 
 export const focusImage = (key: string): ImageSourcePropType | undefined => IMAGES[key];
@@ -44,6 +45,17 @@ export const FOCUS_INFO: Record<string, FocusInfo> = {
       { icon: 'water-outline', label: '静かな心' },
     ],
     body: '広大な海の上を巨大な満月の下で漂うシーンです。6Hz周波数は集中した集中力に関連しており、心に広がる思考を解放する前にクリアにする助けとなります。',
+  },
+  morning_mist: {
+    short: '穏やかで霧のかかった朝のためのジェントルなサウンドスケープ。',
+    text: 'リラックスしながらも目覚めている状態に関連する、落ち着いた脳波のパターンです。積極的に考える負担から離れ、穏やかな注意を保つ状態を表します。',
+    features: [
+      { icon: 'water-outline', label: '穏やかな心' },
+      { icon: 'ellipse-outline', label: '穏やかな集中' },
+      { icon: 'time-outline', label: '今この瞬間' },
+      { icon: 'person-outline', label: 'リラックスした気づき' },
+    ],
+    body: '夜明け前の霧に覆われた湖に面した障子の部屋です。このセッションの10Hz周波数はアルファ波の誘導を助け、心が穏やかで明晰で受容的な「フロー状態」を作り出します。',
   },
   night_rain: {
     short: '幽玄なアンダートーンのアンビエント子守唄。',
