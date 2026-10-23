@@ -42,30 +42,28 @@ export default function TuningScreen() {
         </View>
 
         <View style={{ backgroundColor: colors.bg, marginTop: -24, borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingTop: 24, paddingBottom: 12, gap: 26 }}>
-          {sections.map((section) => (
-            <View key={section} style={{ gap: 12, paddingHorizontal: 20 }}>
-              <View style={{ gap: 6 }}>
-                <Text style={{ color: colors.text, fontSize: 20, fontWeight: '700' }}>{section}</Text>
-                <Text style={{ color: colors.sub, fontSize: 14, lineHeight: 21 }}>{SECTION_TEXT[section] ?? ''}</Text>
-              </View>
-              {/* 深い眠り: the cards slide sideways; the other groups list them one under the other */}
-              {section === '深い眠り' ? (
+          {sections.map((section, i) => {
+            // the first two groups are wide cards, then wide and small alternate: 1 wide, 2 wide, 3 small, 4 wide, 5 small …
+            const small = i >= 2 && i % 2 === 0;
+            const list = sounds.filter((x) => x.section === section);
+            return (
+              <View key={section} style={{ gap: 12, paddingHorizontal: 20 }}>
+                <View style={{ gap: 6 }}>
+                  <Text style={{ color: colors.text, fontSize: 20, fontWeight: '700' }}>{section}</Text>
+                  <Text style={{ color: colors.sub, fontSize: 14, lineHeight: 21 }}>{SECTION_TEXT[section] ?? ''}</Text>
+                </View>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12 }}>
-                  {sounds
-                    .filter((x) => x.section === section)
-                    .map((sound) => (
-                      <SoundCard key={sound.key} sound={sound} wide width={width * 0.8} playing={playingKey === sound.key} onPress={() => void toggleFocusSound(sound)} />
-                    ))}
+                  {list.map((sound) =>
+                    small ? (
+                      <SoundCard key={sound.key} sound={sound} width={150} playing={playingKey === sound.key} onPress={() => void toggleFocusSound(sound)} />
+                    ) : (
+                      <SoundCard key={sound.key} sound={sound} wide width={width * 0.82} playing={playingKey === sound.key} onPress={() => void toggleFocusSound(sound)} />
+                    ),
+                  )}
                 </ScrollView>
-              ) : (
-                sounds
-                  .filter((x) => x.section === section)
-                  .map((sound) => (
-                    <SoundCard key={sound.key} sound={sound} wide width={width - 40} playing={playingKey === sound.key} onPress={() => void toggleFocusSound(sound)} />
-                  ))
-              )}
-            </View>
-          ))}
+              </View>
+            );
+          })}
           {!sounds.length && <Text style={{ color: colors.sub, paddingHorizontal: 20 }}>この脳のチューニングの曲は、まだありません。</Text>}
         </View>
       </ScrollView>
