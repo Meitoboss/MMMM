@@ -4,7 +4,7 @@ import { useCallback } from 'react';
 import { Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
 
 import { FOCUS_SOUNDS } from '../../src/core/focus';
-import { SECTION_TEXT, tuningOf, type TuningKey } from '../../src/core/tuning';
+import { SECTION_ORDER, SECTION_TEXT, tuningOf, type TuningKey } from '../../src/core/tuning';
 import { glow } from '../../src/ui/FocusPlayer';
 import { FOCUS_INFO } from '../../src/ui/focusImages';
 import { SoundCard } from '../../src/ui/SoundCard';
@@ -26,7 +26,12 @@ export default function TuningScreen() {
   const sounds = FOCUS_SOUNDS.filter((x) => x.tuning === key);
   // the groups, in the order they first appear in the list
   // おすすめ always comes first; the other groups follow in the order of the list
-  const sections = [...new Set(sounds.map((x) => x.section))].sort((a, b) => (a === 'おすすめ' ? -1 : b === 'おすすめ' ? 1 : 0));
+  const groupsOf = (x: (typeof sounds)[number]) => [x.section, ...(x.alsoSections ?? [])];
+  const rank = (s: string) => {
+    const i = SECTION_ORDER.indexOf(s);
+    return i < 0 ? SECTION_ORDER.length : i;
+  };
+  const sections = [...new Set(sounds.flatMap(groupsOf))].sort((a, b) => rank(a) - rank(b));
 
   // leaving this page: the 集中 sounds stop, and the music from before comes back
   useFocusEffect(useCallback(() => leaveFocusOnBlur(), []));
@@ -47,7 +52,7 @@ export default function TuningScreen() {
           {sections.map((section, i) => {
             // the first two groups are wide cards, then wide and small alternate: 1 wide, 2 wide, 3 small, 4 wide, 5 small …
             const small = i >= 2 && i % 2 === 0;
-            const list = sounds.filter((x) => x.section === section);
+            const list = sounds.filter((x) => groupsOf(x).includes(section));
             return (
               <View key={section} style={{ gap: 12, paddingHorizontal: 20 }}>
                 <View style={{ gap: 6 }}>
