@@ -27,6 +27,8 @@ export interface FocusSound {
   tuning: TuningKey | null;
   /** the heading of its group on that card's page (see SECTION_TEXT in core/tuning.ts) */
   section: string;
+  /** other groups of that page it is also shown in (optional) */
+  alsoSections?: string[];
 }
 
 /** the big sections of the 気分 tab the sounds are shown under */
@@ -43,7 +45,7 @@ export const FOCUS_SOUNDS: FocusSound[] = [
   { key: 'moon_light', name: '残る月光', hz: 200.25, beat: 0.5, group: 'sleep', ready: true, scenarios: ['深い眠り'], tuning: 'sleep', section: '深い眠り' },
   { key: 'rain', name: 'ブリキ屋根の夢想', hz: 102.5, beat: 5, group: 'nature', ready: true, scenarios: [], tuning: 'relax', section: 'ジャーニー' },
   // the おすすめ card of each 脳をチューニング: placeholders until their sounds (name, photo, height) are decided (準備中)
-  { key: 'christmas_eve', name: 'クリスマスイブ', hz: 200, beat: 7, group: 'none', ready: false, scenarios: ['夜のリセット'], tuning: 'sleep', section: 'おすすめ' },
+  { key: 'christmas_eve', name: 'クリスマスイブ', hz: 200, beat: 7, group: 'none', ready: false, scenarios: ['夜のリセット'], tuning: 'sleep', section: 'おすすめ', alsoSections: ['夜のリセット'] },
   { key: 'focus_pick', name: '集中のおすすめ（仮）', hz: 200, beat: 10, group: 'none', ready: false, scenarios: [], tuning: 'focus', section: 'おすすめ' },
   { key: 'meditate_pick', name: '瞑想のおすすめ（仮）', hz: 200, beat: 10, group: 'none', ready: false, scenarios: [], tuning: 'meditate', section: 'おすすめ' },
   { key: 'tinnitus_pick', name: '耳鳴り緩和のおすすめ（仮）', hz: 200, beat: 10, group: 'none', ready: false, scenarios: [], tuning: 'tinnitus', section: 'おすすめ' },

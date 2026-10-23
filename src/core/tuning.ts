@@ -31,4 +31,7 @@ export const SECTION_TEXT: Record<string, string> = {
   '不安を手放す': '7-13Hzの穏やかな周波数が落ち着く自然音とともに流れ、神経系を鎮め、内なる平和を取り戻します。',
 };
 
+/** the order of the groups on a 脳をチューニング page (the others follow after these) */
+export const SECTION_ORDER = ['おすすめ', '仕事・勉強', '深い眠り', '夜のリセット', '不安を手放す', 'ジャーニー'];
+
 export const tuningOf = (key: TuningKey): Tuning | undefined => TUNINGS.find((t) => t.key === key);
