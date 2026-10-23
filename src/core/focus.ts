@@ -41,7 +41,7 @@ export const FOCUS_SOUNDS: FocusSound[] = [
   // the height (hz) is not set yet: it is a placeholder until the height is decided; the sound is not on the server yet (準備中)
   { key: 'sunset_flow', name: 'サンセットフロー', hz: 200, beat: 16, group: 'focus', ready: true, scenarios: ['ディープワーク'], tuning: 'focus', section: '仕事・勉強' },
   { key: 'moon_light', name: '残る月光', hz: 200.25, beat: 0.5, group: 'sleep', ready: true, scenarios: ['深い眠り'], tuning: 'sleep', section: '深い眠り' },
-  { key: 'rain', name: 'ブリキ屋根の夢想', hz: 102.5, beat: 5, group: 'nature', ready: true, scenarios: [], tuning: 'relax', section: 'おすすめ' },
+  { key: 'rain', name: 'ブリキ屋根の夢想', hz: 102.5, beat: 5, group: 'nature', ready: true, scenarios: [], tuning: 'relax', section: 'ジャーニー' },
   // the height (hz) is not set yet (placeholder); the sound is not on the server yet (準備中)
   { key: 'morning_mist', name: '朝の鏡のささやき', hz: 200, beat: 10, group: 'none', ready: false, scenarios: ['ストレス解消'], tuning: 'relax', section: '不安を手放す' },
   { key: 'night_rain', name: '真夜中の雨', hz: 200, beat: 5, group: 'sleep', ready: false, scenarios: ['夜のリセット'], tuning: 'sleep', section: '夜のリセット' },

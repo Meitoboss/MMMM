@@ -24,7 +24,8 @@ export default function TuningScreen() {
   const playingKey = current && isFocusId(current.id) && (status === 'playing' || status === 'loading') ? focusKeyOf(current.id) : '';
   const sounds = FOCUS_SOUNDS.filter((x) => x.tuning === key);
   // the groups, in the order they first appear in the list
-  const sections = [...new Set(sounds.map((x) => x.section))];
+  // おすすめ always comes first; the other groups follow in the order of the list
+  const sections = [...new Set(sounds.map((x) => x.section))].sort((a, b) => (a === 'おすすめ' ? -1 : b === 'おすすめ' ? 1 : 0));
 
   // leaving this page: the 集中 sounds stop, and the music from before comes back
   useFocusEffect(useCallback(() => leaveFocusOnBlur(), []));
