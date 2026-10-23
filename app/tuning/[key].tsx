@@ -6,6 +6,7 @@ import { Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-na
 import { FOCUS_SOUNDS } from '../../src/core/focus';
 import { SECTION_TEXT, tuningOf, type TuningKey } from '../../src/core/tuning';
 import { glow } from '../../src/ui/FocusPlayer';
+import { FOCUS_INFO } from '../../src/ui/focusImages';
 import { SoundCard } from '../../src/ui/SoundCard';
 import { leaveFocusOnBlur, toggleFocusSound } from '../../src/player/focusControl';
 import { focusKeyOf, isFocusId } from '../../src/player/focus';
@@ -51,7 +52,10 @@ export default function TuningScreen() {
               <View key={section} style={{ gap: 12, paddingHorizontal: 20 }}>
                 <View style={{ gap: 6 }}>
                   <Text style={{ color: colors.text, fontSize: 20, fontWeight: '700' }}>{section}</Text>
-                  <Text style={{ color: colors.sub, fontSize: 14, lineHeight: 21 }}>{SECTION_TEXT[section] ?? ''}</Text>
+                  {/* おすすめ: the line of its card (the short line under the title); the other groups: their own line */}
+                  <Text style={{ color: colors.sub, fontSize: 14, lineHeight: 21 }}>
+                    {(section === 'おすすめ' && list[0] && FOCUS_INFO[list[0].key]?.short) || SECTION_TEXT[section] || ''}
+                  </Text>
                 </View>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12 }}>
                   {list.map((sound) =>
