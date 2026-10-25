@@ -46,7 +46,7 @@ export const FOCUS_SOUNDS: FocusSound[] = [
   { key: 'rain', name: 'ブリキ屋根の夢想', hz: 102.5, beat: 5, group: 'nature', ready: true, scenarios: [], tuning: 'relax', section: 'ジャーニー' },
   // the おすすめ card of each 脳をチューニング: placeholders until their sounds (name, photo, height) are decided (準備中)
   { key: 'christmas_eve', name: 'クリスマスイブ', hz: 200, beat: 7, group: 'none', ready: true, scenarios: ['夜のリセット'], tuning: 'sleep', section: 'おすすめ', alsoSections: ['夜のリセット'] },
-  { key: 'focus_pick', name: '集中のおすすめ（仮）', hz: 200, beat: 10, group: 'none', ready: false, scenarios: [], tuning: 'focus', section: 'おすすめ' },
+  { key: 'steady_road', name: '揺るぎない道', hz: 200, beat: 12, group: 'none', ready: false, scenarios: ['作成'], tuning: 'focus', section: 'おすすめ' },
   { key: 'meditate_pick', name: '瞑想のおすすめ（仮）', hz: 200, beat: 10, group: 'none', ready: false, scenarios: [], tuning: 'meditate', section: 'おすすめ' },
   { key: 'tinnitus_pick', name: '耳鳴り緩和のおすすめ（仮）', hz: 200, beat: 10, group: 'none', ready: false, scenarios: [], tuning: 'tinnitus', section: 'おすすめ' },
   // the height (hz) is not set yet (placeholder); the sound is not on the server yet (準備中)
