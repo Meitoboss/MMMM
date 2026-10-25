@@ -11,6 +11,8 @@ const IMAGES: Record<string, ImageSourcePropType> = {
   night_rain: require('../../assets/focus/night_rain.jpg'),
   morning_mist: require('../../assets/focus/morning_mist.jpg'),
   christmas_eve: require('../../assets/focus/christmas_eve.jpg'),
+  steady_road: require('../../assets/focus/steady_road.jpg'),
+  green_story: require('../../assets/focus/green_story.jpg'),
 };
 
 export const focusImage = (key: string): ImageSourcePropType | undefined => IMAGES[key];
@@ -46,6 +48,28 @@ export const FOCUS_INFO: Record<string, FocusInfo> = {
       { icon: 'water-outline', label: '静かな心' },
     ],
     body: '広大な海の上を巨大な満月の下で漂うシーンです。6Hz周波数は集中した集中力に関連しており、心に広がる思考を解放する前にクリアにする助けとなります。',
+  },
+  green_story: {
+    short: '緑の物語のためのリラクシングなアンビエントトーン',
+    text: 'リラックスしながらも目覚めている状態に関連する、落ち着いた脳波のパターンです。積極的に考える負担から離れ、穏やかな注意を保つ状態を表します。',
+    features: [
+      { icon: 'water-outline', label: '穏やかな心' },
+      { icon: 'ellipse-outline', label: '穏やかな集中' },
+      { icon: 'time-outline', label: '今この瞬間' },
+      { icon: 'person-outline', label: 'リラックスした気づき' },
+    ],
+    body: '若く生き生きとした葉の下で太陽の光が柔らかな新芽を通り抜けるシーンです。このセッションの11Hz周波数はアルファ波の誘導を助け、穏やかなリラクゼーションとストレス解消に関連する脳の状態です。',
+  },
+  steady_road: {
+    short: '急がず注意を準備する温かいスタートアップハム',
+    text: 'リラックスしながらも目覚めている状態に関連する、落ち着いた脳波のパターンです。積極的に考える負担から離れ、穏やかな注意を保つ状態を表します。',
+    features: [
+      { icon: 'water-outline', label: '穏やかな心' },
+      { icon: 'ellipse-outline', label: '穏やかな集中' },
+      { icon: 'time-outline', label: '今この瞬間' },
+      { icon: 'person-outline', label: 'リラックスした気づき' },
+    ],
+    body: '一本のまっすぐな高速道路が広大な大地を横切り、遠くの雄大な雪山に向かって揺るぎなく伸びています。太陽の下で輝くその純白の峰は、静かで栄光ある約束として立っています。これらのメカニカルなテクスチャーの下に微妙な12Hzのパルスが織り込まれ、皮質活動を覚醒と穏やかなバランスへと導きます。',
   },
   christmas_eve: {
     short: '琥珀色のキャンドルライトの下の記憶のための内省的なアンビエントトーン。',
