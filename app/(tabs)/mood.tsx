@@ -115,5 +115,6 @@ const SECTIONS: { title: string; text: string; match: (x: FocusSound) => boolean
   { title: '深い眠り', text: '0.5-7Hzの波がアンビエントメロディーを通じて流れ、眠る前の日常の緊張を解放します。', match: (x) => x.section === '深い眠り' },
   { title: '夜のリセット', text: '0.5-7Hzの波がアンビエントメロディーを通じて流れ、眠る前の日常の緊張を解放します。', match: (x) => x.section === '夜のリセット' || x.key === 'christmas_eve' },
   { title: '不安を手放す', text: '7-13Hzの穏やかな周波数が落ち着く自然音とともに流れ、神経系を鎮め、内なる平和を取り戻します。', match: (x) => x.section === '不安を手放す' },
+  { title: '回復', text: '緑の中で、やわらかな光に包まれて心と体を回復させるサウンドです。', match: (x) => x.key === 'green_story' },
   { title: '自然の旅', text: '自然の音とともに、心を遠くへ旅させるサウンドです。', match: (x) => x.group === 'nature' },
 ];
