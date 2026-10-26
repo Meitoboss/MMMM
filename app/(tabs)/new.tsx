@@ -1,6 +1,7 @@
+import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { FlatList, Image, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { FlatList, Image, Pressable, RefreshControl, ScrollView, Text, View, useWindowDimensions } from 'react-native';
 
 import { yt } from '../../src/core';
 import { type AppleRelease, sameTitle } from '../../src/core/appleNew';
@@ -22,27 +23,35 @@ async function openApple(router: ReturnType<typeof useRouter>, r: AppleRelease):
   if (song) void usePlayer.getState().playSongs([song], 0);
 }
 
-/** the Apple Music shelf: below the artists you bookmarked, above the recommended ones */
+/** the Apple Music shelf, in Apple's own layout: a title with a chevron, then two rows of pictures that slide sideways */
 function AppleShelf({ releases }: { releases: AppleRelease[] }) {
   const router = useRouter();
   useScheme();
+  const { width } = useWindowDimensions();
   if (!releases.length) return null;
+  const cardWidth = width * 0.42;
+  const columns: AppleRelease[][] = [];
+  for (let i = 0; i < releases.length; i += 2) columns.push(releases.slice(i, i + 2));
+  const card = (r: AppleRelease) => (
+    <Pressable key={r.id} onPress={() => void openApple(router, r)} accessibilityRole="button" style={{ width: cardWidth, gap: 6 }}>
+      {!!r.artwork && <Image source={{ uri: r.artwork }} style={{ width: cardWidth, height: cardWidth, borderRadius: 10, backgroundColor: colors.surface2 }} />}
+      <Text numberOfLines={1} style={{ color: colors.text, fontSize: 15 }}>{r.name}</Text>
+      <Text numberOfLines={1} style={{ color: colors.sub, fontSize: 14 }}>{r.artist}</Text>
+    </Pressable>
+  );
   return (
-    <View style={{ marginBottom: 20 }}>
-      <Text style={{ color: colors.text, fontSize: 20, fontWeight: '700', paddingHorizontal: 16, marginBottom: 10 }}>Apple Music の新譜</Text>
+    <View style={{ marginBottom: 24 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, marginBottom: 14 }}>
+        <Text style={{ color: colors.text, fontSize: 26, fontWeight: '800' }}>Apple Music の新譜</Text>
+        <Ionicons name="chevron-forward" size={20} color={colors.sub} style={{ marginLeft: 6, marginTop: 4 }} />
+      </View>
       <FlatList
         horizontal
         showsHorizontalScrollIndicator={false}
-        data={releases}
-        keyExtractor={(r) => r.id}
-        contentContainerStyle={{ paddingHorizontal: 16, gap: 12 }}
-        renderItem={({ item }) => (
-          <Pressable onPress={() => void openApple(router, item)} accessibilityRole="button" style={{ width: 140, gap: 6 }}>
-            {!!item.artwork && <Image source={{ uri: item.artwork }} style={{ width: 140, height: 140, borderRadius: 12, backgroundColor: colors.surface2 }} />}
-            <Text numberOfLines={1} style={{ color: colors.text, fontWeight: '700' }}>{item.name}</Text>
-            <Text numberOfLines={1} style={{ color: colors.sub, fontSize: 12 }}>{item.artist}</Text>
-          </Pressable>
-        )}
+        data={columns}
+        keyExtractor={(c) => c[0].id}
+        contentContainerStyle={{ paddingHorizontal: 16, gap: 16 }}
+        renderItem={({ item }) => <View style={{ gap: 18 }}>{item.map(card)}</View>}
       />
     </View>
   );
