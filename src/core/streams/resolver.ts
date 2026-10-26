@@ -21,6 +21,35 @@ export interface ResolverOptions {
 
 const cache = new Map<string, AudioSource>();
 
+/** where the stream addresses are kept between starts (set by the app; the core stays free of storage) */
+export interface StreamStore {
+  load(): Record<string, AudioSource>;
+  save(entries: Record<string, AudioSource>): void;
+}
+let store: StreamStore | null = null;
+let loaded = false;
+/** how many addresses are kept between starts */
+const KEEP = 60;
+
+export function setStreamStore(s: StreamStore): void {
+  store = s;
+  loaded = false;
+}
+
+function loadOnce(): void {
+  if (loaded || !store) return;
+  loaded = true;
+  for (const [id, src] of Object.entries(store.load())) {
+    if (!src.expiresAt || src.expiresAt - 60_000 > Date.now()) cache.set(id, src);
+  }
+}
+
+function persist(): void {
+  if (!store) return;
+  const kept = [...cache.entries()].slice(-KEEP);
+  store.save(Object.fromEntries(kept));
+}
+
 /** InnerTube `player` (iOS client): direct, non-ciphered URLs – no signature deciphering needed. */
 async function viaInnerTube(videoId: string): Promise<AudioSource> {
   const r = await player(videoId, 'ios');
@@ -48,6 +77,7 @@ async function viaInnerTube(videoId: string): Promise<AudioSource> {
  * (Kotlin did the same: InnerTube → Piped / Invidious fallbacks.)
  */
 export async function resolveAudio(videoId: string, opts: ResolverOptions = {}): Promise<AudioSource> {
+  loadOnce();
   const hit = cache.get(videoId);
   if (hit && (!hit.expiresAt || hit.expiresAt - 60_000 > Date.now())) return hit;
 
@@ -67,6 +97,7 @@ export async function resolveAudio(videoId: string, opts: ResolverOptions = {}):
             ? await piped.resolve(videoId, opts.pipedInstances)
             : await invidious.resolve(videoId, opts.invidiousInstances);
       cache.set(videoId, src);
+      persist();
       return src;
     } catch (e) {
       errors.push(`${backend}: ${e instanceof Error ? e.message : String(e)}`);

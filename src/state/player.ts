@@ -17,6 +17,7 @@ import { resolveFocus, isFocusId } from '../player/focus';
 import { focusLoopPosition, loadFocusLoop, pauseFocusLoop, playFocusLoop, setFocusLoopVolume, stopFocusLoop } from '../player/focusLoop';
 import { resolveLocal } from '../player/localFiles';
 import { resolveOffline } from '../player/offline';
+import { cacheAudio, cachedAudio } from '../player/autoCache';
 import { ambientFactor } from '../player/binaural';
 import { LOOP_INTERVAL, NORMAL_INTERVAL, ensurePlayer, setProgressInterval } from '../player/setup';
 import { useOffline } from './offline';
@@ -99,6 +100,8 @@ let doubledLogged = -1; // the load for which "the file says double" was written
 let lastSource = ''; // what the song that is playing was resolved to: via, itag, mime type – written next to "the file says double"
 let loadToken = 0;
 let loadedAt = 0;
+/** how long a song must play before it is kept on the phone */
+const AUTO_CACHE_AFTER_MS = 45_000;
 let playedMs = 0;
 let lastTickAt = Date.now();
 let lastLoopJumpAt = 0;
@@ -244,6 +247,18 @@ export const usePlayer = create<PlayerState>((set, get) => {
     }
   }
 
+  /** a song that has played for a while is kept on the phone, so it starts at once the next time */
+  function scheduleAutoCache(songId: string): void {
+    setTimeout(() => {
+      const cur = get().current;
+      if (!cur || cur.id !== songId || get().status !== 'playing' || isLocalId(songId) || isFocusId(songId)) return;
+      void (async () => {
+        if ((await cachedAudio(songId)) || (await resolveOffline(songId))) return;
+        await cacheAudio(songId, await resolveAudio(songId, resolverOptions()));
+      })().catch(() => undefined);
+    }, AUTO_CACHE_AFTER_MS);
+  }
+
   /** `fadeIn`: start silent and fade up (the song was reached by itself – the end of the previous one) */
   async function loadAt(index: number, startAt = 0, fadeIn = false) {
     const song = get().queue[index];
@@ -263,7 +278,7 @@ export const usePlayer = create<PlayerState>((set, get) => {
         ? await resolveFocus(song.id)
         : isLocalId(song.id)
           ? await resolveLocal(song.id)
-          : (await resolveOffline(song.id)) ?? (await resolveAudio(song.id, resolverOptions())); // a saved copy plays without the network
+          : (await resolveOffline(song.id)) ?? (await cachedAudio(song.id)) ?? (await resolveAudio(song.id, resolverOptions())); // a saved or kept copy plays without the network
       if (token !== loadToken) return; // user skipped again while resolving
       // start / end trim of this song (best effort)
       const trim = onThisPhone(song.id, useOffline.getState().ids) ? await openDb().then((db) => repo.trimOf(db, song.id)).catch(() => null) : null;
@@ -298,9 +313,11 @@ export const usePlayer = create<PlayerState>((set, get) => {
       // for the home screen's "recently played" shelf (best effort, never blocks playback)
       openDb().then((db) => repo.markPlayed(db, song)).catch(() => undefined);
       set({ status: 'playing' });
-      // warm the URL cache for the next song so skipping is instant
-      const upcoming = get().queue[index + 1];
-      if (upcoming && !isLocalId(upcoming.id)) resolveAudio(upcoming.id, resolverOptions()).catch(() => undefined);
+      // warm the addresses of the next songs, so skipping is instant
+      for (const upcoming of get().queue.slice(index + 1, index + 4)) {
+        if (!isLocalId(upcoming.id) && !isFocusId(upcoming.id)) resolveAudio(upcoming.id, resolverOptions()).catch(() => undefined);
+      }
+      scheduleAutoCache(song.id);
     } catch (e) {
       if (token === loadToken) {
         const msg = e instanceof Error ? e.message : String(e);
