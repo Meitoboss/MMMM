@@ -13,6 +13,7 @@ const IMAGES: Record<string, ImageSourcePropType> = {
   christmas_eve: require('../../assets/focus/christmas_eve.jpg'),
   steady_road: require('../../assets/focus/steady_road.jpg'),
   green_story: require('../../assets/focus/green_story.jpg'),
+  fresh_green: require('../../assets/focus/fresh_green.jpg'),
 };
 
 export const focusImage = (key: string): ImageSourcePropType | undefined => IMAGES[key];
@@ -48,6 +49,17 @@ export const FOCUS_INFO: Record<string, FocusInfo> = {
       { icon: 'water-outline', label: '静かな心' },
     ],
     body: '広大な海の上を巨大な満月の下で漂うシーンです。6Hz周波数は集中した集中力に関連しており、心に広がる思考を解放する前にクリアにする助けとなります。',
+  },
+  fresh_green: {
+    short: '新しく生えた草の中の静かなアンビエントドローン',
+    text: '深いリラックスや内面への気づきに関連する、穏やかな脳波のパターンです。瞑想や想像、自由に漂う思考の内省的な感覚を思わせます。',
+    features: [
+      { icon: 'leaf-outline', label: '深いリラックス' },
+      { icon: 'ellipse-outline', label: '瞑想' },
+      { icon: 'sparkles-outline', label: '創造性' },
+      { icon: 'eye-outline', label: '内面の振り返り' },
+    ],
+    body: '新鮮な草のカーペットの中で朝露がきらめくシーンです。この作品の7Hz周波数はシータ波の誘導を助け、深いリラクゼーションと瞑想に理想的です。',
   },
   green_story: {
     short: '緑の物語のためのリラクシングなアンビエントトーン',
