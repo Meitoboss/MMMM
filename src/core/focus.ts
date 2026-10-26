@@ -41,7 +41,7 @@ export type FocusGroup = 'focus' | 'sleep' | 'nature' | 'none';
 export const FOCUS_SOUNDS: FocusSound[] = [
   // new sounds go at the top of this list (the left of their row)
   // the height (hz) is not set yet (placeholder); the sound is not on the server yet (準備中)
-  { key: 'dune_fire', name: '砂丘の焚き火', hz: 200, beat: 2, group: 'nature', ready: false, scenarios: [], tuning: null, section: '自然の旅' },
+  { key: 'dune_fire', name: '砂丘の焚き火', hz: 200, beat: 2, group: 'nature', ready: true, scenarios: [], tuning: null, section: '自然の旅' },
   { key: 'fresh_green', name: '新緑の物語', hz: 200, beat: 7, group: 'none', ready: false, scenarios: [], tuning: 'meditate', section: 'おすすめ' },
   // the height (hz) is not set yet (placeholder); the sound is not on the server yet (準備中)
   { key: 'green_story', name: '緑の物語', hz: 200, beat: 11, group: 'none', ready: false, scenarios: [], tuning: 'relax', section: 'ジャーニー' },
