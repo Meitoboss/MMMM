@@ -53,7 +53,8 @@ export function MiniPlayer() {
           <Text style={[glow, { color: colors.text, fontSize: 13, fontWeight: '200', marginBottom: 4, marginLeft: 2 }]}>Hz</Text>
         </View>
         <View style={{ flex: 1 }}>
-          <Marquee text={current.title} style={st.title} />
+          {/* on the 気分 tab the title stays still */}
+          <Marquee text={current.title} style={st.title} still={onMood} />
           <Text style={st.sub} numberOfLines={1}>集中 ・ ミュージック</Text>
         </View>
         <Pressable hitSlop={10} onPress={() => void togglePlay()}>
