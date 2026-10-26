@@ -64,7 +64,7 @@ function rememberSession(kind: SessionKind): void {
   }
 }
 
-async function downloadFile(
+export async function downloadFile(
   src: AudioSource,
   fileName: string,
   onProgress: (fraction: number) => void,
