@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import { appleNewReleasesUrl, parseAppleFeed, sameTitle } from '../src/core/appleNew';
 
 test('the feed address is for the country and the number asked for', () => {
-  assert.equal(appleNewReleasesUrl('jp', 30), 'https://rss.applemarketingtools.com/api/v2/jp/music/new-releases/all/30/explicit.json');
+  assert.equal(appleNewReleasesUrl('jp', 30), 'https://rss.marketingtools.apple.com/api/v2/jp/music/most-played/30/albums.json');
 });
 
 test('the releases are read from the feed, with a 300 pixel picture', () => {

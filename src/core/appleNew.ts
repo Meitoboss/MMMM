@@ -13,9 +13,9 @@ export interface AppleRelease {
   url: string;
 }
 
-/** the feed of the newest releases in a country (default Japan) */
+/** Apple's chart of the top albums in a country (default Japan). The new-releases feed no longer exists (404), so this is the nearest one. */
 export const appleNewReleasesUrl = (country = 'jp', limit = 30): string =>
-  `https://rss.applemarketingtools.com/api/v2/${country}/music/new-releases/all/${limit}/explicit.json`;
+  `https://rss.marketingtools.apple.com/api/v2/${country}/music/most-played/${limit}/albums.json`;
 
 interface FeedEntry {
   id?: unknown;

@@ -42,7 +42,7 @@ function AppleShelf({ releases }: { releases: AppleRelease[] }) {
   return (
     <View style={{ marginBottom: 24 }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, marginBottom: 14 }}>
-        <Text style={{ color: colors.text, fontSize: 26, fontWeight: '800' }}>Apple Music の新譜</Text>
+        <Text style={{ color: colors.text, fontSize: 26, fontWeight: '800' }}>Apple Music のトップアルバム</Text>
         <Ionicons name="chevron-forward" size={20} color={colors.sub} style={{ marginLeft: 6, marginTop: 4 }} />
       </View>
       <FlatList
