@@ -72,8 +72,52 @@ async function viaInnerTube(videoId: string): Promise<AudioSource> {
   };
 }
 
+/** the first backend starts at once; each next one joins after this long without an answer (or at once when it fails) */
+const HEDGE_MS = 1200;
+
 /**
- * Resolve a playable audio URL for a videoId, trying every backend in order.
+ * The first backend that answers wins. A slow backend does not hold up the others: the next one starts after HEDGE_MS.
+ * Rejects with every backend's reason when all of them fail.
+ */
+function firstAnswer(tasks: { name: string; run: () => Promise<AudioSource> }[]): Promise<AudioSource> {
+  return new Promise((resolve, reject) => {
+    const errors: string[] = [];
+    let next = 0;
+    let failed = 0;
+    let done = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const launch = (): void => {
+      if (done || next >= tasks.length) return;
+      const i = next++;
+      clearTimeout(timer);
+      timer = setTimeout(launch, HEDGE_MS);
+      tasks[i].run().then(
+        (src) => {
+          if (done) return;
+          done = true;
+          clearTimeout(timer);
+          resolve(src);
+        },
+        (e) => {
+          if (done) return;
+          errors.push(`${tasks[i].name}: ${e instanceof Error ? e.message : String(e)}`);
+          if (++failed === tasks.length) {
+            done = true;
+            clearTimeout(timer);
+            reject(new Error(errors.join('\n')));
+          } else if (i === next - 1) {
+            launch(); // the newest one failed: the next one need not wait
+          }
+        },
+      );
+    };
+    launch();
+  });
+}
+
+/**
+ * Resolve a playable audio URL for a videoId, trying the backends in order (a server of your own first, when set).
+ * The others run side by side: see firstAnswer.
  * (Kotlin did the same: InnerTube → Piped / Invidious fallbacks.)
  */
 export async function resolveAudio(videoId: string, opts: ResolverOptions = {}): Promise<AudioSource> {
@@ -81,29 +125,42 @@ export async function resolveAudio(videoId: string, opts: ResolverOptions = {}):
   const hit = cache.get(videoId);
   if (hit && (!hit.expiresAt || hit.expiresAt - 60_000 > Date.now())) return hit;
 
+  const run = (backend: StreamBackend): Promise<AudioSource> =>
+    backend === 'server'
+      ? server.resolve(videoId, opts.serverUrl ?? '', opts.serverKey)
+      : backend === 'webpot'
+        ? resolveWithPoToken(videoId)
+        : backend === 'innertube'
+          ? viaInnerTube(videoId)
+          : backend === 'piped'
+            ? piped.resolve(videoId, opts.pipedInstances)
+            : invidious.resolve(videoId, opts.invidiousInstances);
+
   const base: StreamBackend[] = opts.order ?? ['webpot', 'piped', 'invidious'];
-  const order: StreamBackend[] = opts.serverUrl?.trim() ? ['server', ...base.filter((b) => b !== 'server')] : base.filter((b) => b !== 'server');
   const errors: string[] = [];
-  for (const backend of order) {
+  let src: AudioSource | undefined;
+  // your own server, when set, is asked first on its own
+  if (opts.serverUrl?.trim()) {
     try {
-      const src =
-        backend === 'server'
-          ? await server.resolve(videoId, opts.serverUrl ?? '', opts.serverKey)
-          : backend === 'webpot'
-            ? await resolveWithPoToken(videoId)
-            : backend === 'innertube'
-            ? await viaInnerTube(videoId)
-            : backend === 'piped'
-            ? await piped.resolve(videoId, opts.pipedInstances)
-            : await invidious.resolve(videoId, opts.invidiousInstances);
-      cache.set(videoId, src);
-      persist();
-      return src;
+      src = await run('server');
     } catch (e) {
-      errors.push(`${backend}: ${e instanceof Error ? e.message : String(e)}`);
+      errors.push(`server: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
-  throw new Error(`Could not resolve a stream for ${videoId}\n${errors.join('\n')}`);
+  if (!src) {
+    const tasks = base.filter((b) => b !== 'server').map((b) => ({ name: b, run: () => run(b) }));
+    if (tasks.length) {
+      try {
+        src = await firstAnswer(tasks);
+      } catch (e) {
+        errors.push(e instanceof Error ? e.message : String(e));
+      }
+    }
+  }
+  if (!src) throw new Error(`Could not resolve a stream for ${videoId}\n${errors.join('\n')}`);
+  cache.set(videoId, src);
+  persist();
+  return src;
 }
 
 export function clearStreamCache() {
