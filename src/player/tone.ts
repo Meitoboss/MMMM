@@ -24,7 +24,7 @@ function apply(): void {
   if (!native) return;
   // the test and the 集中 sounds play the tone whatever the output is (headphones or not): detection is not needed to hear it
   // each 集中 sound has its own pitch (the focus sound's comes from the settings, which the 気分 tab changes)
-  const pitch = focusWant ? soundPitch(focusWant.key) : null;
+  const pitch = focusWant ? focusEars(focusWant.key) : null;
   const tone = testWant ? mixFor(testWant.center, true, testWant.beat).tone : pitch ? mixFor(pitch.center, true, pitch.beat).tone : null;
   if (!tone) {
     if (playing) native.stop();
@@ -41,6 +41,30 @@ function apply(): void {
     }
   }
   refreshAmbient();
+}
+
+/** beta only: how far each ear is moved by hand, in Hz, on top of the 集中 sound's own pitch */
+let earShift = { left: 0, right: 0 };
+
+/** the pitch of the 集中 sound with the hand-made shift: the middle pitch and the difference between the ears */
+function focusEars(key: string): { center: number; beat: number } {
+  const own = soundPitch(key);
+  return {
+    center: own.center + (earShift.left + earShift.right) / 2,
+    beat: own.beat + (earShift.right - earShift.left),
+  };
+}
+
+/** the left and right ear's pitch of a 集中 sound, in Hz */
+export function earsOf(key: string): { left: number; right: number } {
+  const { center, beat } = focusEars(key);
+  return { left: center - beat / 2, right: center + beat / 2 };
+}
+
+/** beta only: moves one ear of the 集中 sounds by `delta` Hz, now (a playing sound follows at once) */
+export function shiftEar(side: 'left' | 'right', delta: number): void {
+  earShift = { ...earShift, [side]: earShift[side] + delta };
+  apply();
 }
 
 /** a 集中 sound is playing: its tone plays beside it */

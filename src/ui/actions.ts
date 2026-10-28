@@ -3,6 +3,7 @@ import type { Router } from 'expo-router';
 import { create } from 'zustand';
 
 import { isLocalId } from '../core/localMeta';
+import { parseDuration } from '../core/innertube/helpers';
 import type { MusicItem, SongItem, VideoItem } from '../core/types';
 import { removeLocalFile } from '../player/localFiles';
 import { usePlayer } from '../state/player';
@@ -16,7 +17,8 @@ import { requestOfflineSave } from './offlineActions';
 export const useAddToPlaylist = create<{ song?: SongItem }>(() => ({}));
 
 export function videoToSong(v: VideoItem): SongItem {
-  return { kind: 'song', id: v.id, title: v.title, artists: v.artists, durationText: v.durationText, thumbnail: v.thumbnail, explicit: false };
+  // the length in seconds too: the player needs it to tell a file that claims twice the length (see core/songLength.ts)
+  return { kind: 'song', id: v.id, title: v.title, artists: v.artists, durationText: v.durationText, durationSec: parseDuration(v.durationText), thumbnail: v.thumbnail, explicit: false };
 }
 
 /** Tap on any search / home item. `context` lets a song start a queue made of its siblings. */

@@ -9,7 +9,7 @@ import { isDoubledDuration, songEnd } from '../core/songLength';
 import { normalizedVolume } from '../core/loudness';
 import { isLocalId } from '../core/localMeta';
 import { yt } from '../core';
-import { resolveAudio } from '../core/streams/resolver';
+import { isPremiumOnly, resolveAudio } from '../core/streams/resolver';
 import type { AudioSource, SongItem } from '../core/types';
 import { openDb } from '../db/expo';
 import * as repo from '../db/repo';
@@ -322,6 +322,13 @@ export const usePlayer = create<PlayerState>((set, get) => {
       if (token === loadToken) {
         const msg = e instanceof Error ? e.message : String(e);
         get().log(`FAILED ${msg.split('\n')[0]}`);
+        // a song only YouTube Music Premium members can hear: skip it, and go on with the next one
+        const { queue, index, repeat } = get();
+        if (isPremiumOnly(msg) && (index + 1 < queue.length || (repeat === 'all' && queue.length))) {
+          get().log('会員限定の曲なので、次の曲へ進みます');
+          void advance(false);
+          return;
+        }
         set({ status: 'error', error: msg });
       }
     }
