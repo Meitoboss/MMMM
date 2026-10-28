@@ -6,7 +6,8 @@ import { Modal, PanResponder, Pressable, ScrollView, Text, View, useWindowDimens
 
 import { TONE_LEVELS, type ToneLevel } from '../core/focus';
 import { focusKeyOf, soundPitch } from '../player/focus';
-import { refreshTone } from '../player/tone';
+import { earsOf, refreshTone, shiftEar } from '../player/tone';
+import { isBetaBuild } from '../core/build';
 import { toggleLikeSong, useIsLiked } from '../state/likes';
 import { usePlayer } from '../state/player';
 import { useSettings } from '../state/settings';
@@ -252,6 +253,36 @@ function TimerHeader() {
   return <Text style={{ color: colors.text, fontSize: 15, fontWeight: '500', fontVariant: ['tabular-nums'] }}>タイマー • {countdown(sleepAt!, Date.now())}</Text>;
 }
 
+/** beta only: the left and right ear's pitch, each with − and + (5 Hz a press) */
+function EarShift({ id }: { id: string }) {
+  const [, redraw] = useState(0);
+  const ears = earsOf(focusKeyOf(id));
+  const move = (side: 'left' | 'right', delta: number) => {
+    shiftEar(side, delta);
+    redraw((n) => n + 1);
+  };
+  const ear = (name: string, side: 'left' | 'right', hz: number) => (
+    <View style={{ flex: 1, alignItems: 'center', gap: 6 }}>
+      <Text style={{ color: colors.sub, fontSize: 12 }}>{name}</Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+        <Pressable hitSlop={8} accessibilityRole="button" onPress={() => move(side, -5)} style={{ width: 32, height: 32, borderRadius: 16, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' }}>
+          <Text style={{ color: colors.text, fontSize: 18 }}>−</Text>
+        </Pressable>
+        <Text style={{ color: colors.text, fontWeight: '700', minWidth: 72, textAlign: 'center' }}>{hz} Hz</Text>
+        <Pressable hitSlop={8} accessibilityRole="button" onPress={() => move(side, 5)} style={{ width: 32, height: 32, borderRadius: 16, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' }}>
+          <Text style={{ color: colors.text, fontSize: 18 }}>+</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+  return (
+    <View style={{ marginTop: 14, flexDirection: 'row' }}>
+      {ear('左', 'left', Math.round(ears.left))}
+      {ear('右', 'right', Math.round(ears.right))}
+    </View>
+  );
+}
+
 /** the player for the 集中 sounds: the photo, a big thin Hz, the play circle, the strength, and the description under a bar that opens upwards */
 export function FocusPlayer() {
   useScheme();
@@ -337,6 +368,9 @@ export function FocusPlayer() {
             </Text>
           )}
         </View>
+
+        {/* beta only: each ear's pitch, moved by hand in steps of 5 Hz */}
+        {isBetaBuild() && !!current && <EarShift id={current.id} />}
 
         {/* the strength: オフ / 低 / 普通 / 高 */}
         <View style={{ marginTop: 18, flexDirection: 'row', borderWidth: 1, borderColor: colors.border, borderRadius: 26, overflow: 'hidden' }}>
