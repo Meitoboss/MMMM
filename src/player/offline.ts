@@ -169,7 +169,7 @@ export async function resolveOffline(songId: string): Promise<AudioSource | null
       await repo.deleteOffline(db, songId); // the file is gone (the OS cleaned it up): forget it
       return null;
     }
-    return { url: uri, mimeType: row.mimeType ?? undefined, via: 'offline', note: 'saved copy' };
+    return { url: uri, mimeType: row.mimeType ?? undefined, itag: await repo.itagOf(db, songId), via: 'offline', note: 'saved copy' };
   } catch {
     return null;
   }

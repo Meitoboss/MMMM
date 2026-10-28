@@ -617,6 +617,12 @@ export async function setBpm(db: Db, song: SongItem, info: BpmInfo | null): Prom
   return { bpm: info.bpm, ...(anchor !== null ? { anchor } : {}) };
 }
 
+/** the itag (the stream's format number) stored for a song, or undefined */
+export async function itagOf(db: Db, songId: string): Promise<number | undefined> {
+  const r = await db.first<{ itag: number | null }>('SELECT itag FROM Format WHERE songId = ?', [songId]);
+  return r?.itag ?? undefined;
+}
+
 /** the loudness stored for a song, or null – lets saved copies be evened out without the network */
 export async function loudnessFor(db: Db, songId: string): Promise<number | null> {
   const r = await db.first<{ loudnessDb: number | null }>('SELECT loudnessDb FROM Format WHERE songId = ?', [songId]);
