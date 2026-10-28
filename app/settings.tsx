@@ -179,6 +179,9 @@ export default function Settings() {
         <Row title="曲を自動で保存" sub="よく聴いた曲を端末に保存して、次から速く始めます。保存のとき、曲をもう一度ダウンロードするので、通信量が増えます（オフのときは増えません）">
           <Switch value={st.autoSaveSongs} onValueChange={(v) => st.update({ autoSaveSongs: v })} trackColor={{ true: colors.accent }} />
         </Row>
+        <Row title="通信量を節約" sub="一番小さい音質で流し、次の曲を先に読みません。一つずつ取りに行き、ジャケットも小さいものを使います（オフにすると、速く始まりますが通信量が増えます）">
+          <Switch value={st.dataSaver} onValueChange={(v) => st.update({ dataSaver: v })} trackColor={{ true: colors.accent }} />
+        </Row>
         <Row title="スリープタイマー" sub="指定した時間が経つと、再生を止めます" last />
         <Chips
           options={SLEEP_OPTIONS.map((o) => ({ label: o.label, value: o.minutes }))}

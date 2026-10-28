@@ -41,6 +41,8 @@ export interface Settings {
   resumeOnLaunch: boolean;
   /** keep a song on the phone after it has played for a while. It downloads the whole song again, so it uses data: off by default */
   autoSaveSongs: boolean;
+  /** the data saver: the lowest audio quality, no early fetching of the next songs, one request at a time and small covers on the lock screen */
+  dataSaver: boolean;
   /** show the playback event log on the player screen */
   showDebug: boolean;
   autoRadio: boolean;
@@ -81,6 +83,7 @@ export const DEFAULT_SETTINGS: Settings = {
   volumeNormalize: 'standard',
   resumeOnLaunch: true,
   autoSaveSongs: false,
+  dataSaver: true,
   showDebug: false,
   autoRadio: true,
   autoLyrics: true,
@@ -114,7 +117,7 @@ export function applySettings(s: Settings) {
   configureRemotePot({ url: s.potServerUrl, key: s.potServerKey });
   configure({
     platform: Platform.OS === 'android' ? 'android' : 'ios',
-    quality: s.audioQuality === 'saver' || s.audioQuality === 'high' ? s.audioQuality : 'standard',
+    quality: s.dataSaver ? 'saver' : s.audioQuality === 'saver' || s.audioQuality === 'high' ? s.audioQuality : 'standard',
     hl: s.hl,
     gl: s.gl,
     web: { ...WEB_REMIX, clientVersion: s.webClientVersion },
@@ -133,6 +136,7 @@ export function resolverOptions(s: Settings = useSettings.getState()): ResolverO
     invidiousInstances: s.invidiousInstances,
     serverUrl: s.streamServerUrl,
     serverKey: s.streamServerKey,
+    hedgeMs: s.dataSaver ? 0 : undefined, // data saver: one request at a time
   };
 }
 
