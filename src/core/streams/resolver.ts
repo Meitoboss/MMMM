@@ -163,6 +163,11 @@ export async function resolveAudio(videoId: string, opts: ResolverOptions = {}):
   return src;
 }
 
+/** a song that only YouTube Music Premium members can hear: the app has no login, so it cannot play it */
+export function isPremiumOnly(message: string): boolean {
+  return /UNPLAYABLE|Music Premium/i.test(message);
+}
+
 export function clearStreamCache() {
   cache.clear();
 }
