@@ -2,8 +2,11 @@ import Storage from 'expo-sqlite/kv-store';
 import TrackPlayer from 'react-native-track-player';
 
 import { parseResume, serializeResume, startPosition } from '../core/resume';
+import { resolveAudio } from '../core/streams/resolver';
+import { isFocusId } from '../player/focus';
+import { isLocalId } from '../core/localMeta';
 import { usePlayer } from './player';
-import { useSettings } from './settings';
+import { resolverOptions, useSettings } from './settings';
 
 /**
  * "Continue where you left off". The queue is saved whenever it (or the current song, or repeat / shuffle) changes; the
@@ -65,6 +68,8 @@ export function restoreResume(): void {
     needsLoad: true,
     resumePosition: lastPosition,
   });
+  // the address of the restored song is fetched now, so that pressing play starts it at once
+  if (!isLocalId(song.id) && !isFocusId(song.id)) resolveAudio(song.id, resolverOptions()).catch(() => undefined);
 }
 
 let started = false;
