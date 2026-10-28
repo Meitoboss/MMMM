@@ -39,6 +39,8 @@ export interface Settings {
   volumeNormalize: NormalizeMode;
   /** keep the queue and position, and offer them again at the next start */
   resumeOnLaunch: boolean;
+  /** keep a song on the phone after it has played for a while. It downloads the whole song again, so it uses data: off by default */
+  autoSaveSongs: boolean;
   /** show the playback event log on the player screen */
   showDebug: boolean;
   autoRadio: boolean;
@@ -78,6 +80,7 @@ export const DEFAULT_SETTINGS: Settings = {
   fadeSeconds: 0,
   volumeNormalize: 'standard',
   resumeOnLaunch: true,
+  autoSaveSongs: false,
   showDebug: false,
   autoRadio: true,
   autoLyrics: true,

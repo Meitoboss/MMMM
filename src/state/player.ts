@@ -319,7 +319,7 @@ export const usePlayer = create<PlayerState>((set, get) => {
       for (const upcoming of get().queue.slice(index + 1, index + 4)) {
         if (!isLocalId(upcoming.id) && !isFocusId(upcoming.id)) resolveAudio(upcoming.id, resolverOptions()).catch(() => undefined);
       }
-      scheduleAutoCache(song.id);
+      if (useSettings.getState().autoSaveSongs) scheduleAutoCache(song.id);
     } catch (e) {
       if (token === loadToken) {
         const msg = e instanceof Error ? e.message : String(e);
