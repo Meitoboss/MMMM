@@ -253,32 +253,46 @@ function TimerHeader() {
   return <Text style={{ color: colors.text, fontSize: 15, fontWeight: '500', fontVariant: ['tabular-nums'] }}>タイマー • {countdown(sleepAt!, Date.now())}</Text>;
 }
 
-/** beta only: the left and right ear's pitch, each with − and + (5 Hz a press) */
+/** beta only: the steps the ears move by, in Hz */
+const EAR_STEPS = [0.5, 1];
+
+/** beta only: the left and right ear's pitch, each with − and + (the step is chosen above them) */
 function EarShift({ id }: { id: string }) {
   const [, redraw] = useState(0);
+  const [step, setStep] = useState(1);
   const ears = earsOf(focusKeyOf(id));
   const move = (side: 'left' | 'right', delta: number) => {
     shiftEar(side, delta);
     redraw((n) => n + 1);
   };
+  const shown = (hz: number) => String(Math.round(hz * 10) / 10);
   const ear = (name: string, side: 'left' | 'right', hz: number) => (
     <View style={{ flex: 1, alignItems: 'center', gap: 6 }}>
       <Text style={{ color: colors.sub, fontSize: 12 }}>{name}</Text>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-        <Pressable hitSlop={8} accessibilityRole="button" onPress={() => move(side, -5)} style={{ width: 32, height: 32, borderRadius: 16, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' }}>
+        <Pressable hitSlop={8} accessibilityRole="button" onPress={() => move(side, -step)} style={{ width: 32, height: 32, borderRadius: 16, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' }}>
           <Text style={{ color: colors.text, fontSize: 18 }}>−</Text>
         </Pressable>
-        <Text style={{ color: colors.text, fontWeight: '700', minWidth: 72, textAlign: 'center' }}>{hz} Hz</Text>
-        <Pressable hitSlop={8} accessibilityRole="button" onPress={() => move(side, 5)} style={{ width: 32, height: 32, borderRadius: 16, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' }}>
+        <Text style={{ color: colors.text, fontWeight: '700', minWidth: 72, textAlign: 'center' }}>{shown(hz)} Hz</Text>
+        <Pressable hitSlop={8} accessibilityRole="button" onPress={() => move(side, step)} style={{ width: 32, height: 32, borderRadius: 16, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' }}>
           <Text style={{ color: colors.text, fontSize: 18 }}>+</Text>
         </Pressable>
       </View>
     </View>
   );
   return (
-    <View style={{ marginTop: 14, flexDirection: 'row' }}>
-      {ear('左', 'left', Math.round(ears.left))}
-      {ear('右', 'right', Math.round(ears.right))}
+    <View style={{ marginTop: 14, gap: 10 }}>
+      <View style={{ flexDirection: 'row' }}>
+        {ear('左', 'left', ears.left)}
+        {ear('右', 'right', ears.right)}
+      </View>
+      <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 8 }}>
+        {EAR_STEPS.map((v) => (
+          <Pressable key={v} accessibilityRole="button" onPress={() => setStep(v)} style={{ paddingHorizontal: 14, paddingVertical: 6, borderRadius: 16, borderWidth: 1, borderColor: colors.border, backgroundColor: step === v ? colors.surface2 : undefined }}>
+            <Text style={{ color: colors.text, fontWeight: step === v ? '700' : '400' }}>{v} Hz</Text>
+          </Pressable>
+        ))}
+      </View>
     </View>
   );
 }
@@ -369,7 +383,7 @@ export function FocusPlayer() {
           )}
         </View>
 
-        {/* beta only: each ear's pitch, moved by hand in steps of 5 Hz */}
+        {/* beta only: each ear's pitch, moved by hand in steps of 0.5 or 1 Hz */}
         {isBetaBuild() && !!current && <EarShift id={current.id} />}
 
         {/* the strength: オフ / 低 / 普通 / 高 */}
