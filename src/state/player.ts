@@ -98,6 +98,7 @@ interface PlayerState {
 /** how many lines of the playback log are kept (the log is shown in Settings → 再生ログを表示) */
 const DEBUG_LINES = 40;
 let doubledLogged = -1; // the load for which "the file says double" was written to the log
+let doubledLockFixed = -1; // the load for which the lock screen was given the song's own length
 let lastSource = ''; // what the song that is playing was resolved to: via, itag, mime type – written next to "the file says double"
 let loadToken = 0;
 let loadedAt = 0;
@@ -561,6 +562,11 @@ export const usePlayer = create<PlayerState>((set, get) => {
       if (doubled && doubledLogged !== loadToken) {
         doubledLogged = loadToken;
         get().log(`length: the file says ${Math.round(duration)}s, the song is ${Math.round(known ?? 0)}s – it ends at ${Math.round(known ?? 0)}s${lastSource ? ` [${lastSource}]` : ''}`);
+      }
+      // the lock screen and the notification take the file's length too: they show the song's own length instead
+      if (doubled && doubledLockFixed !== loadToken) {
+        doubledLockFixed = loadToken;
+        void TrackPlayer.updateNowPlayingMetadata({ duration: known ?? undefined }).catch(() => undefined);
       }
       const queue = get().queue;
       const upcoming = get().index + 1 < queue.length ? queue[get().index + 1] : get().repeat === 'all' ? queue[0] : undefined;
