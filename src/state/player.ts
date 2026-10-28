@@ -233,7 +233,7 @@ export const usePlayer = create<PlayerState>((set, get) => {
       const src = await resolveFocus(song.id);
       if (token !== loadToken) return; // user skipped again while resolving
       ambientMul = ambientFactor();
-      await loadFocusLoop(src.url, effectiveVolume());
+      await loadFocusLoop(src.url, effectiveVolume(), { title: song.title, artist: '集中' }); // the lock screen shows the sound
       if (token !== loadToken) return;
       playFocusLoop();
       loadedAt = Date.now();
