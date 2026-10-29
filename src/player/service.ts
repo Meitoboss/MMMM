@@ -2,6 +2,7 @@ import { Platform } from 'react-native';
 import TrackPlayer, { Event, State } from 'react-native-track-player';
 
 import { reassertLockLength, usePlayer } from '../state/player';
+import { isFocusId } from './focus';
 import { noteProgress } from '../state/resume';
 
 /** Registered in index.ts – handles lock-screen / Control Center / headset buttons and track events. */
@@ -39,6 +40,9 @@ export async function playbackService() {
     void p().onEnded();
   });
   TrackPlayer.addEventListener(Event.PlaybackProgressUpdated, (e) => {
+    // a 集中 sound: the song player only plays silence for the lock screen (focusLock.ts) – its progress means nothing
+    const cur = p().current;
+    if (cur && isFocusId(cur.id)) return;
     p().tick();
     p().checkLoop(e.position);
     p().checkTransition(e.position, e.duration);

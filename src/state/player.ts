@@ -15,7 +15,7 @@ import type { AudioSource, SongItem } from '../core/types';
 import { openDb } from '../db/expo';
 import * as repo from '../db/repo';
 import { resolveFocus, isFocusId } from '../player/focus';
-import { leaveFocusLockScreen, showFocusOnLockScreen } from '../player/focusLock';
+import { leaveFocusLockScreen, setFocusLockPlaying, showFocusOnLockScreen } from '../player/focusLock';
 import { focusLoopPosition, loadFocusLoop, pauseFocusLoop, playFocusLoop, setFocusLoopVolume, stopFocusLoop } from '../player/focusLoop';
 import { resolveLocal } from '../player/localFiles';
 import { resolveOffline } from '../player/offline';
@@ -471,9 +471,11 @@ export const usePlayer = create<PlayerState>((set, get) => {
         if (st === 'playing') {
           pauseFocusLoop();
           set({ status: 'paused' });
+          setFocusLockPlaying(false).catch(() => undefined);
         } else if (st === 'paused') {
           playFocusLoop();
           set({ status: 'playing' });
+          setFocusLockPlaying(true).catch(() => undefined);
         } else if (st === 'error') {
           await loadAt(get().index);
         }
