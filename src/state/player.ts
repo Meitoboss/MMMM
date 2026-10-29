@@ -298,7 +298,7 @@ export const usePlayer = create<PlayerState>((set, get) => {
         title: song.title,
         artist: song.artists.map((a) => a.name).join(', '),
         album: song.album?.name,
-        artwork: useSettings.getState().dataSaver ? song.thumbnail : hiResCover(song.thumbnail, 1080), // the big cover costs data: only without the data saver
+        artwork: hiResCover(song.thumbnail, 1080), // the lock screen and the notification: the same big cover as the player screen
         duration: song.durationSec,
         // A custom user agent makes AVPlayer fail on PO-token streams (diagnostics 8.1 vs 8.2) – only the old iOS-client URLs need one.
         userAgent: src.via === 'innertube' ? getConfig().ios.userAgent : undefined,
