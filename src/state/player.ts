@@ -689,7 +689,15 @@ export const usePlayer = create<PlayerState>((set, get) => {
     },
 
     onEnded: async () => {
-      const { repeat } = get();
+      const { repeat, current, status } = get();
+      // the silence that carries the 集中 lock screen ended: it is only a carrier, so it plays again from the start
+      if (current && isFocusId(current.id)) {
+        if (status === 'playing') {
+          await TrackPlayer.seekTo(0).catch(() => undefined);
+          await TrackPlayer.play().catch(() => undefined);
+        }
+        return;
+      }
       // A "queue ended" that arrives right after loading is spurious (e.g. caused by reset()) – ignore it.
       const progress = await TrackPlayer.getProgress().catch(() => ({ position: 0, duration: 0 }));
       if (Date.now() - loadedAt < 4000 || (progress.duration > 0 && progress.position < 3)) {
