@@ -46,8 +46,8 @@ export function MiniPlayer() {
     if (!focusPage) return null;
     return (
       <Pressable onPress={() => router.push('/focus-player')} style={[st.wrap, { bottom }]}>
+        {/* no green progress line: a 集中 sound has no end */}
         <FocusBackdrop id={current.id} dim={0.45} />
-        <View style={[st.progress, { width: `${pct * 100}%` }]} />
         <View style={{ flexDirection: 'row', alignItems: 'flex-end', minWidth: 64 }}>
           <Text style={[glow, { color: colors.text, fontSize: 28, fontWeight: '200' }]}>{focusBeat(current.id)}</Text>
           <Text style={[glow, { color: colors.text, fontSize: 13, fontWeight: '200', marginBottom: 4, marginLeft: 2 }]}>Hz</Text>
