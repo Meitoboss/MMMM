@@ -83,7 +83,7 @@ export const DEFAULT_SETTINGS: Settings = {
   volumeNormalize: 'standard',
   resumeOnLaunch: true,
   autoSaveSongs: false,
-  dataSaver: true,
+  dataSaver: false,
   showDebug: false,
   autoRadio: true,
   autoLyrics: true,
