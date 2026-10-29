@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import TrackPlayer, { Event, State } from 'react-native-track-player';
 
 import { reassertLockLength, usePlayer } from '../state/player';
@@ -7,11 +8,30 @@ import { noteProgress } from '../state/resume';
 export async function playbackService() {
   const p = () => usePlayer.getState();
 
-  TrackPlayer.addEventListener(Event.RemotePlay, () => void p().togglePlay());
-  TrackPlayer.addEventListener(Event.RemotePause, () => void p().togglePlay());
-  TrackPlayer.addEventListener(Event.RemoteNext, () => void p().next());
-  TrackPlayer.addEventListener(Event.RemotePrevious, () => void p().previous());
-  TrackPlayer.addEventListener(Event.RemoteSeek, (e) => void p().seekTo(e.position));
+  // the lock-screen buttons are written to the log (with the app's state then), so a button that does nothing can be traced.
+  // Play and pause do what they say even when the app's state is behind the player's (a toggle would then do nothing)
+  TrackPlayer.addEventListener(Event.RemotePlay, () => {
+    p().log(`remote: play (status=${p().status})`);
+    if (p().needsLoad || p().status === 'paused' || p().status === 'error') void p().togglePlay();
+    else void TrackPlayer.play().then(() => p().setStatus('playing')).catch(() => undefined);
+  });
+  TrackPlayer.addEventListener(Event.RemotePause, () => {
+    p().log(`remote: pause (status=${p().status})`);
+    if (p().status === 'playing') void p().togglePlay();
+    else void TrackPlayer.pause().then(() => p().setStatus('paused')).catch(() => undefined);
+  });
+  TrackPlayer.addEventListener(Event.RemoteNext, () => {
+    p().log('remote: next');
+    void p().next();
+  });
+  TrackPlayer.addEventListener(Event.RemotePrevious, () => {
+    p().log('remote: previous');
+    void p().previous();
+  });
+  TrackPlayer.addEventListener(Event.RemoteSeek, (e) => {
+    p().log(`remote: seek ${Math.round(e.position)}s`);
+    void p().seekTo(e.position);
+  });
   TrackPlayer.addEventListener(Event.RemoteStop, () => void TrackPlayer.pause());
 
   TrackPlayer.addEventListener(Event.PlaybackQueueEnded, () => {
@@ -31,7 +51,7 @@ export async function playbackService() {
   });
   TrackPlayer.addEventListener(Event.PlaybackState, (e) => {
     p().log(`event: state=${e.state}`);
-    reassertLockLength(); // iOS has just written the file's length back to the lock screen
+    if (Platform.OS === 'ios') reassertLockLength(); // iOS has just written the file's length back (Android keeps what it was given)
     const cur = p().status;
     if (cur === 'loading' || cur === 'idle') {
       if (e.state === State.Playing) p().setStatus('playing');
