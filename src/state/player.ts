@@ -193,6 +193,16 @@ function shuffleTail<T>(arr: T[], from: number): T[] {
  * Evens out the volume between songs (Settings → Playback). Uses the loudness YouTube reports for the video;
  * for a saved copy it is read from the database. Never allowed to get in the way of playing.
  */
+/** what the lock screen and the notification show for a song */
+function lockMetadata(song: SongItem): { title: string; artist: string; album?: string; artwork?: string } {
+  return {
+    title: song.title,
+    artist: song.artists.map((a) => a.name).join(', '),
+    album: song.album?.name,
+    artwork: hiResCover(song.thumbnail, 1080), // the same big cover as the player screen
+  };
+}
+
 async function applyVolume(song: SongItem, src: AudioSource, log: (line: string) => void): Promise<number> {
   try {
     const mode = useSettings.getState().volumeNormalize;
@@ -295,10 +305,7 @@ export const usePlayer = create<PlayerState>((set, get) => {
       await TrackPlayer.add({
         id: song.id,
         url: src.url,
-        title: song.title,
-        artist: song.artists.map((a) => a.name).join(', '),
-        album: song.album?.name,
-        artwork: hiResCover(song.thumbnail, 1080), // the lock screen and the notification: the same big cover as the player screen
+        ...lockMetadata(song),
         duration: song.durationSec,
         // A custom user agent makes AVPlayer fail on PO-token streams (diagnostics 8.1 vs 8.2) – only the old iOS-client URLs need one.
         userAgent: src.via === 'innertube' ? getConfig().ios.userAgent : undefined,
@@ -567,7 +574,9 @@ export const usePlayer = create<PlayerState>((set, get) => {
       // the lock screen and the notification take the file's length too: they show the song's own length instead
       if (doubled && doubledLockFixed !== loadToken) {
         doubledLockFixed = loadToken;
-        void TrackPlayer.updateNowPlayingMetadata({ duration: known ?? undefined }).catch(() => undefined);
+        // the whole set: Android replaces what it shows with exactly this (a length alone would remove the cover and the title)
+        const cur = get().current;
+        if (cur) void TrackPlayer.updateNowPlayingMetadata({ ...lockMetadata(cur), duration: known ?? undefined }).catch(() => undefined);
       }
       const queue = get().queue;
       const upcoming = get().index + 1 < queue.length ? queue[get().index + 1] : get().repeat === 'all' ? queue[0] : undefined;
