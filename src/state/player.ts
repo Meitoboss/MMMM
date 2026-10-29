@@ -10,7 +10,6 @@ import { normalizedVolume } from '../core/loudness';
 import { isLocalId } from '../core/localMeta';
 import { yt } from '../core';
 import { isPremiumOnly, resolveAudio } from '../core/streams/resolver';
-import { hiResCover } from '../core/taste';
 import type { AudioSource, SongItem } from '../core/types';
 import { openDb } from '../db/expo';
 import * as repo from '../db/repo';
@@ -298,7 +297,7 @@ export const usePlayer = create<PlayerState>((set, get) => {
         title: song.title,
         artist: song.artists.map((a) => a.name).join(', '),
         album: song.album?.name,
-        artwork: useSettings.getState().dataSaver ? song.thumbnail : hiResCover(song.thumbnail, 1080), // the big cover costs data: only without the data saver
+        artwork: song.thumbnail, // the big (1080 px) cover made the lock screen show no picture at all, so the listed size is used
         duration: song.durationSec,
         // A custom user agent makes AVPlayer fail on PO-token streams (diagnostics 8.1 vs 8.2) – only the old iOS-client URLs need one.
         userAgent: src.via === 'innertube' ? getConfig().ios.userAgent : undefined,
