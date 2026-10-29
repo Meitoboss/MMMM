@@ -56,6 +56,9 @@ export async function playbackService() {
   TrackPlayer.addEventListener(Event.PlaybackState, (e) => {
     p().log(`event: state=${e.state}`);
     if (Platform.OS === 'ios') reassertLockLength(); // iOS has just written the file's length back (Android keeps what it was given)
+    // a 集中 sound is played by its own players: the silent carrier's state (it ends, pauses, buffers) says nothing about it
+    const playing = p().current;
+    if (playing && isFocusId(playing.id)) return;
     const cur = p().status;
     if (cur === 'loading' || cur === 'idle') {
       if (e.state === State.Playing) p().setStatus('playing');
