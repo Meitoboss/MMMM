@@ -323,6 +323,8 @@ export function FocusPlayer() {
       },
     }),
   ).current.panHandlers;
+  const showDebug = useSettings((st) => st.showDebug);
+  const debug = usePlayer((p) => p.debug);
   const beat = focusBeat(current?.id);
   const playing = status === 'playing' || status === 'loading';
   const info = FOCUS_INFO[focusKeyOf(current?.id ?? '')];
@@ -397,6 +399,15 @@ export function FocusPlayer() {
             );
           })}
         </View>
+
+        {/* the playback log, when the settings show it (the same log as the normal player's): the newest lines */}
+        {showDebug && (
+          <ScrollView testID="focus-log" style={{ maxHeight: 160, marginTop: 10 }} contentContainerStyle={{ paddingBottom: 6 }}>
+            <Text selectable style={{ color: colors.sub, fontSize: 10 }}>
+              {debug.slice(-40).join('\n')}
+            </Text>
+          </ScrollView>
+        )}
 
         {/* the description: a bar that opens upwards (swipe up also works) */}
         <Pressable onPress={() => setOpen(true)} style={{ marginTop: 16, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.1)', padding: 16 }}>

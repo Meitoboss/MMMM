@@ -10,10 +10,12 @@ import { normalizedVolume } from '../core/loudness';
 import { isLocalId } from '../core/localMeta';
 import { yt } from '../core';
 import { isPremiumOnly, resolveAudio } from '../core/streams/resolver';
+import { hiResCover } from '../core/taste';
 import type { AudioSource, SongItem } from '../core/types';
 import { openDb } from '../db/expo';
 import * as repo from '../db/repo';
 import { resolveFocus, isFocusId } from '../player/focus';
+import { leaveFocusLockScreen, setFocusLockPlaying, showFocusOnLockScreen } from '../player/focusLock';
 import { focusLoopPosition, loadFocusLoop, pauseFocusLoop, playFocusLoop, setFocusLoopVolume, stopFocusLoop } from '../player/focusLoop';
 import { resolveLocal } from '../player/localFiles';
 import { resolveOffline } from '../player/offline';
@@ -97,6 +99,8 @@ interface PlayerState {
 /** how many lines of the playback log are kept (the log is shown in Settings → 再生ログを表示) */
 const DEBUG_LINES = 40;
 let doubledLogged = -1; // the load for which "the file says double" was written to the log
+/** the song's own length for the lock screen, when its file claims double (null: the file's length is right) */
+let lockLength: { token: number; song: SongItem; seconds: number } | null = null;
 let lastSource = ''; // what the song that is playing was resolved to: via, itag, mime type – written next to "the file says double"
 let loadToken = 0;
 let loadedAt = 0;
@@ -191,6 +195,26 @@ function shuffleTail<T>(arr: T[], from: number): T[] {
  * Evens out the volume between songs (Settings → Playback). Uses the loudness YouTube reports for the video;
  * for a saved copy it is read from the database. Never allowed to get in the way of playing.
  */
+/**
+ * Gives the lock screen the song's own length again, for a file that claims double. iOS writes the file's length back on
+ * every change of state (play, pause, loading), so the playback service calls this after each one.
+ */
+export function reassertLockLength(): void {
+  if (!lockLength || lockLength.token !== loadToken) return;
+  // the whole set: Android replaces what it shows with exactly this (a length alone would remove the cover and the title)
+  void TrackPlayer.updateNowPlayingMetadata({ ...lockMetadata(lockLength.song), duration: lockLength.seconds }).catch(() => undefined);
+}
+
+/** what the lock screen and the notification show for a song */
+function lockMetadata(song: SongItem): { title: string; artist: string; album?: string; artwork?: string } {
+  return {
+    title: song.title,
+    artist: song.artists.map((a) => a.name).join(', '),
+    album: song.album?.name,
+    artwork: hiResCover(song.thumbnail, 1080), // the same big cover as the player screen
+  };
+}
+
 async function applyVolume(song: SongItem, src: AudioSource, log: (line: string) => void): Promise<number> {
   try {
     const mode = useSettings.getState().volumeNormalize;
@@ -238,6 +262,7 @@ export const usePlayer = create<PlayerState>((set, get) => {
       loadedAt = Date.now();
       get().log(`focus loop ${song.id}`);
       set({ status: 'playing' });
+      showFocusOnLockScreen(song).catch((e) => get().log(`lock screen: ${e instanceof Error ? e.message : String(e)}`));
     } catch (e) {
       if (token === loadToken) {
         const msg = e instanceof Error ? e.message : String(e);
@@ -272,6 +297,7 @@ export const usePlayer = create<PlayerState>((set, get) => {
     get().log(`load ${song.id} (#${index + 1}/${get().queue.length})`);
     if (isFocusId(song.id)) return loadFocus(song, token);
     stopFocusLoop(); // a normal song: the 集中 loop (if it was playing) stops
+    await leaveFocusLockScreen().catch(() => undefined);
     try {
       await ensurePlayer();
       const src = isFocusId(song.id)
@@ -293,10 +319,7 @@ export const usePlayer = create<PlayerState>((set, get) => {
       await TrackPlayer.add({
         id: song.id,
         url: src.url,
-        title: song.title,
-        artist: song.artists.map((a) => a.name).join(', '),
-        album: song.album?.name,
-        artwork: song.thumbnail,
+        ...lockMetadata(song),
         duration: song.durationSec,
         // A custom user agent makes AVPlayer fail on PO-token streams (diagnostics 8.1 vs 8.2) – only the old iOS-client URLs need one.
         userAgent: src.via === 'innertube' ? getConfig().ios.userAgent : undefined,
@@ -314,10 +337,11 @@ export const usePlayer = create<PlayerState>((set, get) => {
       openDb().then((db) => repo.markPlayed(db, song)).catch(() => undefined);
       set({ status: 'playing' });
       // warm the addresses of the next songs, so skipping is instant
-      for (const upcoming of get().queue.slice(index + 1, index + 4)) {
+      // the data saver fetches nothing ahead: a skipped song would have cost a page download for nothing
+      for (const upcoming of useSettings.getState().dataSaver ? [] : get().queue.slice(index + 1, index + 4)) {
         if (!isLocalId(upcoming.id) && !isFocusId(upcoming.id)) resolveAudio(upcoming.id, resolverOptions()).catch(() => undefined);
       }
-      scheduleAutoCache(song.id);
+      if (useSettings.getState().autoSaveSongs) scheduleAutoCache(song.id);
     } catch (e) {
       if (token === loadToken) {
         const msg = e instanceof Error ? e.message : String(e);
@@ -447,9 +471,11 @@ export const usePlayer = create<PlayerState>((set, get) => {
         if (st === 'playing') {
           pauseFocusLoop();
           set({ status: 'paused' });
+          setFocusLockPlaying(false).catch(() => undefined);
         } else if (st === 'paused') {
           playFocusLoop();
           set({ status: 'playing' });
+          setFocusLockPlaying(true).catch(() => undefined);
         } else if (st === 'error') {
           await loadAt(get().index);
         }
@@ -561,6 +587,12 @@ export const usePlayer = create<PlayerState>((set, get) => {
         doubledLogged = loadToken;
         get().log(`length: the file says ${Math.round(duration)}s, the song is ${Math.round(known ?? 0)}s – it ends at ${Math.round(known ?? 0)}s${lastSource ? ` [${lastSource}]` : ''}`);
       }
+      // the lock screen and the notification take the file's length too: they show the song's own length instead
+      const cur = get().current;
+      if (doubled && known && cur && lockLength?.token !== loadToken) {
+        lockLength = { token: loadToken, song: cur, seconds: known };
+        reassertLockLength();
+      }
       const queue = get().queue;
       const upcoming = get().index + 1 < queue.length ? queue[get().index + 1] : get().repeat === 'all' ? queue[0] : undefined;
       const fadeSec = fadeMsBetween(get().current, upcoming) / 1000;
@@ -657,7 +689,15 @@ export const usePlayer = create<PlayerState>((set, get) => {
     },
 
     onEnded: async () => {
-      const { repeat } = get();
+      const { repeat, current, status } = get();
+      // the silence that carries the 集中 lock screen ended: it is only a carrier, so it plays again from the start
+      if (current && isFocusId(current.id)) {
+        if (status === 'playing') {
+          await TrackPlayer.seekTo(0).catch(() => undefined);
+          await TrackPlayer.play().catch(() => undefined);
+        }
+        return;
+      }
       // A "queue ended" that arrives right after loading is spurious (e.g. caused by reset()) – ignore it.
       const progress = await TrackPlayer.getProgress().catch(() => ({ position: 0, duration: 0 }));
       if (Date.now() - loadedAt < 4000 || (progress.duration > 0 && progress.position < 3)) {

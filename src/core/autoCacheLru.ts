@@ -8,6 +8,8 @@ export interface CacheEntry {
   bytes: number;
   /** when it was last played (ms) */
   at: number;
+  /** which stream it was taken from (shown in the playback log) */
+  itag?: number;
 }
 
 /** the entries to delete, oldest first, so that what is left fits both limits */

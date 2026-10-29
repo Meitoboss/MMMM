@@ -108,8 +108,8 @@ describe('swiping the player down', () => {
 });
 
 describe('version', () => {
-  it('is 2.0.0 and the same in app.json, package.json and the Settings screen', () => {
-    assert.equal(APP_VERSION, '2.0.0');
+  it('is 2.0.1 and the same in app.json, package.json and the Settings screen', () => {
+    assert.equal(APP_VERSION, '2.0.1');
     const app = JSON.parse(readFileSync('app.json', 'utf8'));
     assert.equal(app.expo.version, APP_VERSION);
     assert.equal(JSON.parse(readFileSync('package.json', 'utf8')).version, APP_VERSION);

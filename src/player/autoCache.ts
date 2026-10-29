@@ -41,7 +41,7 @@ export async function cachedAudio(songId: string): Promise<AudioSource | null> {
     return null;
   }
   write(entries.map((e) => (e.id === songId ? { ...e, at: Date.now() } : e)));
-  return { url: uri, mimeType: hit.file.endsWith('.m4a') ? 'audio/mp4' : undefined, via: 'local', note: 'auto cache' };
+  return { url: uri, mimeType: hit.file.endsWith('.m4a') ? 'audio/mp4' : undefined, itag: hit.itag, via: 'local', note: 'auto cache' };
 }
 
 /** keeps a song on the phone (only MP4 audio, which the player reads from a file on both systems) */
@@ -52,7 +52,7 @@ export async function cacheAudio(songId: string, src: AudioSource): Promise<void
   await ensureOfflineDir();
   const file = `auto-${songId}.m4a`;
   const bytes = await downloadFile(src, file, () => undefined, () => false);
-  const next = [...entries, { id: songId, file, bytes, at: Date.now() }];
+  const next = [...entries, { id: songId, file, bytes, at: Date.now(), itag: src.itag }];
   const drop = pickEvictions(next, AUTO_MAX_BYTES, AUTO_MAX_ITEMS);
   for (const d of drop) await FileSystem.deleteAsync(`${offlineDir()}${d.file}`, { idempotent: true }).catch(() => undefined);
   write(next.filter((e) => !drop.some((d) => d.id === e.id)));

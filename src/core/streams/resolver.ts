@@ -17,6 +17,8 @@ export interface ResolverOptions {
   /** URL of your own server/server.mjs, e.g. http://192.168.1.10:8787 – used first when set */
   serverUrl?: string;
   serverKey?: string;
+  /** how long to wait for a backend before starting the next one; 0 = one at a time (less data) */
+  hedgeMs?: number;
 }
 
 const cache = new Map<string, AudioSource>();
@@ -79,7 +81,7 @@ const HEDGE_MS = 1200;
  * The first backend that answers wins. A slow backend does not hold up the others: the next one starts after HEDGE_MS.
  * Rejects with every backend's reason when all of them fail.
  */
-function firstAnswer(tasks: { name: string; run: () => Promise<AudioSource> }[]): Promise<AudioSource> {
+function firstAnswer(tasks: { name: string; run: () => Promise<AudioSource> }[], hedgeMs: number): Promise<AudioSource> {
   return new Promise((resolve, reject) => {
     const errors: string[] = [];
     let next = 0;
@@ -90,7 +92,7 @@ function firstAnswer(tasks: { name: string; run: () => Promise<AudioSource> }[])
       if (done || next >= tasks.length) return;
       const i = next++;
       clearTimeout(timer);
-      timer = setTimeout(launch, HEDGE_MS);
+      if (hedgeMs > 0) timer = setTimeout(launch, hedgeMs); // 0: one at a time, the next only after a failure
       tasks[i].run().then(
         (src) => {
           if (done) return;
@@ -151,7 +153,7 @@ export async function resolveAudio(videoId: string, opts: ResolverOptions = {}):
     const tasks = base.filter((b) => b !== 'server').map((b) => ({ name: b, run: () => run(b) }));
     if (tasks.length) {
       try {
-        src = await firstAnswer(tasks);
+        src = await firstAnswer(tasks, opts.hedgeMs ?? HEDGE_MS);
       } catch (e) {
         errors.push(e instanceof Error ? e.message : String(e));
       }

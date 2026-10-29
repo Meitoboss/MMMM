@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ActivityIndicator, Alert, Platform, Pressable, ScrollView, Switch, Text, TextInput, View } from 'react-native';
+import { Alert, Platform, Pressable, ScrollView, Switch, Text, TextInput, View } from 'react-native';
 
 import { clearStreamCache } from '../src/core';
 import { runSelfTest, runTokenServerTest, StepResult } from '../src/core/diagnostics';
@@ -7,7 +7,6 @@ import type { StreamBackend } from '../src/core/streams/resolver';
 import { runCurrentSongProbe, runFormatMatrix, runPlaybackProbe, runRealPathTest, runTokenExperiment } from '../src/player/probe';
 import { usePlayer } from '../src/state/player';
 import { headphonesNow } from '../src/player/output';
-import { useUpdate } from '../src/state/update';
 import { DEFAULT_SETTINGS, useSettings } from '../src/state/settings';
 import { s } from '../src/ui/components';
 import { APP_VERSION } from '../src/appVersion';
@@ -127,16 +126,6 @@ export default function Settings() {
     }
   };
 
-  const upd = useUpdate();
-  const updateStatus = !st.updateFeedUrl.trim()
-    ? '上のURLを入れると、アプリを開くたびに、新しい版があるか確認します'
-    : upd.result?.kind === 'newer'
-      ? `新しい版 ${upd.result.feed.version} があります（今は ${APP_VERSION}）`
-      : upd.result?.kind === 'current'
-        ? `最新です（${APP_VERSION}）`
-        : upd.result?.kind === 'error'
-          ? upd.result.message
-          : `いまの版は ${APP_VERSION} です`;
 
   return (
     <ScrollView contentContainerStyle={{ paddingTop: 4, paddingBottom: LIST_BOTTOM + 16 }}>
@@ -176,6 +165,12 @@ export default function Settings() {
         <Row title="前回の続きから再生" sub="アプリを閉じても、キューと再生位置を覚えています。起動しても、自動では再生しません">
           <Switch value={st.resumeOnLaunch} onValueChange={(v) => st.update({ resumeOnLaunch: v })} trackColor={{ true: colors.accent }} />
         </Row>
+        <Row title="曲を自動で保存" sub="よく聴いた曲を端末に保存して、次から速く始めます。保存のとき、曲をもう一度ダウンロードするので、通信量が増えます（オフのときは増えません）">
+          <Switch value={st.autoSaveSongs} onValueChange={(v) => st.update({ autoSaveSongs: v })} trackColor={{ true: colors.accent }} />
+        </Row>
+        <Row title="通信量を節約" sub="一番小さい音質で流し、次の曲を先に読みません。一つずつ取りに行き、ジャケットも小さいものを使います（オフにすると、速く始まりますが通信量が増えます）">
+          <Switch value={st.dataSaver} onValueChange={(v) => st.update({ dataSaver: v })} trackColor={{ true: colors.accent }} />
+        </Row>
         <Row title="スリープタイマー" sub="指定した時間が経つと、再生を止めます" last />
         <Chips
           options={SLEEP_OPTIONS.map((o) => ({ label: o.label, value: o.minutes }))}
@@ -212,15 +207,6 @@ export default function Settings() {
       <SongArchiveSection collapsible />
 
       <OtaSection collapsible />
-
-      <Section title="新しい版のお知らせ（IPA・APK）" collapsible>
-        <Field label="更新情報のURL（version.json）" value={st.updateFeedUrl} onSave={(v) => st.update({ updateFeedUrl: v })} />
-        <Pressable onPress={() => void upd.check(true)}>
-          <Row title="新しい版を確認" sub={updateStatus} last>
-            {upd.checking ? <ActivityIndicator color={colors.accentText} /> : <Text style={{ color: colors.accentText, fontWeight: '700' }}>確認</Text>}
-          </Row>
-        </Pressable>
-      </Section>
 
       <Section title="詳細設定" collapsible>
         <Row title="再生ログを表示" info="プレイヤー画面に、再生の内部ログを出します">
