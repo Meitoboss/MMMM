@@ -1,6 +1,6 @@
 import TrackPlayer, { Event, State } from 'react-native-track-player';
 
-import { usePlayer } from '../state/player';
+import { reassertLockLength, usePlayer } from '../state/player';
 import { noteProgress } from '../state/resume';
 
 /** Registered in index.ts – handles lock-screen / Control Center / headset buttons and track events. */
@@ -31,6 +31,7 @@ export async function playbackService() {
   });
   TrackPlayer.addEventListener(Event.PlaybackState, (e) => {
     p().log(`event: state=${e.state}`);
+    reassertLockLength(); // iOS has just written the file's length back to the lock screen
     const cur = p().status;
     if (cur === 'loading' || cur === 'idle') {
       if (e.state === State.Playing) p().setStatus('playing');

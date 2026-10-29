@@ -98,7 +98,8 @@ interface PlayerState {
 /** how many lines of the playback log are kept (the log is shown in Settings → 再生ログを表示) */
 const DEBUG_LINES = 40;
 let doubledLogged = -1; // the load for which "the file says double" was written to the log
-let doubledLockFixed = -1; // the load for which the lock screen was given the song's own length
+/** the song's own length for the lock screen, when its file claims double (null: the file's length is right) */
+let lockLength: { token: number; song: SongItem; seconds: number } | null = null;
 let lastSource = ''; // what the song that is playing was resolved to: via, itag, mime type – written next to "the file says double"
 let loadToken = 0;
 let loadedAt = 0;
@@ -193,6 +194,16 @@ function shuffleTail<T>(arr: T[], from: number): T[] {
  * Evens out the volume between songs (Settings → Playback). Uses the loudness YouTube reports for the video;
  * for a saved copy it is read from the database. Never allowed to get in the way of playing.
  */
+/**
+ * Gives the lock screen the song's own length again, for a file that claims double. iOS writes the file's length back on
+ * every change of state (play, pause, loading), so the playback service calls this after each one.
+ */
+export function reassertLockLength(): void {
+  if (!lockLength || lockLength.token !== loadToken) return;
+  // the whole set: Android replaces what it shows with exactly this (a length alone would remove the cover and the title)
+  void TrackPlayer.updateNowPlayingMetadata({ ...lockMetadata(lockLength.song), duration: lockLength.seconds }).catch(() => undefined);
+}
+
 /** what the lock screen and the notification show for a song */
 function lockMetadata(song: SongItem): { title: string; artist: string; album?: string; artwork?: string } {
   return {
@@ -572,11 +583,10 @@ export const usePlayer = create<PlayerState>((set, get) => {
         get().log(`length: the file says ${Math.round(duration)}s, the song is ${Math.round(known ?? 0)}s – it ends at ${Math.round(known ?? 0)}s${lastSource ? ` [${lastSource}]` : ''}`);
       }
       // the lock screen and the notification take the file's length too: they show the song's own length instead
-      if (doubled && doubledLockFixed !== loadToken) {
-        doubledLockFixed = loadToken;
-        // the whole set: Android replaces what it shows with exactly this (a length alone would remove the cover and the title)
-        const cur = get().current;
-        if (cur) void TrackPlayer.updateNowPlayingMetadata({ ...lockMetadata(cur), duration: known ?? undefined }).catch(() => undefined);
+      const cur = get().current;
+      if (doubled && known && cur && lockLength?.token !== loadToken) {
+        lockLength = { token: loadToken, song: cur, seconds: known };
+        reassertLockLength();
       }
       const queue = get().queue;
       const upcoming = get().index + 1 < queue.length ? queue[get().index + 1] : get().repeat === 'all' ? queue[0] : undefined;
