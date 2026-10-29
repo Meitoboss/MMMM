@@ -1,10 +1,10 @@
-import { type AudioMetadata, type AudioPlayer, createAudioPlayer, setAudioModeAsync } from 'expo-audio';
+import { type AudioPlayer, createAudioPlayer, setAudioModeAsync } from 'expo-audio';
 
 /**
  * The 集中 sounds, played with two players (expo-audio) so the loop has no gap and no click.
  * The sound is the whole file. When the first player nears the end, the second one starts from its beginning and the two
  * cross-fade over FADE_SEC: the file's last seconds fade into its first seconds, so the loop is heard as one sound.
- * It plays with the screen off (shouldPlayInBackground). The lock screen shows the sound: the player that is heard is the one it follows.
+ * It plays with the screen off (shouldPlayInBackground); the lock screen controls are not used for these sounds.
  */
 
 /** how long the two players cross-fade (seconds) */
@@ -20,8 +20,6 @@ let level = 1;
 let audible = false;
 let timer: ReturnType<typeof setInterval> | undefined;
 let crossing: { from: number; to: number; startedAt: number } | null = null;
-/** what the lock screen shows for the sound */
-let lockMeta: AudioMetadata | undefined;
 
 /** the length of the file in seconds (expo-audio fills it in once the file is ready) */
 async function waitForDuration(p: AudioPlayer): Promise<number> {
@@ -33,7 +31,7 @@ async function waitForDuration(p: AudioPlayer): Promise<number> {
 }
 
 /** loads one 集中 sound from a file on the phone; it is not playing yet */
-export async function loadFocusLoop(uri: string, volume: number, meta: AudioMetadata): Promise<void> {
+export async function loadFocusLoop(uri: string, volume: number): Promise<void> {
   stopFocusLoop();
   await setAudioModeAsync({ playsInSilentMode: true, shouldPlayInBackground: true, interruptionMode: 'doNotMix' });
   const a = createAudioPlayer({ uri }, { updateInterval: 100 });
@@ -41,8 +39,6 @@ export async function loadFocusLoop(uri: string, volume: number, meta: AudioMeta
   players = [a, b];
   level = volume;
   active = 0;
-  lockMeta = meta;
-  a.setActiveForLockScreen(true, meta);
   a.volume = volume;
   b.volume = 0;
   duration = await waitForDuration(a);
@@ -88,14 +84,8 @@ export function focusLoopPosition(): number {
 
 export function stopFocusLoop(): void {
   pauseFocusLoop();
-  if (players) {
-    players.forEach((p) => {
-      p.clearLockScreenControls();
-      p.remove();
-    });
-  }
+  if (players) players.forEach((p) => p.remove());
   players = null;
-  lockMeta = undefined;
   crossing = null;
   duration = 0;
   active = 0;
@@ -120,9 +110,6 @@ function tick(): void {
     const next = players[to];
     next.volume = 0;
     crossing = { from: active, to, startedAt: Date.now() };
-    // the lock screen follows the player that is heard from now on
-    players[crossing.from].setActiveForLockScreen(false);
-    next.setActiveForLockScreen(true, lockMeta);
     void next.seekTo(0).then(() => next.play());
   }
 }
