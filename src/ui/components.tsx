@@ -5,7 +5,9 @@ import { ReactNode } from 'react';
 import { ActivityIndicator, FlatList, Pressable, Text, View } from 'react-native';
 
 import type { MusicItem, Section, SongItem } from '../core/types';
+import { hiResCover } from '../core/taste';
 import { useOffline } from '../state/offline';
+import { useSettings } from '../state/settings';
 import { songMenu, openItem } from './actions';
 import { colors, dynamicStyles, useScheme } from './theme';
 
@@ -19,9 +21,11 @@ export function Cover({ uri, size, round }: { uri?: string; size: number; round?
       </View>
     );
   }
+  // a sharp picture on every screen: asked at about three times the size shown (the data saver asks for the listed size)
+  const sharp = useSettings.getState().dataSaver ? uri : hiResCover(uri, Math.min(900, Math.round(size * 3)));
   return (
     <Image
-      source={{ uri }}
+      source={{ uri: sharp }}
       style={{ width: size, height: size, borderRadius: radius, backgroundColor: colors.surface2 }}
       contentFit="cover"
       transition={150}
