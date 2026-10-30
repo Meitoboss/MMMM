@@ -21,6 +21,17 @@ export function overrideSolverBundle(b: { lib: string; core: string }) {
   bundle = b;
 }
 
+/** where the player script is kept between starts (set by the app; the core stays free of storage) */
+export interface PlayerJsStore {
+  read(): Promise<{ id: string; text: string } | null>;
+  write(saved: { id: string; text: string }): Promise<void>;
+}
+let store: PlayerJsStore | null = null;
+
+export function setPlayerJsStore(s: PlayerJsStore): void {
+  store = s;
+}
+
 let playerCache: { at: number; player: PlayerJs } | undefined;
 let engineKnowsPlayer: string | undefined;
 let solverLoaded = false;
@@ -37,14 +48,27 @@ export async function getPlayerJs(maxAgeMs = 30 * 60_000): Promise<PlayerJs> {
     playerCache = { at: Date.now(), player: playerCache.player };
     return playerCache.player;
   }
+  // the same player as the last start (kept on the phone): no download of the large script again
+  const saved = await store?.read().catch(() => null);
+  if (saved?.id === id) {
+    const player = playerFrom(id, saved.text);
+    playerCache = { at: Date.now(), player };
+    return player;
+  }
   const url = `https://www.youtube.com/s/player/${id}/player_ias.vflset/en_US/base.js`;
   const res = await fetch(url, { credentials: 'omit' });
   if (!res.ok) throw new Error(`Player JS download failed: HTTP ${res.status}`);
   const text = await res.text();
-  const sts = text.match(/(?:signatureTimestamp|sts)\s*[:=]\s*(\d{5})/)?.[1];
-  const player = { id, url, text, sts: sts ? Number(sts) : undefined };
+  void store?.write({ id, text }).catch(() => undefined);
+  const player = playerFrom(id, text);
   playerCache = { at: Date.now(), player };
   return player;
+}
+
+function playerFrom(id: string, text: string): PlayerJs {
+  const url = `https://www.youtube.com/s/player/${id}/player_ias.vflset/en_US/base.js`;
+  const sts = text.match(/(?:signatureTimestamp|sts)\s*[:=]\s*(\d{5})/)?.[1];
+  return { id, url, text, sts: sts ? Number(sts) : undefined };
 }
 
 async function ensureSolverLoaded() {
