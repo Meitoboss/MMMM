@@ -13,6 +13,7 @@ import { ensurePlayer } from '../src/player/setup';
 import { applySettings, useSettings } from '../src/state/settings';
 import { startNetLog } from '../src/state/netlog';
 import { startStreamStore } from '../src/state/streamStore';
+import { startPlayerJsStore } from '../src/state/playerJsStore';
 import { useUpdate } from '../src/state/update';
 import { DialogHost } from '../src/ui/dialogs';
 import { EngineHost } from '../src/ui/EngineHost';
@@ -38,6 +39,7 @@ export default function RootLayout() {
     void ensurePlayer();
     const stopNetLog = startNetLog(); // every answer of the token server is written down (Settings → 通信の記録)
     startStreamStore(); // the stream addresses are kept between starts (a song starts faster)
+    startPlayerJsStore(); // YouTube's player script is kept too (it is large, and it was downloaded at every start)
     // Android 13+: the media notification (lock-screen controls) needs this permission
     if (Platform.OS === 'android' && Number(Platform.Version) >= 33) {
       void PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS).catch(() => undefined);
