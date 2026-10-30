@@ -73,6 +73,7 @@ const json = (data: unknown, status = 200) => new Response(JSON.stringify(data),
 beforeEach(() => {
   configure({ ...defaultConfig });
   clearStreamCache();
+  yt.clearSearchKept();
 });
 afterEach(() => {
   globalThis.fetch = realFetch;

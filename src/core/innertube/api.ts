@@ -75,12 +75,15 @@ export async function search(query: string, filter?: SearchFilter): Promise<Item
  * (in parallel) and merge: songs, artists, albums, playlists, videos.
  */
 export async function searchAll(query: string): Promise<ItemsPage<MusicItem>> {
+  const cached = searchKept.get(query);
+  if (cached && Date.now() - cached.at < SEARCH_KEEP_MS) return cached.page;
+  // fewer results than before: each one brings a picture, and a slow connection waits for all of them
   const plan: [SearchFilter, number][] = [
-    ['song', 10],
-    ['artist', 3],
-    ['album', 5],
-    ['community_playlist', 3],
-    ['video', 6],
+    ['song', 6],
+    ['artist', 2],
+    ['album', 3],
+    ['community_playlist', 2],
+    ['video', 4],
   ];
   const results = await Promise.allSettled(plan.map(([filter]) => search(query, filter)));
 
@@ -103,7 +106,20 @@ export async function searchAll(query: string): Promise<ItemsPage<MusicItem>> {
     }
   });
   if (!anyOk) throw firstError instanceof Error ? firstError : new Error('search failed');
-  return { items, continuation: undefined };
+  const page = { items, continuation: undefined };
+  searchKept.set(query, { at: Date.now(), page });
+  if (searchKept.size > SEARCH_KEEP_MAX) searchKept.delete(searchKept.keys().next().value as string);
+  return page;
+}
+
+/** the answers of the last few searches are kept for a little while: searching the same words again costs no data */
+const SEARCH_KEEP_MS = 10 * 60_000;
+const SEARCH_KEEP_MAX = 20;
+const searchKept = new Map<string, { at: number; page: ItemsPage<MusicItem> }>();
+
+/** forgets the kept searches (tests use it between cases) */
+export function clearSearchKept(): void {
+  searchKept.clear();
 }
 
 export async function searchContinuation(continuation: string): Promise<ItemsPage<MusicItem>> {
