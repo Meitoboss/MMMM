@@ -48,7 +48,8 @@ export function Marquee({ text, style, still = false, speed = 28, pause = 2200 }
   return (
     <View style={{ overflow: 'hidden' }} onLayout={(e) => setBox(e.nativeEvent.layout.width)}>
       {/* a wide, invisible copy only measures how wide the whole title is */}
-      <View pointerEvents="none" style={{ position: 'absolute', left: 0, top: 0, width: 4000, opacity: 0 }}>
+      {/* alignItems: the text keeps its own width here; without it the text is stretched to the 4000 px of this box */}
+      <View pointerEvents="none" style={{ position: 'absolute', left: 0, top: 0, width: 4000, opacity: 0, alignItems: 'flex-start' }}>
         <Text style={style} onLayout={(e) => setFull(e.nativeEvent.layout.width)}>
           {text}
         </Text>
