@@ -28,7 +28,8 @@ export function Marquee({ text, style, still = false, speed = 28, pause = 2200 }
       x.setValue(0);
       running = Animated.sequence([
         Animated.delay(pause),
-        Animated.timing(x, { toValue: -full, duration: (full / speed) * 1000, easing: Easing.linear, useNativeDriver: true }),
+        // not the native driver: the title is moved by the app itself, so the return to the start is always drawn
+        Animated.timing(x, { toValue: -full, duration: (full / speed) * 1000, easing: Easing.linear, useNativeDriver: false }),
       ]);
       running.start(({ finished }) => {
         if (finished) round();
