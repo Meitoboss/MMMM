@@ -4,8 +4,6 @@ import { ScrollView, StyleProp, Text, TextStyle, View } from 'react-native';
 /** a title shorter than this stays still: only the longer ones move */
 const SCROLL_FROM = 17;
 const TICK_MS = 33;
-/** how fast the title flies back to the start (points a second) */
-const REWIND_SPEED = 800;
 
 /**
  * A long title (17 characters or more) that is too wide for its place: it waits at the start, moves slowly to the left until
@@ -23,8 +21,8 @@ export function Marquee({ text, style, still = false, speed = 28, pause = 2200 }
   useEffect(() => {
     scroller.current?.scrollTo({ x: 0, animated: false });
     if (!moves) return;
-    // the rounds: wait at the start, move to the left until the title has left the place, then fly back to the start
-    let phase: 'wait' | 'move' | 'back' = 'wait';
+    // the rounds: wait at the start, move one way (to the left) until the title has left the place, then at once back to the start
+    let phase: 'wait' | 'move' = 'wait';
     let since = Date.now();
     const id = setInterval(() => {
       const now = Date.now();
@@ -39,23 +37,14 @@ export function Marquee({ text, style, still = false, speed = 28, pause = 2200 }
       if (phase === 'move') {
         const moved = secs * speed;
         if (moved >= full) {
-          phase = 'back';
+          // the place is empty now: back at the start at once, and the pause begins again
+          phase = 'wait';
           since = now;
-          scroller.current?.scrollTo({ x: full, animated: false });
+          scroller.current?.scrollTo({ x: 0, animated: false });
           return;
         }
         scroller.current?.scrollTo({ x: moved, animated: false });
-        return;
       }
-      // back: the title flies to the start quickly
-      const at = full - secs * REWIND_SPEED;
-      if (at <= 0) {
-        phase = 'wait';
-        since = now;
-        scroller.current?.scrollTo({ x: 0, animated: false });
-        return;
-      }
-      scroller.current?.scrollTo({ x: at, animated: false });
     }, TICK_MS);
     return () => clearInterval(id);
   }, [moves, full, speed, pause]);
