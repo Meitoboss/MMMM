@@ -19,16 +19,27 @@ export function Marquee({ text, style, still = false, speed = 28, pause = 2200 }
     x.stopAnimation();
     x.setValue(0);
     if (!moves) return;
-    // the title moves until it has left the place completely (its whole width), then it is back at the start at once
-    const animation = Animated.loop(
-      Animated.sequence([
+    // each round: wait at the start, move until the title has left the place completely, and when that is done
+    // the title is set back to the start in the same moment (no reliance on a zero-length animation)
+    let cancelled = false;
+    let running: Animated.CompositeAnimation | undefined;
+    const round = () => {
+      if (cancelled) return;
+      x.setValue(0);
+      running = Animated.sequence([
         Animated.delay(pause),
         Animated.timing(x, { toValue: -full, duration: (full / speed) * 1000, easing: Easing.linear, useNativeDriver: true }),
-        Animated.timing(x, { toValue: 0, duration: 0, useNativeDriver: true }),
-      ]),
-    );
-    animation.start();
-    return () => animation.stop();
+      ]);
+      running.start(({ finished }) => {
+        if (finished) round();
+      });
+    };
+    round();
+    return () => {
+      cancelled = true;
+      running?.stop();
+      x.setValue(0);
+    };
   }, [moves, full, speed, pause, x]);
 
   if (!scrolls) {
