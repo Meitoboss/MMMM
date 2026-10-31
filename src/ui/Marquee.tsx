@@ -3,45 +3,41 @@ import { Animated, Easing, StyleProp, Text, TextStyle, View } from 'react-native
 
 /** a title shorter than this stays still: only the longer ones move */
 const SCROLL_FROM = 17;
+const TICK_MS = 33;
 
 /**
- * A long title (17 characters or more) that is too wide for its place: it waits, moves slowly from the start to the end,
- * and as soon as it has left the place it is back at the start. A short title, or one with `still`, stays still and is cut off.
+ * A long title (17 characters or more) that is too wide for its place: it waits at the start, moves slowly to the left until
+ * it has left the place completely, and at that moment it is back at the start. A short title, or one with `still`, stays
+ * still and is cut off. The position is worked out from the time (no animation library), so the return always happens.
  */
 export function Marquee({ text, style, still = false, speed = 28, pause = 2200 }: { text: string; style?: StyleProp<TextStyle>; still?: boolean; speed?: number; pause?: number }) {
   const [box, setBox] = useState(0); // the width of the place
   const [full, setFull] = useState(0); // the width the whole title needs
-  const x = useRef(new Animated.Value(0)).current;
+  const [offset, setOffset] = useState(0); // how far the title has moved to the left (0 = at the start)
   const scrolls = !still && Array.from(text).length >= SCROLL_FROM;
-  const moves = scrolls && full > box;
+  const moves = scrolls && full > 0 && full > box;
 
   useEffect(() => {
-    x.stopAnimation();
-    x.setValue(0);
+    setOffset(0);
     if (!moves) return;
-    // each round: wait at the start, move until the title has left the place completely, and when that is done
-    // the title is set back to the start in the same moment (no reliance on a zero-length animation)
-    let cancelled = false;
-    let running: Animated.CompositeAnimation | undefined;
-    const round = () => {
-      if (cancelled) return;
-      x.setValue(0);
-      running = Animated.sequence([
-        Animated.delay(pause),
-        // not the native driver: the title is moved by the app itself, so the return to the start is always drawn
-        Animated.timing(x, { toValue: -full, duration: (full / speed) * 1000, easing: Easing.linear, useNativeDriver: false }),
-      ]);
-      running.start(({ finished }) => {
-        if (finished) round();
-      });
-    };
-    round();
-    return () => {
-      cancelled = true;
-      running?.stop();
-      x.setValue(0);
-    };
-  }, [moves, full, speed, pause, x]);
+    let begins = Date.now() + pause; // the movement starts after the pause at the start
+    const id = setInterval(() => {
+      const elapsed = Date.now() - begins;
+      if (elapsed < 0) {
+        setOffset(0);
+        return;
+      }
+      const moved = (elapsed / 1000) * speed;
+      if (moved >= full) {
+        // gone from the place: back at the start, and the pause begins again
+        begins = Date.now() + pause;
+        setOffset(0);
+        return;
+      }
+      setOffset(-moved);
+    }, TICK_MS);
+    return () => clearInterval(id);
+  }, [moves, full, speed, pause]);
 
   if (!scrolls) {
     return (
@@ -59,11 +55,11 @@ export function Marquee({ text, style, still = false, speed = 28, pause = 2200 }
           {text}
         </Text>
       </View>
-      <Animated.View style={{ transform: [{ translateX: x }], width: full > 0 ? full : undefined }}>
+      <View style={{ width: full > 0 ? full : undefined, transform: [{ translateX: offset }] }}>
         <Text style={style} numberOfLines={1}>
           {text}
         </Text>
-      </Animated.View>
+      </View>
     </View>
   );
 }
