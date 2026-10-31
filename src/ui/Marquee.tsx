@@ -13,23 +13,23 @@ export function Marquee({ text, style, still = false, speed = 28, pause = 2200 }
   const [full, setFull] = useState(0); // the width the whole title needs
   const x = useRef(new Animated.Value(0)).current;
   const scrolls = !still && Array.from(text).length >= SCROLL_FROM;
-  const overflow = scrolls ? Math.max(0, full - box) : 0;
+  const moves = scrolls && full > box;
 
   useEffect(() => {
     x.stopAnimation();
     x.setValue(0);
-    if (overflow <= 0) return;
+    if (!moves) return;
+    // the title moves until it has left the place completely (its whole width), then it is back at the start at once
     const animation = Animated.loop(
       Animated.sequence([
         Animated.delay(pause),
-        Animated.timing(x, { toValue: -overflow, duration: (overflow / speed) * 1000, easing: Easing.linear, useNativeDriver: true }),
-        // back at the start at once: no waiting once the title has gone out of view
+        Animated.timing(x, { toValue: -full, duration: (full / speed) * 1000, easing: Easing.linear, useNativeDriver: true }),
         Animated.timing(x, { toValue: 0, duration: 0, useNativeDriver: true }),
       ]),
     );
     animation.start();
     return () => animation.stop();
-  }, [overflow, speed, pause, x]);
+  }, [moves, full, speed, pause, x]);
 
   if (!scrolls) {
     return (
